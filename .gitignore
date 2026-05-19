@@ -1,3 +1,8 @@
+# 项目初始化忽略项
+
 /node_modules
 /.husky
 /.ruff_cache
+
+# 忽略 根目录下的 openspec
+/openspec
