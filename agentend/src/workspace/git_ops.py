@@ -5,6 +5,23 @@ logger = logging.getLogger(__name__)
 
 
 class GitOps:
+    async def is_git_repo(self, path: str) -> bool:
+        ok, _ = await self._run_git("rev-parse", "--is-inside-work-tree", cwd=path)
+        return ok
+
+    async def init_repo(self, path: str) -> bool:
+        ok, _ = await self._run_git("init", cwd=path)
+        if not ok:
+            return False
+        ok, _ = await self._run_git("add", "-A", cwd=path)
+        if not ok:
+            return False
+        ok, _ = await self._run_git("commit", "-m", "init", cwd=path)
+        if not ok:
+            return False
+        ok, _ = await self._run_git("branch", "-M", "main", cwd=path)
+        return ok
+
     async def _run_git(self, *args: str, cwd: str | None = None) -> tuple[bool, str]:
         cmd = ["git", *args]
         proc = await asyncio.create_subprocess_exec(

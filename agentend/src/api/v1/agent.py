@@ -33,6 +33,11 @@ async def _resolve_workspace(
     if request.workspace_path:
         return request.workspace_path
     if request.repo_path:
+        if not await workspace_mgr.is_git_repo(request.repo_path):
+            raise HTTPException(
+                status_code=400,
+                detail=f"repo_path is not a git repository: {request.repo_path}",
+            )
         ws = await workspace_mgr.create(
             repo_path=request.repo_path,
             task_id=request.task_id,

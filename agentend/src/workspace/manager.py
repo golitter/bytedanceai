@@ -23,6 +23,15 @@ class WorkspaceManager:
             self._locks[task_id] = asyncio.Lock()
         return self._locks[task_id]
 
+    async def is_git_repo(self, path: str) -> bool:
+        return await self._git.is_git_repo(path)
+
+    async def ensure_git_repo(self, path: str) -> None:
+        if not await self._git.is_git_repo(path):
+            ok = await self._git.init_repo(path)
+            if not ok:
+                raise RuntimeError(f"Failed to init git repo at {path}")
+
     async def _load_from_store(self) -> None:
         stored = await self._store.load_all()
         self._workspaces.update(stored)
