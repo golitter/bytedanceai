@@ -38,6 +38,10 @@ class WorkspaceManager:
 
     async def create(self, repo_path: str, task_id: str, agent_name: str) -> Workspace:
         async with self._get_lock(task_id):
+            existing = self._find_active(task_id, agent_name)
+            if existing:
+                return existing
+
             task_branch = task_branch_name(task_id)
             ok = await self._git.task_branch_create(repo_path, task_id)
             if not ok:
@@ -55,6 +59,12 @@ class WorkspaceManager:
             self._workspaces[ws.id] = ws
             await self._store.save(ws)
             return ws
+
+    def _find_active(self, task_id: str, agent_name: str) -> Workspace | None:
+        for ws in self._workspaces.values():
+            if ws.task_id == task_id and ws.agent_name == agent_name and ws.status == WorkspaceStatus.ACTIVE:
+                return ws
+        return None
 
     def get(self, workspace_id: str) -> Workspace | None:
         return self._workspaces.get(workspace_id)
