@@ -10,6 +10,8 @@ from src.schemas.response import AgentResponse
 
 logger = logging.getLogger(__name__)
 
+_AGENT_TYPE = "opencode"
+
 
 class OpenCodeAdapter(BaseAgentAdapter):
     def __init__(self) -> None:
@@ -21,71 +23,118 @@ class OpenCodeAdapter(BaseAgentAdapter):
         *,
         cwd: str | None = None,
         system_prompt_append: str | None = None,
+        opencode_session_id: str | None = None,
+        is_resume: bool = False,
+        model: str | None = None,
+        agent: str | None = None,
     ) -> list[str]:
         prompt = message
         if system_prompt_append:
             prompt = f"[系统约束: {system_prompt_append}]\n\n{message}"
-        cmd = [settings.OPENCODE_CLI_PATH, "-p", prompt, "-f", "json", "-q"]
+        cmd = [settings.OPENCODE_CLI_PATH, "run", prompt, "--format", "json"]
         if cwd:
-            cmd.extend(["-c", cwd])
+            cmd.extend(["--dir", cwd])
+        if opencode_session_id:
+            cmd.extend(["--session", opencode_session_id])
+            if is_resume:
+                cmd.append("--fork")
+        if model:
+            cmd.extend(["--model", model])
+        if agent:
+            cmd.extend(["--agent", agent])
         return cmd
 
-    def _parse_json_output(self, raw: str) -> list[StreamEvent]:
-        events: list[StreamEvent] = []
+    def _parse_ndjson_line(self, line: str) -> StreamEvent | None:
+        line = line.strip()
+        if not line:
+            return None
+
         try:
-            data = json.loads(raw)
+            data = json.loads(line)
         except json.JSONDecodeError:
-            events.append(StreamEvent.create(EventType.TEXT, text=raw, agent_type="opencode"))
-            events.append(StreamEvent.create(EventType.DONE, agent_type="opencode"))
-            return events
+            return StreamEvent.create(EventType.TEXT, text=line, agent_type=_AGENT_TYPE)
 
-        content_text = data.get("content", "")
-        if content_text:
-            events.append(StreamEvent.create(EventType.TEXT, text=content_text, agent_type="opencode"))
+        event_type = data.get("type", "")
 
-        tool_uses = data.get("toolUses", [])
-        for tu in tool_uses:
-            events.append(
-                StreamEvent.create(
-                    EventType.TOOL_CALL,
-                    tool=tu.get("name", ""),
-                    args=tu.get("input", {}),
-                    agent_type="opencode",
-                )
+        if event_type == "error":
+            error_obj = data.get("error", {})
+            msg = ""
+            if isinstance(error_obj, dict):
+                err_data = error_obj.get("data", {})
+                msg = err_data.get("message", error_obj.get("name", str(error_obj)))
+            else:
+                msg = str(error_obj)
+            return StreamEvent.create(EventType.ERROR, error=msg, agent_type=_AGENT_TYPE)
+
+        if event_type == "step_start":
+            sid = data.get("sessionID", "")
+            return StreamEvent.create(EventType.INIT, cli_session_id=sid, agent_type=_AGENT_TYPE)
+
+        if event_type == "text":
+            part = data.get("part", {})
+            text = part.get("text", "")
+            if text:
+                return StreamEvent.create(EventType.TEXT, text=text, agent_type=_AGENT_TYPE)
+            return None
+
+        if event_type == "reasoning":
+            part = data.get("part", {})
+            text = part.get("text", "")
+            if text:
+                return StreamEvent.create(EventType.TEXT, text=f"[thinking] {text}", agent_type=_AGENT_TYPE)
+            return None
+
+        if event_type == "tool_use":
+            part = data.get("part", {})
+            tool_name = part.get("tool", "")
+            state = part.get("state", {})
+            args = state.get("input", {})
+            status = state.get("status", "")
+            output = state.get("output", "")
+            if status == "error":
+                err = state.get("error", "tool error")
+                return StreamEvent.create(EventType.TOOL_RESULT, tool=tool_name, result=err, agent_type=_AGENT_TYPE)
+            return StreamEvent.create(
+                EventType.TOOL_CALL, tool=tool_name, args=args, result=output, agent_type=_AGENT_TYPE
             )
 
-        usage = data.get("usage", {})
-        events.append(StreamEvent.create(EventType.DONE, usage=usage, agent_type="opencode"))
-        return events
+        if event_type == "step_finish":
+            return None
+
+        return None
 
     async def create_session(self, session_id: str) -> None:
         pass
 
     async def chat(self, session_id: str, message: str, **kwargs) -> AgentResponse:
-        events = []
-        async for event in self.stream_chat(session_id, message, **kwargs):
-            events.append(event)
+        chunks: list[str] = []
+        usage: dict = {}
 
-        text_parts = []
-        usage = {}
-        for e in events:
-            if e.type == EventType.TEXT.value:
-                t = e.content.get("text", "")
-                if t:
-                    text_parts.append(t)
-            elif e.type == EventType.DONE.value:
-                usage = e.content.get("usage", {})
+        async for event in self.stream_chat(session_id, message, **kwargs):
+            if event.type == EventType.TEXT.value:
+                text = event.content.get("text", "")
+                if text:
+                    chunks.append(text)
+            elif event.type == EventType.DONE.value:
+                usage = event.content.get("usage", {})
 
         return AgentResponse(
             session_id=session_id,
-            content="".join(text_parts),
+            content="".join(chunks),
             usage=usage,
         )
 
     async def stream_chat(self, session_id: str, message: str, **kwargs) -> AsyncIterator[StreamEvent]:
         cwd = kwargs.get("cwd")
-        system_prompt_append = kwargs.get("system_prompt_append")
-        cmd = self._build_command(message, cwd=cwd, system_prompt_append=system_prompt_append)
+        cmd = self._build_command(
+            message,
+            cwd=cwd,
+            system_prompt_append=kwargs.get("system_prompt_append"),
+            opencode_session_id=kwargs.get("opencode_session_id"),
+            is_resume=kwargs.get("is_resume", False),
+            model=kwargs.get("model"),
+            agent=kwargs.get("agent"),
+        )
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -96,16 +145,22 @@ class OpenCodeAdapter(BaseAgentAdapter):
         self._processes[session_id] = process
 
         try:
-            stdout, stderr = await process.communicate()
-            raw = stdout.decode()
+            assert process.stdout is not None
+            async for line in process.stdout:
+                event = self._parse_ndjson_line(line.decode())
+                if event:
+                    yield event
 
+            await process.wait()
             if process.returncode and process.returncode != 0:
-                err = stderr.decode().strip()
-                yield StreamEvent.create(EventType.ERROR, error=err or "OpenCode process failed", agent_type="opencode")
-                return
-
-            for event in self._parse_json_output(raw):
-                yield event
+                stderr = ""
+                if process.stderr:
+                    stderr = (await process.stderr.read()).decode()
+                yield StreamEvent.create(
+                    EventType.ERROR, error=stderr or "OpenCode process failed", agent_type=_AGENT_TYPE
+                )
+            else:
+                yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
             self._processes.pop(session_id, None)
 
