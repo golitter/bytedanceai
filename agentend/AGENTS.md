@@ -11,7 +11,8 @@ src/
 ├── app/          # 应用入口与配置
 ├── rules/        # 规则引擎
 ├── schemas/      # 数据模型
-└── session/      # 会话管理
+├── session/      # 会话管理
+└── workspace/    # 工作区管理（Git 操作、恢复、存储）
 ```
 
 ## 常用命令
@@ -25,4 +26,4 @@ uv run python -m src.app.main  # 启动开发服务器（热重载）
 
 ## 详细文档
 
-- [API 端点、核心架构、配置](docs/common/details.md)
+详见 [API 端点、核心架构、配置](docs/common/details.md)。
