@@ -79,6 +79,7 @@ class WorkspaceManager:
         async with self._get_lock(ws.task_id):
             ok = await self._git.worktree_remove(ws.worktree_path)
             if ok:
+                await self._git.branch_delete(ws.repo_path, ws.branch_name)
                 ws.status = WorkspaceStatus.CLEANED
                 await self._store.save(ws)
             # Remove lock if no active workspaces remain for this task
@@ -91,10 +92,14 @@ class WorkspaceManager:
 
     async def cleanup_by_task(self, task_id: str) -> int:
         count = 0
+        repo_path = None
         for ws in list(self._workspaces.values()):
             if ws.task_id == task_id and ws.status == WorkspaceStatus.ACTIVE:
+                repo_path = ws.repo_path
                 if await self.cleanup(ws.id):
                     count += 1
+        if count > 0 and repo_path:
+            await self._git.branch_delete(repo_path, task_branch_name(task_id))
         return count
 
     async def commit(self, workspace_id: str, message: str) -> bool:

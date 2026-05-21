@@ -43,9 +43,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown: stop TTL task + cleanup all active workspaces
     await ws_mgr.stop_ttl_cleanup()
-    for ws in ws_mgr.list():
-        if ws.status == WorkspaceStatus.ACTIVE:
-            await ws_mgr.cleanup(ws.id)
+    task_ids = {ws.task_id for ws in ws_mgr.list() if ws.status == WorkspaceStatus.ACTIVE}
+    for tid in task_ids:
+        await ws_mgr.cleanup_by_task(tid)
     # Shutdown: clean up all active sessions
     mgr = app.state.session_manager
     for session in mgr.list():

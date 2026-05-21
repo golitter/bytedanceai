@@ -58,6 +58,7 @@ async def recover_workspaces(git_ops: GitOps, store: WorkspaceStoreProtocol, rep
             logger.warning("Removing orphan worktree: %s (branch: %s)", path, branch)
             ok = await git_ops.worktree_remove(path)
             if ok:
+                await git_ops.branch_delete(repo_path, branch)
                 orphans_removed += 1
 
     logger.info(

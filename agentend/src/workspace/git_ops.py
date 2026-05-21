@@ -55,6 +55,10 @@ class GitOps:
         ok, _ = await self._run_git("branch", name, base, cwd=repo_path)
         return ok
 
+    async def branch_delete(self, repo_path: str, name: str) -> bool:
+        ok, _ = await self._run_git("branch", "-D", name, cwd=repo_path)
+        return ok
+
     async def task_branch_create(self, repo_path: str, task_id: str) -> bool:
         branch = f"task/{task_id}"
         ok, out = await self._run_git("branch", "--list", branch, cwd=repo_path)
