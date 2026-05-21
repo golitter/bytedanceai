@@ -70,15 +70,6 @@ async def _resolve_session(
     return session.id, cli_session_id or "", bool(cli_session_id)
 
 
-def _build_rule_context(request: AgentRequest) -> dict:
-    return {
-        "message": request.message,
-        "agent_type": request.agent_type,
-        "workspace_path": request.workspace_path,
-        "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
-    }
-
-
 async def _execute_stream(
     request: AgentRequest,
     adapter: BaseAgentAdapter,
@@ -126,11 +117,17 @@ async def agent_stream(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
 ) -> EventSourceResponse:
-    passed, rule_result = rule_engine.evaluate(_build_rule_context(request))
+    workspace_path = await _resolve_workspace(request, workspace_mgr)
+
+    rule_ctx = {
+        "message": request.message,
+        "agent_type": request.agent_type,
+        "workspace_path": workspace_path,
+        "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+    }
+    passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
         raise HTTPException(status_code=400, detail=rule_result)
-
-    workspace_path = await _resolve_workspace(request, workspace_mgr)
 
     adapter_cls = adapter_registry.get(request.agent_type)
     adapter = adapter_cls()
@@ -165,11 +162,17 @@ async def agent_execute(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
 ) -> AgentResponse:
-    passed, rule_result = rule_engine.evaluate(_build_rule_context(request))
+    workspace_path = await _resolve_workspace(request, workspace_mgr)
+
+    rule_ctx = {
+        "message": request.message,
+        "agent_type": request.agent_type,
+        "workspace_path": workspace_path,
+        "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+    }
+    passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
         raise HTTPException(status_code=400, detail=rule_result)
-
-    workspace_path = await _resolve_workspace(request, workspace_mgr)
 
     adapter_cls = adapter_registry.get(request.agent_type)
     adapter = adapter_cls()
