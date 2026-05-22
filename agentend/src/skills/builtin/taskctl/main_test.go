@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +12,9 @@ import (
 
 func TestParsePath(t *testing.T) {
 	exePath := "/abs/worktrees/task-123/sess-abc/.claude/skills/taskctl/exe"
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if taskID != "task-123" {
-		t.Errorf("taskID = %q, want %q", taskID, "task-123")
 	}
 	if sessionID != "sess-abc" {
 		t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
@@ -29,12 +27,9 @@ func TestParsePath(t *testing.T) {
 
 func TestParsePathOpenCode(t *testing.T) {
 	exePath := "/abs/worktrees/task-456/sess-def/.opencode/skills/taskctl/exe"
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if taskID != "task-456" {
-		t.Errorf("taskID = %q, want %q", taskID, "task-456")
 	}
 	if sessionID != "sess-def" {
 		t.Errorf("sessionID = %q, want %q", sessionID, "sess-def")
@@ -47,7 +42,7 @@ func TestParsePathOpenCode(t *testing.T) {
 
 func TestParsePathInvalid(t *testing.T) {
 	exePath := "/usr/local/bin/taskctl/exe"
-	_, _, _, err := parsePath(exePath)
+	_, _, err := parsePath(exePath)
 	if err == nil {
 		t.Fatal("expected error for invalid path, got nil")
 	}
@@ -157,14 +152,6 @@ func TestCmdSummary(t *testing.T) {
 	}
 }
 
-func TestCmdSummaryMissingFiles(t *testing.T) {
-	tmpDir := t.TempDir()
-	output := captureOutput(func() { cmdSummary(tmpDir) })
-	if !strings.Contains(output, "无 plans") {
-		t.Errorf("expected '(无 plans)' when missing, got %q", output)
-	}
-}
-
 // ===================== cmdCommonMemory =====================
 
 func TestCmdCommonMemory(t *testing.T) {
@@ -174,7 +161,7 @@ func TestCmdCommonMemory(t *testing.T) {
 	os.WriteFile(filepath.Join(memDir, "a.md"), []byte("alpha"), 0644)
 	os.WriteFile(filepath.Join(memDir, "b.md"), []byte("beta"), 0644)
 
-	output := captureOutput(func() { cmdCommonMemory(tmpDir) })
+	output := captureOutput(func() { cmdCommonMemory(tmpDir, nil) })
 	if !strings.Contains(output, "alpha") || !strings.Contains(output, "beta") {
 		t.Errorf("expected both alpha and beta in output, got %q", output)
 	}
@@ -182,9 +169,25 @@ func TestCmdCommonMemory(t *testing.T) {
 
 func TestCmdCommonMemoryEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	output := captureOutput(func() { cmdCommonMemory(tmpDir) })
+	output := captureOutput(func() { cmdCommonMemory(tmpDir, nil) })
 	if !strings.Contains(output, "无公共记忆") {
 		t.Errorf("expected '(无公共记忆)', got %q", output)
+	}
+}
+
+func TestCmdCommonMemorySingleFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	memDir := filepath.Join(tmpDir, "memory", "common")
+	os.MkdirAll(memDir, 0755)
+	os.WriteFile(filepath.Join(memDir, "notes.md"), []byte("hello world"), 0644)
+	os.WriteFile(filepath.Join(memDir, "other.md"), []byte("other content"), 0644)
+
+	output := captureOutput(func() { cmdCommonMemory(tmpDir, []string{"notes.md"}) })
+	if !strings.Contains(output, "hello world") {
+		t.Errorf("expected 'hello world', got %q", output)
+	}
+	if strings.Contains(output, "other content") {
+		t.Errorf("should not contain other file content, got %q", output)
 	}
 }
 
@@ -196,7 +199,7 @@ func TestCmdSubMemory(t *testing.T) {
 	os.MkdirAll(memDir, 0755)
 	os.WriteFile(filepath.Join(memDir, "note.md"), []byte("my notes"), 0644)
 
-	output := captureOutput(func() { cmdSubMemory(tmpDir, "sess-abc") })
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "sess-abc", nil) })
 	if !strings.Contains(output, "my notes") {
 		t.Errorf("expected 'my notes' in output, got %q", output)
 	}
@@ -204,9 +207,25 @@ func TestCmdSubMemory(t *testing.T) {
 
 func TestCmdSubMemoryEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	output := captureOutput(func() { cmdSubMemory(tmpDir, "unknown-session") })
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "unknown-session", nil) })
 	if !strings.Contains(output, "无私有记忆") {
 		t.Errorf("expected '(无私有记忆)', got %q", output)
+	}
+}
+
+func TestCmdSubMemorySingleFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	memDir := filepath.Join(tmpDir, "memory", "sess-abc")
+	os.MkdirAll(memDir, 0755)
+	os.WriteFile(filepath.Join(memDir, "log.md"), []byte("session log"), 0644)
+	os.WriteFile(filepath.Join(memDir, "draft.md"), []byte("draft content"), 0644)
+
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "sess-abc", []string{"log.md"}) })
+	if !strings.Contains(output, "session log") {
+		t.Errorf("expected 'session log', got %q", output)
+	}
+	if strings.Contains(output, "draft content") {
+		t.Errorf("should not contain other file content, got %q", output)
 	}
 }
 
@@ -216,7 +235,7 @@ func TestCmdWriteSubMemory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	oldArgs := os.Args
-	os.Args = []string{"taskctl", "write-sub-memory", "log.md", "hello world"}
+	os.Args = []string{"taskctl", "write-sub-memory", "log.md", "hello", "world"}
 	defer func() { os.Args = oldArgs }()
 
 	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "sess-abc") })
@@ -234,16 +253,73 @@ func TestCmdWriteSubMemory(t *testing.T) {
 	}
 }
 
-func TestCmdWriteSubMemoryMissingArgs(t *testing.T) {
+// ===================== atomicWriteFile =====================
+
+func TestAtomicWriteFile(t *testing.T) {
 	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "test.txt")
 
-	oldArgs := os.Args
-	os.Args = []string{"taskctl", "write-sub-memory"}
-	defer func() { os.Args = oldArgs }()
+	err := atomicWriteFile(target, []byte("hello"), 0644)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "sess-abc") })
-	if !strings.Contains(output, "用法") {
-		t.Errorf("expected usage message, got %q", output)
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("file not found: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Errorf("content = %q, want %q", string(data), "hello")
+	}
+}
+
+func TestAtomicWriteFileOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "test.txt")
+
+	os.WriteFile(target, []byte("old"), 0644)
+
+	err := atomicWriteFile(target, []byte("new"), 0644)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("file not found: %v", err)
+	}
+	if string(data) != "new" {
+		t.Errorf("content = %q, want %q", string(data), "new")
+	}
+}
+
+func TestAtomicWriteFileNoTempLeftover(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "test.txt")
+
+	atomicWriteFile(target, []byte("data"), 0644)
+
+	entries, _ := os.ReadDir(tmpDir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".tmp-") {
+			t.Errorf("temp file leftover: %s", e.Name())
+		}
+	}
+}
+
+// ===================== readContent =====================
+
+func TestReadContentFromArgs(t *testing.T) {
+	content := readContent([]string{"log.md", "hello", "world"})
+	if content != "hello world" {
+		t.Errorf("content = %q, want %q", content, "hello world")
+	}
+}
+
+func TestReadContentEmpty(t *testing.T) {
+	content := readContent([]string{"log.md"})
+	if content != "" {
+		t.Errorf("content = %q, want empty", content)
 	}
 }
 
@@ -254,7 +330,7 @@ func TestReadFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "c.txt"), []byte("gamma"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("alpha"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "b.txt"), []byte("beta"), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755) // should be skipped
+	os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
 
 	files, err := readFiles(tmpDir)
 	if err != nil {
@@ -318,7 +394,7 @@ func captureOutput(fn func()) string {
 	os.Stdout = oldStdout
 	os.Stderr = oldStderr
 
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	return string(buf[:n])
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	return buf.String()
 }

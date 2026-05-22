@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 func main() {
@@ -20,13 +22,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "路径解析失败: %v\n", err)
 		os.Exit(1)
 	}
-
-	_ = taskID
 
 	if len(os.Args) < 2 {
 		printHelp()
@@ -47,10 +47,10 @@ func main() {
 		cmdSummary(sharedDir)
 
 	case "common-memory":
-		cmdCommonMemory(sharedDir)
+		cmdCommonMemory(sharedDir, os.Args[2:])
 
 	case "sub-memory":
-		cmdSubMemory(sharedDir, sessionID)
+		cmdSubMemory(sharedDir, sessionID, os.Args[2:])
 
 	case "write-sub-memory":
 		cmdWriteSubMemory(sharedDir, sessionID)
@@ -64,7 +64,7 @@ func main() {
 
 // ===================== 路径解析 =====================
 
-func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) {
+func parsePath(exePath string) (sessionID, sharedDir string, err error) {
 	current := filepath.Dir(exePath)
 
 	skillsDir := filepath.Dir(current)
@@ -74,12 +74,12 @@ func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) 
 	sessionID = filepath.Base(sessionDir)
 
 	taskDir := filepath.Dir(sessionDir)
-	taskID = filepath.Base(taskDir)
+	taskID := filepath.Base(taskDir)
 
 	worktreesDir := filepath.Dir(taskDir)
 
 	if filepath.Base(worktreesDir) != "worktrees" {
-		return "", "", "", fmt.Errorf("未找到 worktrees 目录")
+		return "", "", fmt.Errorf("未找到 worktrees 目录")
 	}
 
 	sharedDir = filepath.Join(worktreesDir, taskID, "shared", ".agent")
@@ -93,11 +93,11 @@ func printHelp() {
 	fmt.Println(`taskctl - Agent共享上下文工具（MVP）
 
 命令:
-  ls                    查看目录结构
-  summary               查看 config.yaml + plans
-  common-memory         查看公共记忆
-  sub-memory            查看当前Agent私有记忆
-  write-sub-memory      写入私有记忆`)
+  ls                          查看目录结构
+  summary                     查看 config.yaml + plans
+  common-memory [file]        查看公共记忆（指定文件名则只读单个文件）
+  sub-memory [file]           查看当前Agent私有记忆（指定文件名则只读单个文件）
+  write-sub-memory <file> [content]  写入私有记忆（无参数时从 stdin 读取内容）`)
 }
 
 // ===================== ls =====================
@@ -106,7 +106,7 @@ func cmdLs(sharedDir string) {
 	entries, err := listTree(sharedDir, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "读取目录失败: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	if len(entries) == 0 {
@@ -166,8 +166,8 @@ func cmdSummary(sharedDir string) {
 
 	entries, err := os.ReadDir(plansDir)
 	if err != nil {
-		fmt.Println("(无 plans)")
-		return
+		fmt.Fprintf(os.Stderr, "读取 plans 目录失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -197,8 +197,19 @@ type FileContent struct {
 }
 
 // 公共记忆
-func cmdCommonMemory(sharedDir string) {
+func cmdCommonMemory(sharedDir string, args []string) {
 	memDir := filepath.Join(sharedDir, "memory", "common")
+
+	if len(args) > 0 {
+		filePath := filepath.Join(memDir, args[0])
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取文件失败: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(string(data))
+		return
+	}
 
 	files, err := readFiles(memDir)
 	if err != nil || len(files) == 0 {
@@ -212,8 +223,19 @@ func cmdCommonMemory(sharedDir string) {
 }
 
 // 私有记忆（读）
-func cmdSubMemory(sharedDir, sessionID string) {
+func cmdSubMemory(sharedDir, sessionID string, args []string) {
 	memDir := filepath.Join(sharedDir, "memory", sessionID)
+
+	if len(args) > 0 {
+		filePath := filepath.Join(memDir, args[0])
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取文件失败: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(string(data))
+		return
+	}
 
 	files, err := readFiles(memDir)
 	if err != nil || len(files) == 0 {
@@ -228,13 +250,17 @@ func cmdSubMemory(sharedDir, sessionID string) {
 
 // 私有记忆（写）
 func cmdWriteSubMemory(sharedDir, sessionID string) {
-	if len(os.Args) < 4 {
-		fmt.Println("用法: taskctl write-sub-memory <文件名> <内容>")
-		return
+	if len(os.Args) < 3 {
+		fmt.Fprintf(os.Stderr, "用法: taskctl write-sub-memory <文件名> [内容]\n")
+		os.Exit(1)
 	}
 
 	fileName := os.Args[2]
-	content := os.Args[3]
+	content := readContent(os.Args[2:])
+	if content == "" {
+		fmt.Fprintf(os.Stderr, "错误: 未提供内容（通过参数或 stdin）\n")
+		os.Exit(1)
+	}
 
 	memDir := filepath.Join(sharedDir, "memory", sessionID)
 
@@ -246,13 +272,60 @@ func cmdWriteSubMemory(sharedDir, sessionID string) {
 
 	filePath := filepath.Join(memDir, fileName)
 
-	err = os.WriteFile(filePath, []byte(content), 0644)
+	err = atomicWriteFile(filePath, []byte(content), 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "写入失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Printf("已写入私有记忆: %s\n", fileName)
+}
+
+// ===================== stdin =====================
+
+func readContent(args []string) string {
+	stat, _ := os.Stdin.Stat()
+	if stat != nil && (stat.Mode()&os.ModeCharDevice) == 0 {
+		data, err := io.ReadAll(os.Stdin)
+		if err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+
+	if len(args) >= 2 {
+		return strings.Join(args[1:], " ")
+	}
+
+	return ""
+}
+
+// ===================== 原子写入 =====================
+
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("关闭临时文件失败: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("重命名失败: %w", err)
+	}
+
+	return nil
 }
 
 // ===================== 文件读取 =====================
