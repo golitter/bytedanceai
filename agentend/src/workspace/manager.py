@@ -9,6 +9,11 @@ from src.workspace.git_ops import GitOps
 from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
 from src.workspace.store import WorkspaceStoreProtocol
 
+_AGENT_CONFIG_DIRS: dict[AgentType, str] = {
+    AgentType.CLAUDE_CODE: ".claude",
+    AgentType.OPENCODE: ".opencode",
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,6 +79,11 @@ class WorkspaceManager:
             self._provisioner.provision(ws.worktree_path, agent_type)
             self._provisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 
+            # Write git exclude for agent config directory
+            config_dir = _AGENT_CONFIG_DIRS.get(agent_type)
+            if config_dir:
+                self._git.write_exclude(ws.worktree_path, [f"/{config_dir}"])
+
             self._workspaces[ws.id] = ws
             await self._store.save(ws)
             return ws
@@ -137,6 +147,9 @@ class WorkspaceManager:
                 ws.status = WorkspaceStatus.MERGED
                 await self._store.save(ws)
             return ok
+
+    async def merge_task_to_main(self, repo_path: str, task_id: str) -> bool:
+        return await self._git.merge_branch(repo_path, task_branch_name(task_id), "main")
 
     # TTL cleanup
 

@@ -23,7 +23,11 @@ class CommitRequest(BaseModel):
 
 
 class MergeRequest(BaseModel):
-    target_branch: str = "main"
+    target_branch: str | None = None
+
+
+class MergeTaskToMainRequest(BaseModel):
+    repo_path: str
 
 
 @router.post("/create")
@@ -67,6 +71,18 @@ async def merge_workspace(
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     ok = await mgr.merge(workspace_id, req.target_branch)
+    if not ok:
+        return {"success": False, "error": "merge conflict"}
+    return {"success": True}
+
+
+@router.post("/task/{task_id}/merge-to-main")
+async def merge_task_to_main(
+    task_id: str,
+    req: MergeTaskToMainRequest,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    ok = await mgr.merge_task_to_main(req.repo_path, task_id)
     if not ok:
         return {"success": False, "error": "merge conflict"}
     return {"success": True}

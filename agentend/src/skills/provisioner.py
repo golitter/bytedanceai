@@ -73,53 +73,7 @@ class SkillProvisioner:
             logger.info("Provisioned skill %s to %s", skill_name, dest)
 
         if provisioned:
-            self._write_git_exclude(worktree_path, agent_type, provisioned)
-
-    def _resolve_git_dir(self, worktree_path: str) -> Path | None:
-        """Resolve the actual git directory for a worktree.
-
-        In a git worktree, .git is a file containing 'gitdir: <path>'.
-        In a plain repo, .git is a directory.
-        """
-        dot_git = Path(worktree_path) / ".git"
-        if dot_git.is_dir():
-            return dot_git
-        if dot_git.is_file():
-            content = dot_git.read_text().strip()
-            if content.startswith("gitdir: "):
-                git_dir = Path(content[len("gitdir: ") :].strip())
-                if not git_dir.is_absolute():
-                    git_dir = Path(worktree_path) / git_dir
-                if git_dir.is_dir():
-                    return git_dir
-        return None
-
-    def _write_git_exclude(self, worktree_path: str, agent_type: AgentType, skill_names: list[str]) -> None:
-        """Add provisioned skill paths to .git/info/exclude so they're never committed.
-
-        Only excludes the specific skill subdirectories we provisioned, not the
-        entire config directory — the repo may already have its own tracked content
-        under .claude/ or .opencode/.
-        """
-        config_dir = _AGENT_TYPE_DIRS.get(agent_type)
-        if not config_dir:
-            return
-        git_dir = self._resolve_git_dir(worktree_path)
-        if not git_dir:
-            logger.warning("Cannot resolve git dir for worktree: %s", worktree_path)
-            return
-        exclude_file = git_dir / "info" / "exclude"
-        exclude_file.parent.mkdir(parents=True, exist_ok=True)
-        existing = exclude_file.read_text() if exclude_file.exists() else ""
-        lines = set(existing.splitlines())
-        entries = [f"/{config_dir}/skills/{name}" for name in skill_names]
-        new_entries = [e for e in entries if e not in lines]
-        if new_entries:
-            with exclude_file.open("a") as f:
-                if existing and not existing.endswith("\n"):
-                    f.write("\n")
-                f.write("\n".join(new_entries) + "\n")
-            logger.info("Added %s to %s", new_entries, exclude_file)
+            logger.info("Provisioned %d skills to %s", len(provisioned), target)
 
     def init_shared_dirs(self, worktrees_root: str, task_id: str, session_id: str) -> None:
         shared_base = Path(worktrees_root) / task_id / "shared" / ".agent" / "memory"

@@ -15,13 +15,13 @@
 
 ## 分支结构设计
 
-采用两级分支策略：`main → task/{task_id} → agent/{agent_name}/{task_id}`
+采用两级分支策略：`main → task/{task_id} → agent/{session_id}/{task_id}`
 
 ```
 main
-  └── task/task-123                    ← 集成分支（from main）
-        ├── agent/frontend/task-123    ← 前端 Agent 独立分支 + worktree 目录
-        └── agent/backend/task-123     ← 后端 Agent 独立分支 + worktree 目录
+  └── task/task-123                              ← 集成分支（from main）
+        ├── agent/sess-aaa/task-123              ← Session A 的 Agent 独立分支 + worktree 目录
+        └── agent/sess-bbb/task-123              ← Session B 的 Agent 独立分支 + worktree 目录
 ```
 
 - **task branch**：同一 task 下所有 Agent 的公共父分支，从 main 创建。作为任务内的集成分支
@@ -32,9 +32,9 @@ main
 分两步走，避免多 Agent 直接操作 main：
 
 ```
-agent/frontend/task-123 → task/task-123   (Agent → 任务内集成，默认行为)
-agent/backend/task-123  → task/task-123   (Agent → 任务内集成，默认行为)
-task/task-123           → main            (任务 → 主分支，显式触发)
+agent/sess-aaa/task-123 → task/task-123   (Agent → 任务内集成，默认行为)
+agent/sess-bbb/task-123 → task/task-123   (Agent → 任务内集成，默认行为)
+task/task-123            → main           (任务 → 主分支，显式触发)
 ```
 
 ### 目录结构
@@ -46,8 +46,8 @@ task/task-123           → main            (任务 → 主分支，显式触发
   ├── project/                          ← 主仓库（main 分支）
   └── worktrees/
         └── task-123/
-              ├── frontend/             ← 前端 Agent 的 worktree
-              └── backend/              ← 后端 Agent 的 worktree
+              ├── sess-aaa/             ← Session A 的 worktree
+              └── sess-bbb/             ← Session B 的 worktree
 ```
 
 ## 模块结构
@@ -109,8 +109,8 @@ class Workspace:
 ```
 
 `__post_init__` 中自动计算：
-- `branch_name` → `"agent/{agent_name}/{task_id}"`
-- `worktree_path` → `"{repo_parent}/worktrees/{task_id}/{agent_name}"`
+- `branch_name` → `"agent/{session_id}/{task_id}"`
+- `worktree_path` → `"{repo_parent}/worktrees/{task_id}/{session_id}"`
 
 #### task_branch_name 辅助函数
 
@@ -171,10 +171,10 @@ raw["created_at"] = datetime.fromisoformat(raw["created_at"])  # ISO → datetim
     "id": "uuid-abc",
     "task_id": "task-123",
     "agent_name": "frontend",
+    "session_id": "sess-aaa",
     "repo_path": "/repos/project",
-    "worktree_path": "/repos/worktrees/task-123/frontend",
-    "branch_name": "agent/frontend/task-123",
-    "session_id": null,
+    "worktree_path": "/repos/worktrees/task-123/sess-aaa",
+    "branch_name": "agent/sess-aaa/task-123",
     "container_id": null,
     "status": "active",
     "created_at": "2026-05-21T00:30:00.123456"
@@ -226,14 +226,14 @@ async def worktree_add(
 
 ```bash
 # 检查分支是否已存在
-git branch --list agent/frontend/task-123
+git branch --list agent/sess-aaa/task-123
 
 # 分支不存在：创建新分支 + worktree
-git worktree add /path/to/worktree -b agent/frontend/task-123 task/task-123
-#                                                  新分支名 ↑           ↑ 起始点
+git worktree add /path/to/worktree -b agent/sess-aaa/task-123 task/task-123
+#                                                新分支名 ↑            ↑ 起始点
 
 # 分支已存在：直接检出已有分支
-git worktree add /path/to/worktree agent/frontend/task-123
+git worktree add /path/to/worktree agent/sess-aaa/task-123
 ```
 
 `base_branch` 参数指定新分支的起始点（即 task branch），不传时从 HEAD 创建。
@@ -251,9 +251,9 @@ worktree /repos/project
 HEAD abc123def
 branch refs/heads/main
 
-worktree /repos/worktrees/task-123/frontend
+worktree /repos/worktrees/task-123/sess-aaa
 HEAD def456abc
-branch refs/heads/agent/frontend/task-123
+branch refs/heads/agent/sess-aaa/task-123
 ```
 
 解析逻辑：按空行分隔条目，提取 `worktree`（路径）和 `branch`（分支名，去掉 `refs/heads/` 前缀）。
@@ -274,7 +274,7 @@ git rev-parse --abbrev-ref HEAD
 git checkout main
 
 # 合并
-git merge agent/frontend/task-123
+git merge agent/sess-aaa/task-123
 
 # 冲突时回滚
 git merge --abort
@@ -467,66 +467,75 @@ Shutdown:
 
 ## 完整生命周期示例
 
-### 场景：为 task-123 创建 frontend 和 backend 两个 Agent
+### 场景：为 task-123 创建两个 Agent Session
 
-**Step 1: 创建 frontend workspace**
+**Step 1: 创建 Session A 的 workspace**
 
 ```
 POST /v1/workspace/create
-{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "frontend"}
+{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "frontend", "session_id": "sess-aaa", "agent_type": "claude_code"}
 ```
 
 Manager 内部执行：
 ```bash
 git branch task/task-123 main                              # 创建集成分支
-git worktree add /repos/worktrees/task-123/frontend \
-    -b agent/frontend/task-123 task/task-123                # 创建 agent worktree
+git worktree add /repos/worktrees/task-123/sess-aaa \
+    -b agent/sess-aaa/task-123 task/task-123               # 创建 agent worktree
 ```
 
-**Step 2: 创建 backend workspace**
+**Step 2: 创建 Session B 的 workspace**
 
 ```
 POST /v1/workspace/create
-{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "backend"}
+{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "backend", "session_id": "sess-bbb", "agent_type": "opencode"}
 ```
 
 Manager 内部执行：
 ```bash
 git branch --list task/task-123                             # 检查已存在，跳过
-git worktree add /repos/worktrees/task-123/backend \
-    -b agent/backend/task-123 task/task-123                 # 从同一 task branch 创建
+git worktree add /repos/worktrees/task-123/sess-bbb \
+    -b agent/sess-bbb/task-123 task/task-123               # 从同一 task branch 创建
 ```
 
 **Step 3: Agent 工作中**
 
 两个 Agent 分别在各自的 worktree 目录中独立工作，互不影响。
 
-**Step 4: 合并 frontend 到 task branch**
+**Step 4: 提交变更**
 
 ```
-POST /v1/workspace/{frontend_id}/merge
+POST /v1/workspace/{workspace_id}/commit
+{"message": "feat: implement login page"}
+```
+
+等价于 `git add -A && git commit -m "feat: implement login page"`，提交到当前 agent 分支。
+
+**Step 5: 合并 Session A 到 task branch**
+
+```
+POST /v1/workspace/{workspace_a_id}/merge
 {"target_branch": "task/task-123"}
 ```
 
-等价于 `git checkout task/task-123 && git merge agent/frontend/task-123`。frontend workspace 状态保持 ACTIVE。
+等价于 `git checkout task/task-123 && git merge agent/sess-aaa/task-123`。workspace 状态保持 ACTIVE。
 
-**Step 5: 合并 task branch 到 main**
+**Step 6: 合并 task branch 到 main**
 
 ```
-POST /v1/workspace/{frontend_id}/merge
-{"target_branch": "main"}
+POST /v1/workspace/task/task-123/merge-to-main
+{"repo_path": "/repos/project"}
 ```
 
 等价于 `git checkout main && git merge task/task-123`。此时所有该 task 下的变更一次性合入 main。
 
-**Step 6: 清理 workspace**
+**Step 7: 清理 workspace**
 
 ```
-DELETE /v1/workspace/{frontend_id}
-DELETE /v1/workspace/{backend_id}
+DELETE /v1/workspace/{workspace_a_id}
+DELETE /v1/workspace/{workspace_b_id}
 ```
 
-等价于 `git worktree remove --force <path>`，状态变为 CLEANED，Lock 对象被回收。
+等价于 `git worktree remove --force <path>` + `git branch -D agent/sess-aaa/task-123`，状态变为 CLEANED，Lock 对象被回收。
 
 ---
 

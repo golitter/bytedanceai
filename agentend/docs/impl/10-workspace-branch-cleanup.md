@@ -5,8 +5,8 @@
 `cleanup()` 只执行 `git worktree remove`，没有删除对应的 git 分支。清理后残留如下分支：
 
 ```
-  agent/AgentType.CLAUDE_CODE/333
-  agent/AgentType.OPENCODE/333333
+  agent/sess-aaa/333
+  agent/sess-bbb/333333
 * main
   task/333
   task/333333
@@ -16,7 +16,7 @@
 
 每个 task 的 workspace 会创建两类分支：
 
-- **agent 分支**：`agent/{agent_name}/{task_id}` — 每个 agent 对应一个
+- **agent 分支**：`agent/{session_id}/{task_id}` — 每个 agent session 对应一个
 - **task 分支**：`task/{task_id}` — 同一 task 共享的基础分支
 
 ## 修复方案

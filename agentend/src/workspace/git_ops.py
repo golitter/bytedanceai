@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -101,16 +102,49 @@ class GitOps:
 
     async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> bool:
         ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
+        if not ok:
+            return False
         ok, _ = await self._run_git("checkout", target, cwd=repo_path)
         if not ok:
             return False
         ok, err = await self._run_git("merge", branch, cwd=repo_path)
         if not ok:
             await self._run_git("merge", "--abort", cwd=repo_path)
-            await self._run_git("checkout", current.strip(), cwd=repo_path)
-            return False
-        return True
+        await self._run_git("checkout", current.strip(), cwd=repo_path)
+        return ok
 
     async def get_current_branch(self, path: str) -> str:
         ok, out = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=path)
         return out.strip() if ok else ""
+
+    @staticmethod
+    def resolve_git_dir(worktree_path: str) -> Path | None:
+        dot_git = Path(worktree_path) / ".git"
+        if dot_git.is_dir():
+            return dot_git
+        if dot_git.is_file():
+            content = dot_git.read_text().strip()
+            if content.startswith("gitdir: "):
+                git_dir = Path(content[len("gitdir: ") :].strip())
+                if not git_dir.is_absolute():
+                    git_dir = Path(worktree_path) / git_dir
+                if git_dir.is_dir():
+                    return git_dir
+        return None
+
+    def write_exclude(self, worktree_path: str, entries: list[str]) -> None:
+        git_dir = self.resolve_git_dir(worktree_path)
+        if not git_dir:
+            logger.warning("Cannot resolve git dir for worktree: %s", worktree_path)
+            return
+        exclude_file = git_dir / "info" / "exclude"
+        exclude_file.parent.mkdir(parents=True, exist_ok=True)
+        existing = exclude_file.read_text() if exclude_file.exists() else ""
+        lines = set(existing.splitlines())
+        new_entries = [e for e in entries if e not in lines]
+        if new_entries:
+            with exclude_file.open("a") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write("\n".join(new_entries) + "\n")
+            logger.info("Added %s to %s", new_entries, exclude_file)
