@@ -126,10 +126,18 @@ git branch --show-current
 ### 4. taskctl merge（成功路径）
 
 ```bash
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
-.claude/skills/taskctl/taskctl merge
-# 预期输出: merged to task/test
-# exit code: 0
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent1",
+    "message": "合并当前改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
 ```
 
 验证合并结果：
@@ -153,16 +161,41 @@ git log task/test --oneline -3
 ### 5. taskctl merge（有未提交改动）
 
 ```bash
-# 制造未提交改动
+# 先让 agent 制造未提交改动
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent1",
+    "message": "在 README.md 末尾追加一行: extra content",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
+
+# 合并（agent 应自动提交后合并）
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent1",
+    "message": "合并当前改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
+```
+
+验证合并结果：
+
+```bash
 cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
-echo "extra content" >> README.md
 
-# merge 应自动提交后合并
-.claude/skills/taskctl/taskctl merge
-# 预期输出: merged to task/test
-# exit code: 0
-
-# 验证 task 分支包含新内容
+# task 分支包含新内容
 git show task/test:README.md
 # 应包含 extra content
 
@@ -188,23 +221,61 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
   }' | python3 -m json.tool
 
 # 在 agent2 中修改 README 并提交
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent2
-echo "# Conflict from agent2" > README.md
-git add -A && git commit -m "agent2: conflict change"
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent2",
+    "message": "将 README.md 的内容替换为一行: # Conflict from agent2，然后提交改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
 
 # 先 merge agent2 成功
-.claude/skills/taskctl/taskctl merge
-# 输出: merged to task/test
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent2",
+    "message": "合并当前改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
 
 # 回到 agent1，制造冲突修改
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
-echo "# Conflict from agent1" > README.md
-git add -A && git commit -m "agent1: conflict change"
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent1",
+    "message": "将 README.md 的内容替换为一行: # Conflict from agent1，然后提交改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
 
 # merge 应冲突失败
-.claude/skills/taskctl/taskctl merge
-# 预期 stderr 输出: 合并冲突: ...
-# exit code: 1
+curl -s -X POST http://localhost:8001/v1/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "test",
+    "session_id": "test-agent1",
+    "message": "合并当前改动",
+    "agent_type": "claude-code",
+    "stream": false,
+    "config": {
+      "allowed_tools": ["Read", "Write", "Edit", "Bash"]
+    }
+  }' | python3 -m json.tool
+# 预期输出应包含合并冲突信息
 ```
 
 验证冲突后状态安全：
