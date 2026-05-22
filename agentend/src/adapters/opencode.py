@@ -31,7 +31,8 @@ class OpenCodeAdapter(BaseAgentAdapter):
         prompt = message
         if system_prompt_append:
             prompt = f"[系统约束: {system_prompt_append}]\n\n{message}"
-        cmd = [settings.OPENCODE_CLI_PATH, "run", prompt, "--format", "json"]
+        # CLI 可执行文件路径来自 config.yaml 的 cli.opencode_path
+        cmd = [settings.cli.opencode_path, "run", prompt, "--format", "json"]
         if cwd:
             cmd.extend(["--dir", cwd])
         if cli_session_id:
@@ -169,8 +170,9 @@ class OpenCodeAdapter(BaseAgentAdapter):
         if not process or process.returncode is not None:
             return False
         process.terminate()
+        # 超时来自 config.yaml 的 execution.process_terminate_timeout
         try:
-            await asyncio.wait_for(process.wait(), timeout=5.0)
+            await asyncio.wait_for(process.wait(), timeout=settings.execution.process_terminate_timeout)
         except asyncio.TimeoutError:
             process.kill()
         self._processes.pop(session_id, None)

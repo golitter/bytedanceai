@@ -1,4 +1,0 @@
-taskctl:
-  file:
-    - SKILL.md
-    - taskctl

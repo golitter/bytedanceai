@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from datetime import datetime
 
+from src.app.config import settings
 from src.session.models import _VALID_TRANSITIONS, Session, SessionState
 
 
@@ -46,8 +47,9 @@ class SessionManager:
 
         if session.process and session.process.returncode is None:
             session.process.terminate()
+            # 超时来自 config.yaml 的 execution.process_terminate_timeout
             try:
-                await asyncio.wait_for(session.process.wait(), timeout=5.0)
+                await asyncio.wait_for(session.process.wait(), timeout=settings.execution.process_terminate_timeout)
             except asyncio.TimeoutError:
                 session.process.kill()
 

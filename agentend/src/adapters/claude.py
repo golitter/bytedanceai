@@ -34,7 +34,8 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
         allowed_tools: list[str] | None = None,
         max_turns: int | None = None,
     ) -> list[str]:
-        cmd = [settings.CLAUDE_CLI_PATH, "-p", message, "--output-format", "stream-json", "--verbose"]
+        # CLI 可执行文件路径来自 config.yaml 的 cli.claude_path
+        cmd = [settings.cli.claude_path, "-p", message, "--output-format", "stream-json", "--verbose"]
 
         if cli_session_id:
             if is_resume:
@@ -154,8 +155,9 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             return False
 
         process.terminate()
+        # 超时来自 config.yaml 的 execution.process_terminate_timeout
         try:
-            await asyncio.wait_for(process.wait(), timeout=5.0)
+            await asyncio.wait_for(process.wait(), timeout=settings.execution.process_terminate_timeout)
         except asyncio.TimeoutError:
             process.kill()
 

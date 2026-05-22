@@ -2,27 +2,15 @@ import logging
 import shutil
 from pathlib import Path
 
-import yaml
-
+from src.app.config import settings
 from src.schemas.request import AgentType
 
 logger = logging.getLogger(__name__)
 
-# Map AgentType enum to its config directory name
 _AGENT_TYPE_DIRS: dict[AgentType, str] = {
     AgentType.CLAUDE_CODE: ".claude",
     AgentType.OPENCODE: ".opencode",
 }
-
-_BUILTIN_SKILLS_DIR = Path(__file__).parent / "builtin"
-_MANIFEST_PATH = _BUILTIN_SKILLS_DIR / "manifest.yaml"
-
-
-def _load_manifest() -> dict:
-    if not _MANIFEST_PATH.is_file():
-        return {}
-    with _MANIFEST_PATH.open() as f:
-        return yaml.safe_load(f) or {}
 
 
 def _skill_target_dir(worktree_path: str, agent_type: AgentType) -> Path | None:
@@ -41,12 +29,13 @@ class SkillProvisioner:
         if target is None:
             return
 
-        builtin_dir = _BUILTIN_SKILLS_DIR
+        # builtin 目录和 manifest 清单均来自 config.yaml 的 skills 分区
+        builtin_dir = Path(settings.skills.builtin_dir)
         if not builtin_dir.is_dir():
             logger.warning("Builtin skills directory not found: %s", builtin_dir)
             return
 
-        manifest = _load_manifest()
+        manifest = settings.skills.manifest
         provisioned: list[str] = []
         for skill_name, spec in manifest.items():
             skill_dir = builtin_dir / skill_name

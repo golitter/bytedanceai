@@ -4,11 +4,10 @@ import logging
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from src.app.config import settings
 from src.workspace.models import Workspace, WorkspaceStatus
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_STORE_PATH = Path("logs/workspaces.json")
 
 
 @runtime_checkable
@@ -22,7 +21,8 @@ class WorkspaceStoreProtocol(Protocol):
 
 class JsonFileWorkspaceStore:
     def __init__(self, path: Path | None = None) -> None:
-        self._path = path or _DEFAULT_STORE_PATH
+        # 默认路径来自 config.yaml 的 workspace.store_path
+        self._path = path or Path(settings.workspace.store_path)
         self._data: dict[str, dict] = {}
         self._lock = asyncio.Lock()
         self._load()

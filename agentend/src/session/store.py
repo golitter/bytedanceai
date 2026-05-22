@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
 
-_DEFAULT_STORE_PATH = Path("logs/session_mappings.json")
+from src.app.config import settings
 
 
 class SessionMappingStore:
     def __init__(self, path: Path | None = None) -> None:
-        self._path = path or _DEFAULT_STORE_PATH
+        # 默认路径来自 config.yaml 的 session.store_path
+        self._path = path or Path(settings.session.store_path)
         self._mappings: dict[str, str] = {}
         self._load()
 

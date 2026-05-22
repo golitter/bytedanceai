@@ -37,7 +37,8 @@ async def lifespan(app: FastAPI):
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
 
     # Startup: begin TTL cleanup
-    await ws_mgr.start_ttl_cleanup(check_interval=settings.WORKSPACE_TTL_CHECK_INTERVAL)
+    # check_interval 来自 config.yaml 的 workspace.ttl_check_interval
+    await ws_mgr.start_ttl_cleanup(check_interval=settings.workspace.ttl_check_interval)
 
     yield
 
@@ -52,14 +53,16 @@ async def lifespan(app: FastAPI):
         await mgr.destroy(session.id)
 
 
-app = FastAPI(title="AgentEnd Runtime", version="0.1.0", lifespan=lifespan)
+# title/version 来自 config.yaml，便于运维统一修改
+app = FastAPI(title=settings.app.title, version=settings.app.version, lifespan=lifespan)
 
+# CORS 参数来自 config.yaml，不再硬编码
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.server.cors.origins,
+    allow_credentials=settings.server.cors.credentials,
+    allow_methods=settings.server.cors.methods,
+    allow_headers=settings.server.cors.headers,
 )
 
 app.include_router(health_router)
@@ -69,4 +72,5 @@ app.include_router(workspace_router)
 
 
 if __name__ == "__main__":
-    uvicorn.run("src.app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    # host/port/reload 均来自 config.yaml 的 server 分区
+    uvicorn.run("src.app.main:app", host=settings.server.host, port=settings.server.port, reload=settings.server.reload)

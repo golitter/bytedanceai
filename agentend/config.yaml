@@ -1,0 +1,53 @@
+# AgentEnd 统一配置文件
+# 所有可配置参数的唯一来源，缺失必填字段会导致启动报错退出
+
+# HTTP 服务器配置（uvicorn 启动参数 + CORS 中间件）
+server:
+  host: "0.0.0.0"
+  port: 8001
+  reload: true
+  cors:
+    origins:
+      - "*"
+    credentials: true
+    methods:
+      - "*"
+    headers:
+      - "*"
+
+# FastAPI 应用元信息
+app:
+  title: "AgentEnd Runtime"
+  version: "0.1.0"
+
+# CLI 工具路径（用于 adapter 构建子进程命令）
+cli:
+  claude_path: "claude"
+  opencode_path: "opencode"
+
+# Workspace 生命周期与持久化
+workspace:
+  base_dir: "./worktrees"              # worktree 根目录
+  ttl_seconds: 3600                    # 空闲 workspace 过期时间
+  ttl_check_interval: 300              # TTL 清理巡检间隔（秒）
+  store_path: "logs/workspaces.json"   # workspace 元数据持久化路径
+  git_default_branch: "main"           # 默认 git 分支
+
+# Session 映射持久化
+session:
+  store_path: "logs/session_mappings.json"  # session_id -> cli_session_id 映射存储
+
+# Agent 执行控制
+execution:
+  max_turns: 20                        # 单次执行最大轮次
+  timeout: 300                         # 单次执行最大等待时间（秒）
+  process_terminate_timeout: 5.0       # 子进程 terminate 后等待 kill 的超时（秒）
+
+# Skills 配置（原 skills/builtin/manifest.yaml 已合并至此）
+skills:
+  builtin_dir: "src/skills/builtin"    # builtin skills 目录（相对于 agentend/）
+  manifest:                            # skill 清单，格式: { skill_name: { file: [...], dir: [...] } }
+    taskctl:
+      file:
+        - SKILL.md
+        - taskctl

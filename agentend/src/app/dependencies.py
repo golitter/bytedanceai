@@ -33,4 +33,4 @@ def create_rule_engine() -> RuleEngine:
 
 def create_workspace_manager() -> WorkspaceManager:
     store = JsonFileWorkspaceStore()
-    return WorkspaceManager(store, ttl_seconds=settings.WORKSPACE_TTL_SECONDS)
+    return WorkspaceManager(store, ttl_seconds=settings.workspace.ttl_seconds)

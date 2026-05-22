@@ -212,7 +212,8 @@ async def agent_execute(
         return "".join(chunks)
 
     try:
-        content = await asyncio.wait_for(_collect(), timeout=settings.EXECUTION_TIMEOUT)
+        # 执行超时来自 config.yaml 的 execution.timeout
+        content = await asyncio.wait_for(_collect(), timeout=settings.execution.timeout)
 
         session_mgr.update_state(session_id, SessionState.COMPLETED)
         session_mgr.record_history(session_id, {"role": "assistant", "content": content})
