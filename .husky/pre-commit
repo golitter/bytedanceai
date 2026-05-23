@@ -5,18 +5,18 @@ set -euo pipefail
 export PATH="$HOME/go/bin:$PATH"
 npx lint-staged
 
-# ── 契约相关目录模式 ──────────────────────────────────────────────────────
-CONTRACT_PATTERNS=(
-  "agentend/src/schemas/"
-  "agentend/src/api/"
-  "agentend/src/adapters/"
-  "backend/internal/model/"
-  "backend/internal/handler/"
-  "backend/internal/types/"
-  "frontend/src/types/"
-  "frontend/src/api/"
-  "contracts/"
-)
+# ── 契约相关目录模式（从配置文件读取）──────────────────────────────────────
+WATCH_PATHS_FILE="contracts/.watch-paths"
+if [ ! -f "$WATCH_PATHS_FILE" ]; then
+  echo "⚠️  未找到 $WATCH_PATHS_FILE，跳过契约检测。"
+  exit 0
+fi
+CONTRACT_PATTERNS=()
+while IFS= read -r line; do
+  line="${line%%#*}"
+  line="$(echo "$line" | xargs)"
+  [ -n "$line" ] && CONTRACT_PATTERNS+=("$line")
+done < "$WATCH_PATHS_FILE"
 
 # ── Stage 1: 变更检测 ────────────────────────────────────────────────────
 staged_files=$(git diff --cached --name-only)
