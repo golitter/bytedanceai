@@ -132,7 +132,7 @@ export function MessageList({
           <ArrowDown
             className="h-4 w-4"
             style={{ color: 'var(--text-secondary)' }}
-            strokeWidth={1.5}
+            strokeWidth={1.25}
           />
         </button>
       )}

@@ -26,6 +26,7 @@ const components: Components = {
         style={{
           backgroundColor: '#0D0F14',
           fontFamily: "'Geist Mono', monospace",
+          letterSpacing: 0,
         }}
         {...props}
       >

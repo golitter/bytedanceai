@@ -20,7 +20,7 @@ export function ImPage() {
             taskId={active.taskId}
             sessionId={active.sessionId}
             agentType={active.agentType}
-            agentName={active.agentType}
+            agentName={active.agentName || undefined}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">

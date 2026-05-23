@@ -50,6 +50,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
       style={{
         backgroundColor: '#0D0F14',
         fontFamily: "'Geist Mono', monospace",
+        letterSpacing: 0,
       }}
     >
       {html ? (

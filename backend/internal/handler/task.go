@@ -26,9 +26,15 @@ func NewTaskHandler(agentClient *agentend_client.Client) *TaskHandler {
 	return &TaskHandler{agentClient: agentClient}
 }
 
+type AgentConfig struct {
+	Type string `json:"type" binding:"required"`
+	Name string `json:"name"`
+}
+
 type CreateTaskReq struct {
-	Title    string `json:"title" binding:"required"`
-	RepoPath string `json:"repo_path"`
+	Title    string        `json:"title" binding:"required"`
+	RepoPath string        `json:"repo_path"`
+	Agents   []AgentConfig `json:"agents"`
 }
 
 func (h *TaskHandler) CreateTask(c *gin.Context) {
@@ -47,6 +53,20 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		vo.InternalError(c, err.Error())
 		return
 	}
+
+	for _, agent := range req.Agents {
+		s := model.Session{
+			SessionID: uuid.New().String(),
+			TaskID:    t.TaskID,
+			AgentType: agent.Type,
+			AgentName: agent.Name,
+			Status:    "active",
+		}
+		if err := db.GetDB().Create(&s).Error; err != nil {
+			slog.Warn("failed to create session", "task_id", t.TaskID, "agent_type", agent.Type, "error", err)
+		}
+	}
+
 	vo.Created(c, t)
 }
 

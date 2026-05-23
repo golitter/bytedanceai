@@ -30,7 +30,7 @@ export function ConversationList() {
       {/* Header */}
       <div
         className="flex shrink-0 items-center gap-2 border-b px-4 py-3"
-        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+        style={{ borderColor: 'var(--divider)' }}
       >
         <div
           className="flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold text-white"
@@ -42,13 +42,13 @@ export function ConversationList() {
           AgentHub
         </span>
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-120"
           style={{ color: 'var(--text-secondary)' }}
           onClick={() => setShowNewChat(true)}
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
-          <Plus className="h-4 w-4" strokeWidth={1.5} />
+          <Plus className="h-4 w-4" strokeWidth={1.25} />
         </button>
       </div>
 
@@ -61,7 +61,7 @@ export function ConversationList() {
           <Search
             className="h-3.5 w-3.5 shrink-0"
             style={{ color: 'var(--text-tertiary)' }}
-            strokeWidth={1.5}
+            strokeWidth={1.25}
           />
           <input
             type="text"
@@ -85,7 +85,7 @@ export function ConversationList() {
             <MessageSquare
               className="h-6 w-6"
               style={{ color: 'var(--text-tertiary)' }}
-              strokeWidth={1.5}
+              strokeWidth={1.25}
             />
             <p className="text-center text-xs" style={{ color: 'var(--text-tertiary)' }}>
               {search ? '没有找到对话' : '还没有对话，点击 + 开始新对话'}

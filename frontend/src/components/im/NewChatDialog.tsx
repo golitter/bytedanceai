@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -25,10 +26,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   })
   const createMutation = useCreateConversation()
   const { setCurrentSession } = useChatNav()
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
 
-  const handleSelect = (agentType: AgentType) => {
+  const handleSelect = (agentType: AgentType, agentName?: string) => {
     createMutation.mutate(
-      { agentType },
+      { agentType, agentName },
       {
         onSuccess: (conversation) => {
           setCurrentSession(conversation.sessionId)
@@ -63,25 +66,61 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         </p>
         <div className="flex flex-col gap-2">
           {types.map((agent) => (
-            <button
-              key={agent.type}
-              className="flex items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors"
-              style={{ border: '1px solid rgba(255,255,255,0.06)' }}
-              onClick={() => handleSelect(agent.type as AgentType)}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              disabled={createMutation.isPending}
-            >
-              <AgentAvatar agentType={agent.type as AgentType} status="ready" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {agent.name}
-                </p>
-                <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {agent.description || AGENT_DESCRIPTIONS[agent.type]}
-                </p>
-              </div>
-            </button>
+            <div key={agent.type}>
+              <button
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors"
+                style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                onClick={() => {
+                  if (expandedAgent === agent.type) {
+                    handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
+                  } else {
+                    setExpandedAgent(agent.type)
+                  }
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                disabled={createMutation.isPending}
+              >
+                <AgentAvatar agentType={agent.type as AgentType} status="ready" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {agent.name}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {agent.description || AGENT_DESCRIPTIONS[agent.type]}
+                  </p>
+                </div>
+              </button>
+              {expandedAgent === agent.type && (
+                <div className="flex items-center gap-2 px-3 pt-1 pb-2">
+                  <input
+                    ref={nameRef}
+                    placeholder="自定义名称（可选）"
+                    className="flex-1 rounded-md border px-2 py-1.5 text-xs outline-none"
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.1)',
+                      backgroundColor: 'var(--bg-canvas)',
+                      color: 'var(--text-primary)',
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
+                      }
+                    }}
+                  />
+                  <button
+                    className="rounded-md px-3 py-1.5 text-xs font-medium"
+                    style={{ backgroundColor: 'var(--color-brand)', color: '#fff' }}
+                    onClick={() =>
+                      handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
+                    }
+                    disabled={createMutation.isPending}
+                  >
+                    开始
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </DialogContent>

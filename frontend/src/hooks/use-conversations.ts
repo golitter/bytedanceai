@@ -13,8 +13,15 @@ export function useConversations() {
 export function useCreateConversation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ agentType, title }: { agentType: AgentType; title?: string }) =>
-      createConversation(agentType, title),
+    mutationFn: ({
+      agentType,
+      agentName,
+      title,
+    }: {
+      agentType: AgentType
+      agentName?: string
+      title?: string
+    }) => createConversation(agentType, agentName, title),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },

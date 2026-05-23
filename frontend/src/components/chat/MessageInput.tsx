@@ -44,13 +44,13 @@ export function MessageInput({
   return (
     <div
       className="flex items-end gap-2 border-t px-4 py-3"
-      style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+      style={{ borderColor: 'var(--divider)' }}
     >
       <textarea
         ref={textareaRef}
         className="flex-1 resize-none rounded-lg px-3 py-2.5 text-sm outline-none placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
         style={{
-          backgroundColor: 'var(--bg-hover)',
+          backgroundColor: 'var(--card)',
           color: 'var(--text-primary)',
           minHeight: 48,
           maxHeight: 200,
@@ -67,7 +67,7 @@ export function MessageInput({
         onClick={handleSend}
         disabled={disabled}
       >
-        <Send className="h-4 w-4 text-white" strokeWidth={1.5} />
+        <Send className="h-4 w-4 text-white" strokeWidth={1.25} />
       </button>
     </div>
   )

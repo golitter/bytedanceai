@@ -38,7 +38,7 @@ export function ChatArea({
       {/* Header — IM style: agent avatar + name */}
       <div
         className="flex h-12 shrink-0 items-center gap-3 border-b px-6"
-        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+        style={{ borderColor: 'var(--divider)' }}
       >
         <AgentAvatar agentType={agentType} status={isStreaming ? 'running' : 'ready'} size={28} />
         <div>

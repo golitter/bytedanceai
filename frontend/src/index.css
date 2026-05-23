@@ -127,9 +127,10 @@
     --color-success: #22C55E;
     --color-warning: #F59E0B;
     --color-error: #EF4444;
-    --agent-claude: #6366F1;
-    --agent-opencode: #F59E0B;
-    --agent-orchestrator: #22C55E;
+    --agent-claude: #DA7756;
+    --agent-opencode: #10B981;
+    --agent-orchestrator: #EAB308;
+    --divider: rgba(255, 255, 255, 0.04);
 }
 
 @layer base {
@@ -138,8 +139,19 @@
     }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: -0.01em;
     }
   html {
     @apply font-sans;
     }
+}
+
+@keyframes status-ready-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes status-running-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

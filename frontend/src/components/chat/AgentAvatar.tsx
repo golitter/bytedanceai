@@ -6,6 +6,12 @@ const AGENT_COLORS: Record<AgentType, string> = {
   orchestrator: 'var(--agent-orchestrator)',
 }
 
+const AGENT_SHADOW_COLORS: Record<AgentType, string> = {
+  'claude-code': '#DA7756',
+  opencode: '#10B981',
+  orchestrator: '#EAB308',
+}
+
 const AGENT_LABELS: Record<AgentType, string> = {
   'claude-code': 'Claude',
   opencode: 'OpenCode',
@@ -29,7 +35,15 @@ interface AgentAvatarProps {
 
 export function AgentAvatar({ agentType, status = 'offline', size = 32 }: AgentAvatarProps) {
   const color = AGENT_COLORS[agentType] ?? 'var(--color-brand)'
+  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? '#6366F1'
   const label = AGENT_LABELS[agentType] ?? agentType
+
+  const statusAnimation =
+    status === 'ready'
+      ? 'status-ready-pulse 2s ease-in-out infinite'
+      : status === 'running'
+        ? 'status-running-spin 1.5s linear infinite'
+        : undefined
 
   return (
     <div className="relative inline-flex shrink-0" title={label}>
@@ -40,6 +54,7 @@ export function AgentAvatar({ agentType, status = 'offline', size = 32 }: AgentA
           height: size,
           backgroundColor: color,
           borderRadius: 8,
+          boxShadow: `0 0 8px ${shadowColor}`,
         }}
       >
         {label.charAt(0).toUpperCase()}
@@ -51,7 +66,7 @@ export function AgentAvatar({ agentType, status = 'offline', size = 32 }: AgentA
             width: 8,
             height: 8,
             backgroundColor: STATUS_COLORS[status],
-            animation: status === 'running' ? 'pulse 1.5s ease-in-out infinite' : undefined,
+            animation: statusAnimation,
           }}
         />
       )}
