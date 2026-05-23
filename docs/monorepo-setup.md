@@ -1,19 +1,15 @@
 # Monorepo 工程化配置说明
 
-## 项目结构
-
-```
-bytedanceai/
-├── frontend/      # React 前端
-├── backend/       # Go 后端
-├── agentend/      # Python Agent 端
-├── docs/          # 文档
-└── scripts/       # 脚本
-```
-
 ## 包管理
 
-使用 **pnpm** 作为包管理器。
+| 子项目 | 包管理器 | 说明 |
+|--------|---------|------|
+| 根目录 | pnpm | Husky / commitlint / lint-staged |
+| frontend | pnpm | Next.js 生态 |
+| backend | go mod | Go 模块管理 |
+| agentend | uv | Python 依赖管理 |
+
+---
 
 ## Git Hooks（Husky）
 
@@ -22,45 +18,39 @@ bytedanceai/
 | pre-commit | `git commit` 前 | 运行 lint-staged，检查暂存文件的代码风格 |
 | commit-msg | `git commit` 前 | 运行 commitlint，校验 commit message 格式 |
 
-## 代码检查与格式化（lint-staged）
+---
 
-| 子项目 | 匹配文件 | 执行命令 |
-|--------|---------|---------|
-| frontend | `**/*.{ts,tsx}` | `eslint --fix --max-warnings=0` + `prettier --write` |
-| backend | `**/*.go` | `gofmt -w` + `goimports -w` |
-| agentend | `**/*.py` | `ruff check --fix` + `ruff format` |
+## AgentEnd（Python FastAPI）
 
-## Commit 规范（commitlint）
+### 前置要求
 
-遵循 `@commitlint/config-conventional` 约定式提交，scope 不能为空且只能是以下值：
+| 工具 | 版本 | 安装 |
+|------|------|------|
+| Python | >= 3.10 | 系统自带 / `brew install python` |
+| uv | latest | `brew install uv` |
 
-| scope | 说明 |
-|-------|------|
-| frontend | 前端 |
-| backend | 后端 |
-| agentend | Agent 端 |
-| common | 公共 |
-| docs | 文档 |
-| other | 其他 |
+### 核心依赖
 
-提交格式：
+定义在 `pyproject.toml`：
 
-```
-<type>(<scope>): <描述>
-```
+| 依赖 | 用途 |
+|------|------|
+| fastapi | HTTP 框架 |
+| uvicorn | ASGI 服务器 |
+| pydantic / pydantic-settings | 数据校验 + 配置加载 |
+| langchain-core / langchain-anthropic / langchain-openai | LLM 调用 |
+| langgraph | Agent DAG 编排 |
+| sse-starlette | SSE 流式推送 |
+| httpx | 异步 HTTP 客户端 |
+| pyyaml | YAML 配置解析 |
+| python-dotenv | .env 加载 |
 
-示例：
+开发依赖：`pytest` + `pytest-asyncio`。
 
-```
-feat(frontend): 添加登录页面
-fix(backend): 修复数据库连接超时
-docs(agentend): 更新 API 文档
-```
+---
 
-## Python 配置（ruff）
+## Frontend（Next.js）
 
-配置文件：`agentend/ruff.toml`
 
-- 行宽：120
-- Lint 规则：E, F, I, N, W, UP
-- 格式化：双引号
+## Backend（Go Gin）
+
