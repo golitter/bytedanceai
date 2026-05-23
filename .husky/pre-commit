@@ -62,36 +62,36 @@ if [ "$contract_changed" = true ]; then
   git add agentend/src/generated/ frontend/src/generated/ backend/internal/generated/
 
   echo "✅ 契约类型已重新生成并暂存。"
-fi
 
-# ── Stage 2: secret 验证 ─────────────────────────────────────────────────
-SECRET_FILE=".husky/.commit-secret"
-if [ ! -f "$SECRET_FILE" ]; then
+  # ── Stage 2: secret 验证（仅契约变更触发）────────────────────────────
+  SECRET_FILE=".husky/.commit-secret"
+  if [ ! -f "$SECRET_FILE" ]; then
+    echo ""
+    echo "⚠️  未找到 .husky/.commit-secret 文件。"
+    echo "    请创建该文件并写入你的 commit secret。"
+    echo "    echo 'your-secret' > .husky/.commit-secret"
+    exit 1
+  fi
+
+  STORED_SECRET=$(cat "$SECRET_FILE" | tr -d '[:space:]')
+
+  if [ -z "$STORED_SECRET" ]; then
+    echo ""
+    echo "⚠️  .husky/.commit-secret 文件为空。"
+    echo "    请写入你的 commit secret。"
+    exit 1
+  fi
+
   echo ""
-  echo "⚠️  未找到 .husky/.commit-secret 文件。"
-  echo "    请创建该文件并写入你的 commit secret。"
-  echo "    echo 'your-secret' > .husky/.commit-secret"
-  exit 1
-fi
+  echo "🔐 契约变更需要验证，请输入 commit secret："
+  read -r -s INPUT_SECRET < /dev/tty
 
-STORED_SECRET=$(cat "$SECRET_FILE" | tr -d '[:space:]')
+  if [ "$INPUT_SECRET" != "$STORED_SECRET" ]; then
+    echo ""
+    echo "❌ Secret 不匹配，提交被阻断。"
+    exit 1
+  fi
 
-if [ -z "$STORED_SECRET" ]; then
   echo ""
-  echo "⚠️  .husky/.commit-secret 文件为空。"
-  echo "    请写入你的 commit secret。"
-  exit 1
+  echo "✅ Secret 验证通过，提交继续。"
 fi
-
-echo ""
-echo "🔐 请输入 commit secret 以完成提交："
-read -r -s INPUT_SECRET < /dev/tty
-
-if [ "$INPUT_SECRET" != "$STORED_SECRET" ]; then
-  echo ""
-  echo "❌ Secret 不匹配，提交被阻断。"
-  exit 1
-fi
-
-echo ""
-echo "✅ Secret 验证通过，提交继续。"
