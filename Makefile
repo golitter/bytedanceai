@@ -5,15 +5,15 @@
 
 SCRIPT := ./scripts/run.sh
 
-# 启动前端 — Vite dev server，localhost:5173
+# 启动前端（热重载）— Vite dev server，localhost:5173
 run-frontend:
 	$(SCRIPT) start frontend
 
-# 启动后端 — Air 热重载，localhost:8080
+# 启动后端（热重载）— Air，localhost:8080
 run-backend:
 	$(SCRIPT) start backend
 
-# 启动 Agent 端 — uvicorn --reload
+# 启动 Agent 端（热重载）— uvicorn --reload，localhost:8001
 run-agentend:
 	$(SCRIPT) start agentend
 
@@ -33,19 +33,19 @@ stop-backend:
 stop-agentend:
 	$(SCRIPT) stop agentend
 
-# 重启前端
+# 重启前端（热重载）
 restart-frontend:
 	$(SCRIPT) restart frontend
 
-# 重启后端
+# 重启后端（热重载）
 restart-backend:
 	$(SCRIPT) restart backend
 
-# 重启 Agent 端
+# 重启 Agent 端（热重载）
 restart-agentend:
 	$(SCRIPT) restart agentend
 
-# 查看三端运行状态与 PID
+# 查看三端运行状态（端口 + PID）
 status:
 	$(SCRIPT) status
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PID_DIR=".pids"
-SERVICES=(frontend backend agentend)
+# ── 服务定义 ──────────────────────────────────────
+# name:port 格式（均为热重载模式）
+SERVICES=(frontend:5173 backend:8080 agentend:8001)
 
 # ── 颜色 ──────────────────────────────────────────
 GREEN='\033[32m'
@@ -10,73 +11,108 @@ RED='\033[31m'
 RESET='\033[0m'
 
 # ── 工具函数 ──────────────────────────────────────
-mkdir -p "$PID_DIR"
+name_of() { cut -d: -f1 <<< "$1"; }
+port_of() { cut -d: -f2 <<< "$1"; }
 
-pid_file()  { echo "$PID_DIR/$1.pid"; }
-
-is_running() {
-  local pf
-  pf=$(pid_file "$1")
-  [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null
+pid_on_port() {
+  lsof -i ":$1" -sTCP:LISTEN -t 2>/dev/null | head -1
 }
 
-save_pid()  { echo $! > "$(pid_file "$1")"; }
-
-read_pid()  { cat "$(pid_file "$1")"; }
-
-clear_pid() { rm -f "$(pid_file "$1")"; }
+is_running() {
+  local port
+  port=$(port_of "$1")
+  [ -n "$(pid_on_port "$port")" ]
+}
 
 # ── 启动单个服务 ──────────────────────────────────
 start_service() {
-  local name=$1
-  if is_running "$name"; then
-    echo "$name 已在运行 (PID $(read_pid "$name"))，跳过"
+  local entry=$1
+  local name
+  name=$(name_of "$entry")
+  local port
+  port=$(port_of "$entry")
+
+  if is_running "$entry"; then
+    echo "$name 已在运行 (port $port, PID $(pid_on_port "$port"))，跳过"
     return
   fi
 
-  echo "启动 $name ..."
+  echo "启动 $name (port $port) ..."
   case "$name" in
     frontend)
-      (cd frontend && pnpm dev &)
+      (cd frontend && exec pnpm dev) &
       ;;
     backend)
-      (cd backend && ~/go/bin/air -c .air.toml &)
+      (cd backend && exec ~/go/bin/air -c .air.toml) &
       ;;
     agentend)
-      (cd agentend && uv run uvicorn src.app.main:app --reload &)
+      (cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port") &
       ;;
   esac
-  save_pid "$name"
+
+  # 等待端口就绪（最多 10 秒）
+  local waited=0
+  while [ $waited -lt 100 ] && ! is_running "$entry"; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+
+  if is_running "$entry"; then
+    echo "$name 启动成功 (PID $(pid_on_port "$port"))"
+  else
+    echo "$name 启动超时，请检查日志"
+  fi
 }
 
 # ── 停止单个服务 ──────────────────────────────────
 stop_service() {
-  local name=$1
-  if is_running "$name"; then
-    echo "停止 $name (PID $(read_pid "$name"))"
-    kill "$(read_pid "$name")" 2>/dev/null || true
+  local entry=$1
+  local name
+  name=$(name_of "$entry")
+  local port
+  port=$(port_of "$entry")
+
+  if ! is_running "$entry"; then
+    echo "$name 未运行"
+    return
   fi
-  clear_pid "$name"
+
+  local pid
+  pid=$(pid_on_port "$port")
+  echo "停止 $name (PID $pid)"
+  kill "$pid" 2>/dev/null || true
 }
 
 # ── 状态表格 ──────────────────────────────────────
 show_status() {
-  echo "┌──────────┬──────────┬────────────────┐"
-  echo "│ 服务     │ 状态     │ PID            │"
-  echo "├──────────┼──────────┼────────────────┤"
-  for name in "${SERVICES[@]}"; do
-    if is_running "$name"; then
-      printf "│ %-8s │ ${GREEN}%-8s${RESET} │ %-14s │\n" "$name" "运行中" "$(read_pid "$name")"
+  echo "┌──────────┬──────────┬──────┬─────────┐"
+  echo "│ 服务     │ 状态     │ 端口 │ PID     │"
+  echo "├──────────┼──────────┼──────┼─────────┤"
+  for entry in "${SERVICES[@]}"; do
+    local name
+    name=$(name_of "$entry")
+    local port
+    port=$(port_of "$entry")
+    if is_running "$entry"; then
+      printf "│ %-8s │ ${GREEN}%-8s${RESET} │ %-4s │ %-7s │\n" "$name" "运行中" "$port" "$(pid_on_port "$port")"
     else
-      printf "│ %-8s │ ${RED}%-8s${RESET} │ %-14s │\n" "$name" "未运行" "-"
+      printf "│ %-8s │ ${RED}%-8s${RESET} │ %-4s │ %-7s │\n" "$name" "未运行" "$port" "-"
     fi
   done
-  echo "└──────────┴──────────┴────────────────┘"
+  echo "└──────────┴──────────┴──────┴─────────┘"
 }
 
 # ── 入口 ──────────────────────────────────────────
 cmd=${1:-help}
 target=${2:-}
+
+# 根据 name 查找完整 entry
+find_entry() {
+  for e in "${SERVICES[@]}"; do
+    [ "$(name_of "$e")" = "$1" ] && echo "$e" && return
+  done
+  echo ""
+}
 
 case "$cmd" in
   start)
@@ -85,13 +121,17 @@ case "$cmd" in
       echo "用法: $0 start <frontend|backend|agentend>"
       exit 1
     fi
-    start_service "$target"
+    entry=$(find_entry "$target")
+    [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
+    start_service "$entry"
     ;;
   stop)
     if [ -n "$target" ]; then
-      stop_service "$target"
+      entry=$(find_entry "$target")
+      [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
+      stop_service "$entry"
     else
-      for s in "${SERVICES[@]}"; do stop_service "$s"; done
+      for e in "${SERVICES[@]}"; do stop_service "$e"; done
       echo "✓ 全部已停止"
     fi
     ;;
@@ -101,8 +141,10 @@ case "$cmd" in
       echo "用法: $0 restart <frontend|backend|agentend>"
       exit 1
     fi
-    stop_service "$target"
-    start_service "$target"
+    entry=$(find_entry "$target")
+    [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
+    stop_service "$entry"
+    start_service "$entry"
     ;;
   status)
     show_status
