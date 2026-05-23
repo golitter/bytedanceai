@@ -1,7 +1,7 @@
 {
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [
-      "eslint --fix --max-warnings=0",
+      "npx eslint --fix --max-warnings=0 --config frontend/eslint.config.js",
       "prettier --write"
     ],
     "backend/**/*.go": [
@@ -15,6 +15,11 @@
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
-    "@commitlint/config-conventional": "^21.0.1"
+    "@commitlint/config-conventional": "^21.0.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.8.3"
   }
 }
