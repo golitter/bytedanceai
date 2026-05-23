@@ -17,6 +17,18 @@ bytedanceai/
 
 子项目的框架选型、构建命令、测试方式等详情，请查阅对应目录下的 AGENTS.md。
 
+## Makefile
+
+通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/common/makefile-guide.md](docs/common/makefile-guide.md)。
+
+| 命令 | 说明 |
+|------|------|
+| `make run-frontend` | 启动前端 |
+| `make run-backend` | 启动后端 |
+| `make run-agentend` | 启动 Agent 端 |
+| `make stop` | 停止全部 |
+| `make status` | 查看运行状态 |
+
 
 ## Git 规范
 
