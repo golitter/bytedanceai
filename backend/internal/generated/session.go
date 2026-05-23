@@ -10,6 +10,7 @@ const (
 	SessionStateCompleted SessionState = "completed"
 	SessionStateInterrupted SessionState = "interrupted"
 	SessionStateError SessionState = "error"
+	SessionStateInactive SessionState = "inactive"
 )
 
 type SessionStateTransitions struct {
@@ -18,5 +19,6 @@ type SessionStateTransitions struct {
 	Completed []SessionState `json:"completed"`
 	Interrupted []SessionState `json:"interrupted"`
 	Error []SessionState `json:"error"`
+	Inactive []SessionState `json:"inactive"`
 }
 

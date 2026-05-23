@@ -12,12 +12,12 @@ from src.api.v1.workspace import router as workspace_router
 from src.app.config import settings
 from src.app.dependencies import (
     create_adapter_registry,
+    create_db_reader,
     create_rule_engine,
     create_session_manager,
     create_session_store,
     create_workspace_manager,
 )
-from src.workspace.models import WorkspaceStatus
 from src.workspace.recovery import recover_workspaces
 
 
@@ -37,21 +37,16 @@ async def lifespan(app: FastAPI):
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
 
-    # Startup: begin TTL cleanup
-    # check_interval 来自 config.yaml 的 workspace.ttl_check_interval
-    await ws_mgr.start_ttl_cleanup(check_interval=settings.workspace.ttl_check_interval)
+    # Startup: connect DB reader and begin inactive cleanup
+    db_reader = create_db_reader()
+    await db_reader.connect()
+    await ws_mgr.start_inactive_cleanup(db_reader, interval=settings.workspace.cleanup_interval)
 
     yield
 
-    # Shutdown: stop TTL task + cleanup all active workspaces
-    await ws_mgr.stop_ttl_cleanup()
-    task_ids = {ws.task_id for ws in ws_mgr.list() if ws.status == WorkspaceStatus.ACTIVE}
-    for tid in task_ids:
-        await ws_mgr.cleanup_by_task(tid)
-    # Shutdown: clean up all active sessions
-    mgr = app.state.session_manager
-    for session in mgr.list():
-        await mgr.destroy(session.id)
+    # Shutdown: stop cleanup task and close DB connection
+    await ws_mgr.stop_inactive_cleanup()
+    await db_reader.close()
 
 
 # title/version 来自 config.yaml，便于运维统一修改

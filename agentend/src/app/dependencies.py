@@ -8,6 +8,7 @@ from src.rules.engine import RuleEngine
 from src.schemas.request import AgentType
 from src.session.manager import SessionManager
 from src.session.store import SessionMappingStore
+from src.workspace.db import DBReader
 from src.workspace.manager import WorkspaceManager
 from src.workspace.store import JsonFileWorkspaceStore
 
@@ -35,4 +36,14 @@ def create_rule_engine() -> RuleEngine:
 
 def create_workspace_manager() -> WorkspaceManager:
     store = JsonFileWorkspaceStore()
-    return WorkspaceManager(store, ttl_seconds=settings.workspace.ttl_seconds)
+    return WorkspaceManager(store)
+
+
+def create_db_reader() -> DBReader:
+    return DBReader(
+        host=settings.database.host,
+        port=settings.database.port,
+        user=settings.database.user,
+        password=settings.database.password,
+        db=settings.database.dbname,
+    )

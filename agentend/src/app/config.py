@@ -40,14 +40,21 @@ class CliConfig(BaseModel):
 
 class WorkspaceConfig(BaseModel):
     base_dir: str
-    ttl_seconds: int
-    ttl_check_interval: int
+    cleanup_interval: int
     store_path: str
     git_default_branch: str
 
 
 class SessionConfig(BaseModel):
     store_path: str
+
+
+class DatabaseConfig(BaseModel):
+    host: str
+    port: int
+    user: str
+    password: str
+    dbname: str
 
 
 class ExecutionConfig(BaseModel):
@@ -83,6 +90,7 @@ class Settings(BaseSettings):
     cli: CliConfig
     workspace: WorkspaceConfig
     session: SessionConfig
+    database: DatabaseConfig
     execution: ExecutionConfig
     skills: SkillsConfig
     llm: LlmConfig

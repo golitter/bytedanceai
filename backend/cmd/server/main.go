@@ -37,6 +37,7 @@ func main() {
 
 	taskHandler := handler.NewTaskHandler(agentClient)
 	agentHandler := handler.NewAgentHandler()
+	sessionHandler := handler.NewSessionHandler()
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -57,6 +58,8 @@ func main() {
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
 
 		api.GET("/agent-types", agentHandler.ListAgentTypes)
+
+		api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
 	}
 
 	slog.Info("server starting", "port", 8080)

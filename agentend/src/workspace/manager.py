@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from src.schemas.request import AgentType
 from src.skills.provisioner import SkillProvisioner
+from src.workspace.db import DBReader
 from src.workspace.git_ops import GitOps
 from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
 from src.workspace.store import WorkspaceStoreProtocol
@@ -18,14 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class WorkspaceManager:
-    def __init__(self, store: WorkspaceStoreProtocol, ttl_seconds: int = 3600) -> None:
+    def __init__(self, store: WorkspaceStoreProtocol) -> None:
         self._store = store
-        self._ttl = ttl_seconds
         self._git = GitOps()
         self._provisioner = SkillProvisioner()
         self._workspaces: dict[str, Workspace] = {}
         self._locks: dict[str, asyncio.Lock] = {}
-        self._ttl_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task | None = None
 
     def _get_lock(self, task_id: str) -> asyncio.Lock:
         if task_id not in self._locks:
@@ -151,38 +150,50 @@ class WorkspaceManager:
     async def merge_task_to_main(self, repo_path: str, task_id: str) -> bool:
         return await self._git.merge_branch(repo_path, task_branch_name(task_id), "main")
 
-    # TTL cleanup
+    # Inactive cleanup
 
-    async def start_ttl_cleanup(self, check_interval: int = 300) -> None:
-        if self._ttl_task and not self._ttl_task.done():
+    async def start_inactive_cleanup(self, db_reader: DBReader, interval: int) -> None:
+        if self._cleanup_task and not self._cleanup_task.done():
             return
-        self._ttl_task = asyncio.create_task(self._ttl_cleanup_loop(check_interval))
+        self._cleanup_task = asyncio.create_task(self._inactive_cleanup_loop(db_reader, interval))
 
-    async def stop_ttl_cleanup(self) -> None:
-        if self._ttl_task and not self._ttl_task.done():
-            self._ttl_task.cancel()
+    async def stop_inactive_cleanup(self) -> None:
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
             try:
-                await self._ttl_task
+                await self._cleanup_task
             except asyncio.CancelledError:
                 pass
-            self._ttl_task = None
+            self._cleanup_task = None
 
-    async def _ttl_cleanup_loop(self, check_interval: int) -> None:
+    async def _inactive_cleanup_loop(self, db_reader: DBReader, interval: int) -> None:
         try:
             while True:
-                await asyncio.sleep(check_interval)
-                active = await self._store.query_by_status(WorkspaceStatus.ACTIVE)
-                cleaned = 0
-                now = datetime.now()
-                for ws in active:
-                    age = (now - ws.created_at).total_seconds()
-                    if age > self._ttl:
-                        await self.cleanup(ws.id)
-                        cleaned += 1
+                await asyncio.sleep(interval)
+                inactive_pairs = await db_reader.query_inactive_sessions()
+                task_statuses = await db_reader.query_task_session_statuses()
+
+                scanned = len(inactive_pairs)
+                cleaned_sessions = 0
+                cleaned_tasks = 0
+
+                for session_id, task_id in inactive_pairs:
+                    for ws in list(self._workspaces.values()):
+                        if ws.session_id == session_id and ws.status == WorkspaceStatus.ACTIVE:
+                            if await self.cleanup(ws.id):
+                                cleaned_sessions += 1
+
+                for task_id, statuses in task_statuses.items():
+                    if statuses == {"inactive"}:
+                        count = await self.cleanup_by_task(task_id)
+                        if count > 0:
+                            cleaned_tasks += 1
+
                 logger.info(
-                    "TTL cleanup: checked %d workspaces, cleaned %d expired",
-                    len(active),
-                    cleaned,
+                    "Inactive cleanup: scanned %d sessions, cleaned %d sessions, cleaned %d tasks",
+                    scanned,
+                    cleaned_sessions,
+                    cleaned_tasks,
                 )
         except asyncio.CancelledError:
             pass

@@ -11,6 +11,7 @@ class SessionState(str, Enum):
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     ERROR = "error"
+    INACTIVE = "inactive"
 
 class SessionStateTransitions(BaseModel):
     idle: list[Any]
@@ -18,4 +19,5 @@ class SessionStateTransitions(BaseModel):
     completed: list[Any]
     interrupted: list[Any]
     error: list[Any]
+    inactive: list[Any]
 

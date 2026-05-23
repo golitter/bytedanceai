@@ -6,6 +6,8 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
 import App from './App'
+import { TaskDetail } from './pages/TaskDetail'
+import { TaskList } from './pages/TaskList'
 
 const queryClient = new QueryClient()
 
@@ -15,6 +17,8 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<App />} />
+          <Route path="/tasks" element={<TaskList />} />
+          <Route path="/tasks/:taskId" element={<TaskDetail />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

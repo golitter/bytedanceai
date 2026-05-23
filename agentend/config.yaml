@@ -28,14 +28,21 @@ cli:
 # Workspace 生命周期与持久化
 workspace:
   base_dir: "./worktrees"              # worktree 根目录
-  ttl_seconds: 3600                    # 空闲 workspace 过期时间
-  ttl_check_interval: 300              # TTL 清理巡检间隔（秒）
+  cleanup_interval: 7200              # inactive cleanup 巡检间隔（秒）
   store_path: "logs/workspaces.json"   # workspace 元数据持久化路径
   git_default_branch: "main"           # 默认 git 分支
 
 # Session 映射持久化
 session:
   store_path: "logs/session_mappings.json"  # session_id -> cli_session_id 映射存储
+
+# 数据库只读连接（agentend 轮询 session 状态用）
+database:
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: "123456"
+  dbname: "agenthub"
 
 # Agent 执行控制
 execution:

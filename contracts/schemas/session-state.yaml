@@ -15,6 +15,7 @@ definitions:
       - completed   # 正常完成（终态）
       - interrupted # 被中断（终态）
       - error       # 出错（终态）
+      - inactive    # 用户手动停用（仅由外部 API 设置）
 
   SessionStateTransitions:
     title: "SessionStateTransitions"
@@ -58,9 +59,16 @@ definitions:
           $ref: "#/definitions/SessionState"
         const: []
         description: "终态"
+      inactive:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const: []
+        description: "终态，仅由外部 API 设置"
     required:
       - idle
       - running
       - completed
       - interrupted
       - error
+      - inactive
