@@ -1,6 +1,6 @@
 # Setup Guide — AI Runtime Platform
 
-三层架构一键搭建指南：Frontend (Next.js) + Backend (Go) + AgentEnd (Python)。
+三层架构一键搭建指南：Frontend (React + Vite) + Backend (Go) + AgentEnd (Python)。
 
 ---
 
@@ -13,7 +13,7 @@
 | pnpm       | >= 8       | `npm i -g pnpm`                     |
 | Python     | >= 3.10    | 系统自带 / `brew install python`     |
 | uv         | latest     | `brew install uv`                   |
-| PostgreSQL | >= 15      | `brew install postgresql@16`        |
+| MySQL      | >= 8.0     | `brew install mysql`                |
 | Redis      | >= 7       | `brew install redis`                |
 | Docker     | optional   | `brew install --cask docker`        |
 
@@ -29,8 +29,8 @@ go version && node --version && pnpm --version && uv --version
 
 ```
 bytedanceai/
-├── frontend/          # Next.js + Tailwind + shadcn/ui
-├── backend/           # Go + Gin + GORM
+├── frontend/          # React + Vite + Tailwind + shadcn/ui
+├── backend/           # Go + Gin + GORM + MySQL
 ├── agentend/          # Python FastAPI（已有）
 ├── docs/
 ├── scripts/
@@ -69,48 +69,16 @@ go mod init agenthub/backend
 ### 2.2 安装核心依赖
 
 ```bash
-# Web 框架
-go get github.com/gin-gonic/gin
-
-# ORM + 数据库驱动
-go get gorm.io/gorm
-go get gorm.io/driver/postgres
-
-# 日志
-go get go.uber.org/zap
-
-# 配置
-go get github.com/spf13/viper
-
-# UUID
-go get github.com/google/uuid
-
-# 参数校验
-go get github.com/go-playground/validator/v10
-
-# JWT
-go get github.com/golang-jwt/jwt/v5
-
-# 环境变量
-go get github.com/joho/godotenv
-
-# CORS
-go get github.com/gin-contrib/cors
-```
-
-一条命令版本：
-
-```bash
 go get github.com/gin-gonic/gin \
        gorm.io/gorm \
-       gorm.io/driver/postgres \
-       go.uber.org/zap \
-       github.com/spf13/viper \
-       github.com/google/uuid \
-       github.com/go-playground/validator/v10 \
+       gorm.io/driver/mysql \
+       gopkg.in/yaml.v3 \
        github.com/golang-jwt/jwt/v5 \
-       github.com/joho/godotenv \
-       github.com/gin-contrib/cors
+       github.com/gin-contrib/cors \
+       github.com/swaggo/swag \
+       github.com/swaggo/gin-swagger \
+       github.com/swaggo/files \
+       golang.org/x/time
 ```
 
 ### 2.3 创建目录结构
@@ -118,28 +86,311 @@ go get github.com/gin-gonic/gin \
 ```bash
 cd backend
 mkdir -p cmd/server
-mkdir -p internal/{api,middleware,service,config,models}
-mkdir -p configs
+mkdir -p internal/{conf,controller/impl,dao/gorm,dao/mock,model,service/impl,middleware,vo}
+mkdir -p pkg/db
+mkdir -p configs docs/api
 ```
 
-目标结构：
+目标结构（参考 gormlab 分层模式）：
 
 ```
 backend/
-├── cmd/server/main.go
+├── cmd/server/main.go            # 入口：加载配置 → 连 DB → 注册路由 → 启动
 ├── internal/
-│   ├── api/           # HTTP handlers
-│   ├── middleware/     # Gin 中间件（CORS, Auth, Logger）
-│   ├── service/       # 业务逻辑
-│   ├── config/        # Viper 配置加载
-│   └── models/        # GORM models
-├── configs/
-│   └── config.yaml
+│   ├── conf/conf.go              # 配置加载（YAML → struct）
+│   ├── controller/               # 控制器接口
+│   │   └── impl/                 # 控制器实现（路由注册 + Handler）
+│   ├── dao/                      # 数据访问接口
+│   │   ├── gorm/                 # GORM 实现
+│   │   └── mock/                 # Mock 实现（测试用）
+│   ├── model/                    # GORM 模型（表映射）
+│   ├── service/                  # 业务逻辑接口
+│   │   └── impl/                 # 业务逻辑实现
+│   ├── middleware/                # Gin 中间件（CORS, Auth, Logger, RateLimit）
+│   └── vo/                       # View Object（API 响应结构）
+├── pkg/
+│   └── db/mysql.go               # MySQL 连接（单例）
+├── configs/config.yaml
+├── docs/api/                     # Swagger 生成文件
+├── Makefile
 ├── go.mod
 └── go.sum
 ```
 
-### 2.4 最小 main.go
+### 2.4 配置
+
+创建 `backend/configs/config.yaml`：
+
+```yaml
+mysql:
+  host: localhost
+  port: 3306
+  user: root
+  password: "123456"
+  dbname: agenthub
+
+jwt:
+  secret: "dev-secret-key"
+  expire: 86400
+```
+
+### 2.5 配置加载
+
+创建 `backend/internal/conf/conf.go`：
+
+```go
+package conf
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type MySQLConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+}
+
+type JWTConfig struct {
+	Secret string `yaml:"secret"`
+	Expire int    `yaml:"expire"`
+}
+
+type Config struct {
+	MySQL MySQLConfig `yaml:"mysql"`
+	JWT   JWTConfig   `yaml:"jwt"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config file failed: %w", err)
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config file failed: %w", err)
+	}
+	return &cfg, nil
+}
+```
+
+### 2.6 MySQL 连接
+
+创建 `backend/pkg/db/mysql.go`：
+
+```go
+package db
+
+import (
+	"fmt"
+	"sync"
+
+	"agenthub/backend/internal/conf"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+var (
+	globalDB *gorm.DB
+	once     sync.Once
+)
+
+func dsn(cfg *conf.MySQLConfig) string {
+	return fmt.Sprintf("%s:%s@(%s:%d)/%s?charset=utf8mb4&parseTime=true&loc=Local",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName,
+	)
+}
+
+func Init(cfg *conf.MySQLConfig) (*gorm.DB, error) {
+	var err error
+	once.Do(func() {
+		globalDB, err = gorm.Open(mysql.Open(dsn(cfg)), &gorm.Config{})
+	})
+	return globalDB, err
+}
+
+func GetDB() *gorm.DB {
+	return globalDB
+}
+```
+
+### 2.7 统一响应
+
+创建 `backend/internal/vo/response.go`：
+
+```go
+package vo
+
+import (
+	"net/http"
+	"github.com/gin-gonic/gin"
+)
+
+type Response struct {
+	Code int         `json:"code"`
+	Data interface{} `json:"data,omitempty"`
+	Msg  string      `json:"msg,omitempty"`
+}
+
+func OK(ctx *gin.Context, data interface{}) {
+	ctx.JSON(http.StatusOK, Response{Code: 0, Data: data})
+}
+
+func Created(ctx *gin.Context, data interface{}) {
+	ctx.JSON(http.StatusCreated, Response{Code: 0, Data: data})
+}
+
+func BadRequest(ctx *gin.Context, msg string) {
+	ctx.JSON(http.StatusBadRequest, Response{Code: 400, Msg: msg})
+}
+
+func NotFound(ctx *gin.Context, msg string) {
+	ctx.JSON(http.StatusNotFound, Response{Code: 404, Msg: msg})
+}
+
+func InternalError(ctx *gin.Context, msg string) {
+	ctx.JSON(http.StatusInternalServerError, Response{Code: 500, Msg: msg})
+}
+```
+
+### 2.8 中间件
+
+创建 `backend/internal/middleware/cors.go`：
+
+```go
+package middleware
+
+import (
+	"time"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+)
+
+func CORS() gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	})
+}
+```
+
+创建 `backend/internal/middleware/logger.go`：
+
+```go
+package middleware
+
+import (
+	"log/slog"
+	"time"
+	"github.com/gin-gonic/gin"
+)
+
+func Logger() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		start := time.Now()
+		path := ctx.Request.URL.Path
+		ctx.Next()
+		latency := time.Since(start)
+		status := ctx.Writer.Status()
+		attrs := []any{
+			slog.Int("status", status),
+			slog.String("method", ctx.Request.Method),
+			slog.String("path", path),
+			slog.Duration("latency", latency),
+			slog.String("client_ip", ctx.ClientIP()),
+		}
+		switch {
+		case status >= 500:
+			slog.Error("request", attrs...)
+		case status >= 400:
+			slog.Warn("request", attrs...)
+		default:
+			slog.Info("request", attrs...)
+		}
+	}
+}
+```
+
+创建 `backend/internal/middleware/auth.go`：
+
+```go
+package middleware
+
+import (
+	"net/http"
+	"strings"
+	"time"
+	"github.com/gin-gonic/gin"
+	jwt5 "github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	jwtSecret []byte
+	jwtExpire int
+)
+
+func SetJWTConfig(secret string, expire int) {
+	jwtSecret = []byte(secret)
+	jwtExpire = expire
+}
+
+type Claims struct {
+	UserID uint   `json:"user_id"`
+	Name   string `json:"name"`
+	jwt5.RegisteredClaims
+}
+
+func GenerateToken(userID uint, name string) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		UserID: userID,
+		Name:   name,
+		RegisteredClaims: jwt5.RegisteredClaims{
+			ExpiresAt: jwt5.NewNumericDate(now.Add(time.Duration(jwtExpire) * time.Second)),
+			IssuedAt:  jwt5.NewNumericDate(now),
+		},
+	}
+	token := jwt5.NewWithClaims(jwt5.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+func Auth() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		header := ctx.GetHeader("Authorization")
+		if header == "" {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			return
+		}
+		parts := strings.SplitN(header, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
+			return
+		}
+		claims := &Claims{}
+		token, err := jwt5.ParseWithClaims(parts[1], claims, func(t *jwt5.Token) (any, error) {
+			return jwtSecret, nil
+		})
+		if err != nil || !token.Valid {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
+		}
+		ctx.Set("userID", claims.UserID)
+		ctx.Set("userName", claims.Name)
+		ctx.Next()
+	}
+}
+```
+
+### 2.9 main.go
 
 创建 `backend/cmd/server/main.go`：
 
@@ -147,63 +398,74 @@ backend/
 package main
 
 import (
-	"log"
-	"net/http"
-
-	"github.com/gin-contrib/cors"
+	"fmt"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"agenthub/backend/internal/conf"
+	"agenthub/backend/internal/middleware"
+	"agenthub/backend/pkg/db"
 )
 
 func main() {
-	// --- Database ---
-	dsn := "host=localhost user=postgres password=postgres dbname=agenthub port=5432 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	cfg, err := conf.Load("configs/config.yaml")
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		panic("load config failed: " + err.Error())
 	}
-	log.Println("database connected")
 
-	// --- Router ---
+	middleware.SetJWTConfig(cfg.JWT.Secret, cfg.JWT.Expire)
+
+	database, err := db.Init(&cfg.MySQL)
+	if err != nil {
+		panic("failed to connect database: " + err.Error())
+	}
+	_ = database
+	fmt.Println("database connected")
+
 	r := gin.Default()
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
+	r.Use(middleware.CORS())
+	r.Use(middleware.Logger())
 
-	// --- Health ---
 	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+		c.JSON(200, gin.H{"message": "pong"})
 	})
 
-	// --- Proxy to AgentEnd ---
-	r.Any("/api/agent/*path", proxyAgentEnd("http://localhost:8001"))
-
-	// --- Start ---
-	log.Println("backend running on :8080")
-	r.Run(":8080")
-}
-
-func proxyAgentEnd(target string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 简单反向代理占位，后续用 httputil.ReverseProxy 替换
-		c.JSON(http.StatusOK, gin.H{
-			"proxy":  "agentend",
-			"target": target,
-			"path":   c.Param("path"),
-		})
+	fmt.Println("server running on :8080")
+	if err := r.Run(":8080"); err != nil {
+		panic("failed to start server: " + err.Error())
 	}
 }
 ```
 
-### 2.5 启动 Backend
+### 2.10 Makefile
+
+创建 `backend/Makefile`：
+
+```makefile
+.PHONY: build run swagger fmt tidy
+
+BINARY := server
+MAIN   := cmd/server/main.go
+
+build:
+	go build -o $(BINARY) $(MAIN)
+
+run: build
+	./$(BINARY)
+
+swagger:
+	swag init -g $(MAIN) -o docs/api
+
+fmt:
+	gofmt -w .
+
+tidy:
+	go mod tidy
+```
+
+### 2.11 启动 Backend
 
 ```bash
 cd backend
-go run cmd/server/main.go
+make run
 ```
 
 验证：`curl http://localhost:8080/ping` → `{"message":"pong"}`
@@ -314,7 +576,7 @@ pnpm dev
 
 ---
 
-## 4. 基础设施 — PostgreSQL + Redis
+## 4. 基础设施 — MySQL + Redis
 
 ### 4.1 使用 Docker Compose（推荐）
 
@@ -322,16 +584,15 @@ pnpm dev
 
 ```yaml
 services:
-  postgres:
-    image: postgres:16
+  mysql:
+    image: mysql:8.0
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: agenthub
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: agenthub
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
 
   redis:
     image: redis:7-alpine
@@ -339,7 +600,7 @@ services:
       - "6379:6379"
 
 volumes:
-  pgdata:
+  mysqldata:
 ```
 
 启动：
@@ -351,10 +612,10 @@ docker compose up -d
 ### 4.2 手动安装（不用 Docker）
 
 ```bash
-# PostgreSQL
-brew install postgresql@16
-brew services start postgresql@16
-createdb agenthub
+# MySQL
+brew install mysql
+brew services start mysql
+mysql -u root -e "CREATE DATABASE agenthub;"
 
 # Redis
 brew install redis
@@ -369,12 +630,12 @@ brew services start redis
 
 ```env
 # Backend
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/agenthub?sslmode=disable
+DATABASE_URL=root:123456@tcp(localhost:3306)/agenthub?charset=utf8mb4&parseTime=true&loc=Local
 REDIS_URL=redis://localhost:6379
 AGENTEND_URL=http://localhost:8001
 
 # Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8080
+VITE_API_URL=http://localhost:8080
 ```
 
 ---
@@ -394,7 +655,7 @@ _frontend:
 	cd frontend && pnpm dev
 
 _backend:
-	cd backend && go run cmd/server/main.go
+	cd backend && make run
 
 _agentend:
 	cd agentend && uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8001 --reload
@@ -404,7 +665,7 @@ frontend:
 	cd frontend && pnpm dev
 
 backend:
-	cd backend && go run cmd/server/main.go
+	cd backend && make run
 
 agentend:
 	cd agentend && uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8001 --reload
@@ -473,10 +734,10 @@ make frontend    # → :3000
 
 | 服务         | 端口   |
 | ------------ | ---- |
-| Frontend     | 3000 |
+| Frontend     | 5173 |
 | Backend      | 8080 |
 | AgentEnd     | 8001 |
-| PostgreSQL   | 5432 |
+| MySQL        | 3306 |
 | Redis        | 6379 |
 
 ---
@@ -485,28 +746,28 @@ make frontend    # → :3000
 
 - [ ] `curl localhost:8080/ping` → `{"message":"pong"}`
 - [ ] `curl localhost:8001/docs` → FastAPI Swagger
-- [ ] 浏览器 `localhost:3000` → Next.js 页面
-- [ ] `docker compose ps` → postgres + redis running
+- [ ] 浏览器 `localhost:5173` → React 页面
+- [ ] `docker compose ps` → mysql + redis running
 
 ---
 
 ## 常见问题
 
-### PostgreSQL 连接失败
+### MySQL 连接失败
 
 ```bash
 # 检查是否运行
 docker compose ps
 # 或
-brew services list | grep postgres
+brew services list | grep mysql
 
 # 手动测试连接
-psql postgres://postgres:postgres@localhost:5432/agenthub
+mysql -u root -p agenthub
 ```
 
 ### Frontend 无法连接 Backend
 
-检查 `frontend/.env.local` 中 `NEXT_PUBLIC_API_URL` 是否正确，重启 dev server。
+检查 `frontend/.env.local` 中 `VITE_API_URL` 是否正确，重启 dev server。
 
 ### Go 依赖下载慢
 
