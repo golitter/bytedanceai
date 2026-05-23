@@ -1,0 +1,68 @@
+import { AgentAvatar } from '@/components/chat/AgentAvatar'
+import type { Conversation } from '@/lib/api'
+
+interface ConversationItemProps {
+  conversation: Conversation
+  isActive: boolean
+  onClick: () => void
+}
+
+const AGENT_NAMES: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  opencode: 'OpenCode',
+  orchestrator: 'Orchestrator',
+}
+
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}天前`
+  return new Date(dateStr).toLocaleDateString()
+}
+
+export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
+  const name = AGENT_NAMES[conversation.agentType] ?? conversation.agentType
+
+  return (
+    <button
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+      style={{
+        backgroundColor: isActive ? 'var(--bg-hover)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--color-brand)' : '2px solid transparent',
+      }}
+      onClick={onClick}
+      onMouseEnter={(e) => {
+        if (!isActive) e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'
+      }}
+    >
+      <AgentAvatar
+        agentType={conversation.agentType}
+        status={conversation.status === 'running' ? 'running' : 'ready'}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between">
+          <span
+            className="truncate text-sm font-medium"
+            style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+          >
+            {name}
+          </span>
+          <span className="shrink-0 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+            {relativeTime(conversation.lastActiveAt)}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          {conversation.taskTitle}
+        </p>
+      </div>
+    </button>
+  )
+}

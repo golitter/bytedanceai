@@ -5,9 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
-import App from './App'
-import { TaskDetail } from './pages/TaskDetail'
-import { TaskList } from './pages/TaskList'
+import { ImPage } from './pages/ImPage'
 
 const queryClient = new QueryClient()
 
@@ -16,9 +14,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/tasks" element={<TaskList />} />
-          <Route path="/tasks/:taskId" element={<TaskDetail />} />
+          <Route path="/*" element={<ImPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
