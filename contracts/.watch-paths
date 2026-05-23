@@ -1,0 +1,12 @@
+# 契约相关目录模式（每行一个）
+# pre-commit hook 读取此文件检测契约变更
+# 目录结构变化时更新此文件即可，无需改 hook
+agentend/src/schemas/
+agentend/src/api/
+agentend/src/adapters/
+backend/internal/model/
+backend/internal/handler/
+backend/internal/types/
+frontend/src/types/
+frontend/src/api/
+contracts/
