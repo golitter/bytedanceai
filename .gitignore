@@ -3,6 +3,7 @@
 /node_modules
 /.husky
 /.ruff_cache
+/.pids
 
 # 忽略 根目录下的 openspec
 /openspec
