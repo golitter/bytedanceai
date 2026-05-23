@@ -1,8 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from src.generated.response import AgentResponse as _AgentResponse
 
 
-class AgentResponse(BaseModel):
-    session_id: str
-    content: str
+class AgentResponse(_AgentResponse):
     artifacts: list[dict] = Field(default_factory=list)
     usage: dict = Field(default_factory=dict)
+
+
+__all__ = ["AgentResponse"]

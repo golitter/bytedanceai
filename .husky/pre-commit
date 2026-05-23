@@ -1,4 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 运行 lint-staged（只检查暂存文件）
+# ── Stage 0: lint-staged ────────────────────────────────────────────────
 export PATH="$HOME/go/bin:$PATH"
 npx lint-staged
+
+# ── 契约相关目录模式 ──────────────────────────────────────────────────────
+CONTRACT_PATTERNS=(
+  "agentend/src/schemas/"
+  "agentend/src/api/"
+  "agentend/src/adapters/"
+  "backend/internal/model/"
+  "backend/internal/handler/"
+  "backend/internal/types/"
+  "frontend/src/types/"
+  "frontend/src/api/"
+  "contracts/"
+)
+
+# ── Stage 1: 变更检测 ────────────────────────────────────────────────────
+staged_files=$(git diff --cached --name-only)
+contract_changed=false
+
+for pattern in "${CONTRACT_PATTERNS[@]}"; do
+  if echo "$staged_files" | grep -q "$pattern"; then
+    contract_changed=true
+    break
+  fi
+done
+
+if [ "$contract_changed" = true ]; then
+  changed=$(echo "$staged_files" | grep -E "$(printf '%s' "$(IFS='|'; echo "${CONTRACT_PATTERNS[*]}")")" || true)
+
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════╗"
+  echo "║             ⚠️  契约相关文件变更已检测到                          ║"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  echo "║                                                                ║"
+  echo "║  以下文件涉及跨端契约：                                         ║"
+
+  while IFS= read -r f; do
+    printf "║    • %-56s ║\n" "$f"
+  done <<< "$changed"
+
+  echo "║                                                                ║"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  echo "║  请按以下步骤操作：                                             ║"
+  echo "║                                                                ║"
+  echo "║  1. 对比 contracts/schemas/ 中的定义是否需要更新               ║"
+  echo "║  2. 如需更新，修改 contracts/schemas/*.yaml 后运行 make generate║"
+  echo "║  3. 检查变更对其他端（Frontend/Backend）的影响                  ║"
+  echo "║  4. 在 contracts/logs/ 写入变更记录（格式见 contracts/AGENTS.md）║"
+  echo "║  5. 将所有变更文件加入暂存区后重新 commit                       ║"
+  echo "║                                                                ║"
+  echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+
+  # ── 契约一致性检查 ────────────────────────────────────────────────────
+  # 重新生成契约类型并暂存，确保生成文件与 schema 同步
+  make generate > /dev/null 2>&1 || true
+  git add agentend/src/generated/ frontend/src/generated/ backend/internal/generated/
+
+  echo "✅ 契约类型已重新生成并暂存。"
+fi
+
+# ── Stage 2: secret 验证 ─────────────────────────────────────────────────
+SECRET_FILE=".husky/.commit-secret"
+if [ ! -f "$SECRET_FILE" ]; then
+  echo ""
+  echo "⚠️  未找到 .husky/.commit-secret 文件。"
+  echo "    请创建该文件并写入你的 commit secret。"
+  echo "    echo 'your-secret' > .husky/.commit-secret"
+  exit 1
+fi
+
+STORED_SECRET=$(cat "$SECRET_FILE" | tr -d '[:space:]')
+
+if [ -z "$STORED_SECRET" ]; then
+  echo ""
+  echo "⚠️  .husky/.commit-secret 文件为空。"
+  echo "    请写入你的 commit secret。"
+  exit 1
+fi
+
+echo ""
+echo "🔐 请输入 commit secret 以完成提交："
+read -r -s INPUT_SECRET < /dev/tty
+
+if [ "$INPUT_SECRET" != "$STORED_SECRET" ]; then
+  echo ""
+  echo "❌ Secret 不匹配，提交被阻断。"
+  exit 1
+fi
+
+echo ""
+echo "✅ Secret 验证通过，提交继续。"

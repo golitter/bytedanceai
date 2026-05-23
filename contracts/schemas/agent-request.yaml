@@ -1,0 +1,69 @@
+# Agent 请求结构及 AgentType 枚举
+# 定义前端 → AgentEnd / Backend 的请求协议
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "agent-request.yaml"
+title: "AgentRequest"
+
+definitions:
+  AgentType:
+    title: "AgentType"
+    type: string
+    description: "Agent 类型枚举"
+    enum:
+      - claude-code   # Claude Code CLI
+      - opencode      # OpenCode CLI
+      - orchestrator  # 编排器（多 Agent 协调）
+
+  AgentRequest:
+    title: "AgentRequest"
+    type: object
+    description: "发送给 Agent 的请求结构"
+    properties:
+      task_id:
+        type: string
+        description: "任务唯一标识"
+      session_id:
+        type: string
+        description: "会话唯一标识"
+      message:
+        type: string
+        description: "用户发送的消息内容"
+      agent_type:
+        $ref: "#/definitions/AgentType"
+        default: "claude-code"
+        description: "Agent 类型"
+      stream:
+        type: boolean
+        default: true
+        description: "是否使用 SSE 流式传输"
+      system_prompt:
+        type:
+          - string
+          - "null"
+        description: "自定义系统提示词"
+      rules:
+        type: array
+        items:
+          type: string
+        default: []
+        description: "附加规则列表"
+      workspace_path:
+        type:
+          - string
+          - "null"
+        description: "工作空间路径"
+      repo_path:
+        type:
+          - string
+          - "null"
+        description: "仓库路径"
+      config:
+        type:
+          - object
+          - "null"
+        additionalProperties: true
+        description: "额外配置"
+    required:
+      - task_id
+      - session_id
+      - message

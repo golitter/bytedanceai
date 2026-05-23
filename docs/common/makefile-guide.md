@@ -42,6 +42,7 @@
 |------|------|
 | `make status` | 查看三端运行状态与 PID |
 | `make tidy` | 执行 `go mod tidy` |
+| `make generate` | 从 `contracts/schemas/*.yaml` 生成三端类型文件（Python / TypeScript / Go） |
 
 ## 直接使用脚本
 

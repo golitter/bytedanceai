@@ -1,7 +1,7 @@
 .PHONY: run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart-frontend restart-backend restart-agentend \
-       status tidy
+       status tidy generate
 
 SCRIPT := ./scripts/run.sh
 
@@ -52,3 +52,7 @@ status:
 # 整理 Go 依赖（go mod tidy）
 tidy:
 	cd backend && go mod tidy
+
+# 从 contracts/schemas/ 生成三端类型文件（Python / TypeScript / Go）
+generate:
+	python3 scripts/generate_contracts.py

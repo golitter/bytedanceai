@@ -1,16 +1,8 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 
-
-class SessionState(str, Enum):
-    IDLE = "idle"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    INTERRUPTED = "interrupted"
-    ERROR = "error"
-
+from src.generated.session import SessionState
 
 _VALID_TRANSITIONS: dict[SessionState, set[SessionState]] = {
     SessionState.IDLE: {SessionState.RUNNING},

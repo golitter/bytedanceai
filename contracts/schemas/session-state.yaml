@@ -1,0 +1,66 @@
+# 会话状态枚举及合法转换表
+# 定义 AgentEnd 会话的生命周期状态机
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "session-state.yaml"
+title: "SessionState"
+
+definitions:
+  SessionState:
+    title: "SessionState"
+    type: string
+    description: "会话状态枚举"
+    enum:
+      - idle        # 空闲，等待任务
+      - running     # 执行中
+      - completed   # 正常完成（终态）
+      - interrupted # 被中断（终态）
+      - error       # 出错（终态）
+
+  SessionStateTransitions:
+    title: "SessionStateTransitions"
+    type: object
+    description: |
+      合法的状态转换映射表。
+      key 为当前状态，value 为可转换到的状态集合。
+      completed / interrupted / error 为终态，不可转换。
+    properties:
+      idle:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const:
+          - running
+        description: "idle → running"
+      running:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const:
+          - completed
+          - interrupted
+          - error
+        description: "running → completed / interrupted / error"
+      completed:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const: []
+        description: "终态"
+      interrupted:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const: []
+        description: "终态"
+      error:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const: []
+        description: "终态"
+    required:
+      - idle
+      - running
+      - completed
+      - interrupted
+      - error

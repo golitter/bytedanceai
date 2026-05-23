@@ -1,0 +1,39 @@
+# StreamEvent 事件类型枚举及 StreamEvent 数据结构
+# 三端（Python/TypeScript/Go）的类型定义均由此文件生成
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "event-types.yaml"
+title: "EventTypes"
+
+definitions:
+  EventType:
+    title: "EventType"
+    type: string
+    description: "SSE 流事件类型枚举"
+    enum:
+      - init        # 会话初始化事件
+      - text        # 文本内容流式输出
+      - tool_call   # 工具调用开始
+      - tool_result # 工具调用结果返回
+      - artifact    # 产出物（文件/代码等）
+      - planning    # 规划/思考过程
+      - done        # 流结束
+      - error       # 错误事件
+
+  StreamEvent:
+    title: "StreamEvent"
+    type: object
+    description: "SSE 流事件数据结构"
+    properties:
+      type:
+        $ref: "#/definitions/EventType"
+        description: "事件类型"
+      content:
+        type: object
+        additionalProperties: true
+        default: {}
+        description: "事件内容，具体字段随 type 而异"
+      timestamp:
+        type: number
+        description: "Unix 时间戳（秒，含小数）"
+    required:
+      - type

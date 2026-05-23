@@ -1,0 +1,33 @@
+# Agent 响应结构
+# 定义 AgentEnd → 前端/Backend 的响应协议
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "agent-response.yaml"
+title: "AgentResponse"
+
+definitions:
+  AgentResponse:
+    title: "AgentResponse"
+    type: object
+    description: "Agent 返回的响应结构"
+    properties:
+      session_id:
+        type: string
+        description: "会话唯一标识"
+      content:
+        type: string
+        description: "响应文本内容"
+      artifacts:
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+        default: []
+        description: "产出物列表（文件/代码等）"
+      usage:
+        type: object
+        additionalProperties: true
+        default: {}
+        description: "Token 用量统计"
+    required:
+      - session_id
+      - content
