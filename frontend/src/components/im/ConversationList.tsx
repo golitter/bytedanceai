@@ -2,6 +2,7 @@ import { MessageSquare, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { useConversations } from '@/hooks/use-conversations'
+import { useHoverStyle } from '@/hooks/use-hover-style'
 import { useChatNav } from '@/stores/chat'
 
 import { ConversationItem } from './ConversationItem'
@@ -12,6 +13,7 @@ export function ConversationList() {
   const [showNewChat, setShowNewChat] = useState(false)
   const { data: conversations, isLoading } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
+  const newChatHover = useHoverStyle()
 
   const filtered = conversations?.filter((c) => {
     if (!search) return true
@@ -45,8 +47,7 @@ export function ConversationList() {
           className="flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-120"
           style={{ color: 'var(--text-secondary)' }}
           onClick={() => setShowNewChat(true)}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          {...newChatHover}
         >
           <Plus className="h-4 w-4" strokeWidth={1.25} />
         </button>

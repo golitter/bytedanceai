@@ -1,16 +1,12 @@
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
+import { useHoverStyle } from '@/hooks/use-hover-style'
 import type { Conversation } from '@/lib/api'
+import { AGENT_NAMES } from '@/lib/constants'
 
 interface ConversationItemProps {
   conversation: Conversation
   isActive: boolean
   onClick: () => void
-}
-
-const AGENT_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  opencode: 'OpenCode',
-  orchestrator: 'Orchestrator',
 }
 
 function relativeTime(dateStr: string): string {
@@ -28,6 +24,7 @@ function relativeTime(dateStr: string): string {
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const name =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
+  const hoverStyle = useHoverStyle()
 
   return (
     <button
@@ -37,12 +34,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
         borderLeft: isActive ? '2px solid var(--color-brand)' : '2px solid transparent',
       }}
       onClick={onClick}
-      onMouseEnter={(e) => {
-        if (!isActive) e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'
-      }}
+      {...(!isActive && hoverStyle)}
     >
       <AgentAvatar
         agentType={conversation.agentType}

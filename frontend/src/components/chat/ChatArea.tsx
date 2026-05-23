@@ -1,15 +1,10 @@
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
+import { AGENT_NAMES } from '@/lib/constants'
 
 import { AgentAvatar } from './AgentAvatar'
 import { MessageInput } from './MessageInput'
 import { MessageList } from './MessageList'
-
-const AGENT_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  opencode: 'OpenCode',
-  orchestrator: 'Orchestrator',
-}
 
 interface ChatAreaProps {
   taskId: string

@@ -15,7 +15,7 @@ export interface Session {
   session_id: string
   task_id: string
   agent_type: AgentType
-  agent_name: string
+  agent_name?: string
   status: string
   created_at: string
   updated_at: string
@@ -135,6 +135,7 @@ export async function createConversation(
   const task = await createTask(taskTitle, [{ type: agentType, name: agentName }])
   const detail = await fetchTask(task.task_id)
   const session = detail.sessions[0]
+  if (!session) throw new Error('Backend failed to create session')
   return {
     taskId: task.task_id,
     sessionId: session.session_id,

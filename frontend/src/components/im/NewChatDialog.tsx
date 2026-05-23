@@ -5,14 +5,10 @@ import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { AgentType } from '@/generated/request'
 import { useCreateConversation } from '@/hooks/use-conversations'
+import { useHoverStyle } from '@/hooks/use-hover-style'
 import { fetchAgentTypes } from '@/lib/api'
+import { AGENT_DESCRIPTIONS } from '@/lib/constants'
 import { useChatNav } from '@/stores/chat'
-
-const AGENT_DESCRIPTIONS: Record<string, string> = {
-  'claude-code': 'Anthropic 的 AI 编程助手，擅长代码生成、重构和调试',
-  opencode: '开源 AI 编程工具，支持多种模型',
-  orchestrator: '多 Agent 协调器，自动分派任务给合适的 Agent',
-}
 
 interface NewChatDialogProps {
   open: boolean
@@ -28,6 +24,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const { setCurrentSession } = useChatNav()
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
+  const agentHover = useHoverStyle()
 
   const handleSelect = (agentType: AgentType, agentName?: string) => {
     createMutation.mutate(
@@ -77,8 +74,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     setExpandedAgent(agent.type)
                   }
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                onMouseEnter={agentHover.onMouseEnter}
+                onMouseLeave={agentHover.onMouseLeave}
                 disabled={createMutation.isPending}
               >
                 <AgentAvatar agentType={agent.type as AgentType} status="ready" />
