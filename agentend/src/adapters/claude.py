@@ -10,7 +10,6 @@ from src.schemas.response import AgentResponse
 # Claude CLI output type -> StreamEvent type
 _TYPE_MAP: dict[str, str] = {
     "system": EventType.INIT.value,
-    "assistant": EventType.TEXT.value,
     "tool_use": EventType.TOOL_CALL.value,
     "tool_result": EventType.TOOL_RESULT.value,
     "result": EventType.DONE.value,
@@ -35,7 +34,15 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
         max_turns: int | None = None,
     ) -> list[str]:
         # CLI 可执行文件路径来自 config.yaml 的 cli.claude_path
-        cmd = [settings.cli.claude_path, "-p", message, "--output-format", "stream-json", "--verbose"]
+        cmd = [
+            settings.cli.claude_path,
+            "-p",
+            message,
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+        ]
 
         if cli_session_id:
             if is_resume:
@@ -51,10 +58,10 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
 
         return cmd
 
-    def _parse_stream_line(self, line: str) -> StreamEvent:
+    def _parse_stream_line(self, line: str) -> StreamEvent | None:
         line = line.strip()
         if not line:
-            return StreamEvent.create(EventType.TEXT, text="")
+            return None
 
         try:
             data = json.loads(line)
@@ -62,10 +69,23 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             return StreamEvent.create(EventType.TEXT, text=line)
 
         cli_type = data.get("type", "")
+
+        # Handle stream_event (token-level streaming via --include-partial-messages)
+        if cli_type == "stream_event":
+            event_data = data.get("event", {})
+            event_sub_type = event_data.get("type", "")
+            if event_sub_type == "content_block_delta":
+                delta = event_data.get("delta", {})
+                text = delta.get("text", "")
+                if text:
+                    return StreamEvent.create(EventType.TEXT, text=text)
+            # Ignore meta events: message_start, content_block_start, content_block_stop, message_delta, message_stop
+            return None
+
         event_type = _TYPE_MAP.get(cli_type)
 
         if event_type is None:
-            return StreamEvent.create(EventType.TEXT, text="")
+            return None
 
         if event_type == EventType.INIT:
             cli_session_id = data.get("session_id", "")
@@ -138,7 +158,8 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             assert process.stdout is not None
             async for line in process.stdout:
                 event = self._parse_stream_line(line.decode())
-                yield event
+                if event:
+                    yield event
 
             await process.wait()
             if process.returncode and process.returncode != 0:
