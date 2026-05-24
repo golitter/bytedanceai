@@ -12,6 +12,7 @@ import (
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
+	"agenthub/backend/pkg/qiniu"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,12 +35,13 @@ func main() {
 	}
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
+	qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
 
 	taskHandler := handler.NewTaskHandler(agentClient)
 	agentHandler := handler.NewAgentHandler()
 	sessionHandler := handler.NewSessionHandler()
 	messageHandler := handler.NewMessageHandler()
-	avatarHandler := handler.NewAvatarHandler()
+	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -68,8 +70,6 @@ func main() {
 		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
 	}
-
-	r.Static("/uploads", "./uploads")
 
 	slog.Info("server starting", "port", 8080)
 	if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {

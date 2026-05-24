@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"os"
+	"io"
 	"path/filepath"
 	"strings"
 
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/db"
+	"agenthub/backend/pkg/qiniu"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,7 +16,6 @@ import (
 
 const (
 	maxAvatarSize = 2 << 20 // 2MB
-	avatarDir     = "uploads/avatars"
 )
 
 var allowedExtensions = map[string]bool{
@@ -26,10 +26,12 @@ var allowedExtensions = map[string]bool{
 	".webp": true,
 }
 
-type AvatarHandler struct{}
+type AvatarHandler struct {
+	uploader *qiniu.Uploader
+}
 
-func NewAvatarHandler() *AvatarHandler {
-	return &AvatarHandler{}
+func NewAvatarHandler(uploader *qiniu.Uploader) *AvatarHandler {
+	return &AvatarHandler{uploader: uploader}
 }
 
 func (h *AvatarHandler) UploadAvatar(c *gin.Context) {
@@ -51,20 +53,19 @@ func (h *AvatarHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	if err := os.MkdirAll(avatarDir, 0755); err != nil {
-		vo.InternalError(c, "failed to create upload directory")
+	key := "avatars/" + uuid.New().String() + ext
+	data, err := io.ReadAll(file)
+	if err != nil {
+		vo.InternalError(c, "failed to read file")
 		return
 	}
 
-	filename := uuid.New().String() + ext
-	savePath := filepath.Join(avatarDir, filename)
-
-	if err := c.SaveUploadedFile(header, savePath); err != nil {
-		vo.InternalError(c, "failed to save file")
+	avatarURL, err := h.uploader.UploadBytes(c.Request.Context(), key, data)
+	if err != nil {
+		vo.InternalError(c, "failed to upload file")
 		return
 	}
 
-	avatarURL := "/" + strings.ReplaceAll(savePath, "\\", "/")
 	vo.OK(c, gin.H{"avatar_url": avatarURL})
 }
 

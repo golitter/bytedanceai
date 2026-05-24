@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,13 +36,25 @@ func (c *AgentEndConfig) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
+type QiniuConfig struct {
+	AccessKey string `yaml:"access_key"`
+	SecretKey string `yaml:"secret_key"`
+	Bucket    string `yaml:"bucket"`
+	Domain    string `yaml:"domain"`
+	Region    string `yaml:"region"`
+}
+
 type Config struct {
 	MySQL    MySQLConfig    `yaml:"mysql"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	AgentEnd AgentEndConfig `yaml:"agentend"`
+	Qiniu    QiniuConfig    `yaml:"qiniu"`
 }
 
 func Load(path string) (*Config, error) {
+	// .env is optional — don't error if missing
+	_ = godotenv.Load()
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
@@ -50,5 +63,9 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+
+	cfg.Qiniu.AccessKey = os.Getenv("QINIU_ACCESS_KEY")
+	cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
+
 	return &cfg, nil
 }
