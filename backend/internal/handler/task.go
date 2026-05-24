@@ -2,15 +2,14 @@ package handler
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
+	"agenthub/backend/internal/stream"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
@@ -162,76 +161,76 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		db.GetDB().Model(&session).Update("status", "running")
 	}
 
-	agentReq := &generated.AgentRequest{
-		TaskId:    taskID,
-		SessionId: req.SessionID,
-		Message:   req.Message,
-		AgentType: generated.AgentType(agentType),
-		Stream:    true,
+	// Create agent message with streaming status
+	messageID := uuid.New().String()
+	agentMsg := model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: req.SessionID,
+		Role:      "agent",
+		Content:   "",
+		Status:    "streaming",
+		AgentType: agentType,
 	}
-	if task.RepoPath != "" {
-		agentReq.RepoPath = &task.RepoPath
-	}
-
-	resp, err := h.agentClient.StreamAgent(agentReq)
-	if err != nil {
-		db.GetDB().Model(&session).Update("status", "failed")
-		vo.InternalError(c, fmt.Sprintf("agent stream error: %v", err))
+	if err := db.GetDB().Create(&agentMsg).Error; err != nil {
+		vo.InternalError(c, fmt.Sprintf("create agent message: %v", err))
 		return
 	}
-	defer resp.Body.Close()
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
+	// Launch background goroutine to consume agentend stream
+	go func() {
+		agentReq := &generated.AgentRequest{
+			TaskId:    taskID,
+			SessionId: req.SessionID,
+			Message:   req.Message,
+			AgentType: generated.AgentType(agentType),
+			Stream:    true,
+		}
+		if task.RepoPath != "" {
+			agentReq.RepoPath = &task.RepoPath
+		}
 
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		resp, err := h.agentClient.StreamAgent(agentReq)
+		if err != nil {
+			slog.Warn("agent stream error", "task_id", taskID, "session_id", req.SessionID, "error", err)
+			stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("agent service error: %v", err))
+			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
+			return
+		}
+		defer resp.Body.Close()
 
-	c.Writer.WriteHeader(http.StatusOK)
+		if resp.StatusCode != http.StatusOK {
+			slog.Warn("agent returned non-200", "task_id", taskID, "status", resp.StatusCode)
+			stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("agent returned HTTP %d", resp.StatusCode))
+			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
+			return
+		}
 
-	var contentBuilder strings.Builder
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Fprintf(c.Writer, "%s\n", line)
-		c.Writer.(http.Flusher).Flush()
+		sw := stream.NewStreamWriter(c.Request.Context(), taskID, req.SessionID, messageID, agentType)
 
-		// Accumulate agent text content from SSE data lines
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-			var event generated.StreamEvent
-			if err := json.Unmarshal([]byte(data), &event); err == nil {
-				if event.Type == generated.EventTypeText {
-					if text, ok := event.Content["text"].(string); ok {
-						contentBuilder.WriteString(text)
-					}
-				}
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+		sw.Run(func(fn func(string)) {
+			for scanner.Scan() {
+				fn(scanner.Text())
 			}
-		}
-	}
+			if scanner.Err() != nil {
+				slog.Warn("SSE scanner error", "task_id", taskID, "error", scanner.Err())
+				sw.Fail()
+				db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
+				return
+			}
+			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "completed")
+		})
+	}()
 
-	finalStatus := "completed"
-	streamErr := scanner.Err()
-	if streamErr != nil {
-		slog.Warn("SSE stream error", "task_id", taskID, "session_id", req.SessionID, "error", streamErr)
-		finalStatus = "failed"
-	}
-	db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", finalStatus)
-
-	// Save agent message (full or partial) to Message table
-	agentContent := contentBuilder.String()
-	if agentContent != "" {
-		agentMsg := model.Message{
-			TaskID:    taskID,
-			SessionID: req.SessionID,
-			Role:      "agent",
-			Content:   agentContent,
-			AgentType: agentType,
-		}
-		if err := db.GetDB().Create(&agentMsg).Error; err != nil {
-			slog.Warn("failed to save agent message", "task_id", taskID, "error", err)
-		}
-	}
+	c.JSON(http.StatusAccepted, gin.H{
+		"data": gin.H{
+			"message_id": messageID,
+			"status":     "streaming",
+		},
+	})
 }
 
 // ValidateRepoPath forwards the validation request to agentend.

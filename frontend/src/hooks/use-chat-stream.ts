@@ -1,136 +1,96 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
-import { getTaskMessages } from '@/lib/api'
+import { getTaskMessages, submitMessage } from '@/lib/api'
 import { connectSSE } from '@/lib/sse'
+import { type ChatMessage, useChatStore } from '@/stores/chat'
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'agent' | 'system'
-  content: string
-  agentType?: AgentType
-  timestamp: number
-}
+// Re-export ChatMessage for consumers
+export type { ChatMessage }
 
-type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
+export function useChatStream(taskId: string, sessionId: string) {
+  const store = useChatStore()
+  const abortRef = useRef<AbortController | null>(null)
+  const session = store.getSession(sessionId)
 
-interface ChatState {
-  status: ChatStatus
-  messages: ChatMessage[]
-  streamingContent: string
-  streamingAgentType?: AgentType
-  error: Error | null
-  toolName?: string
-}
+  const connectToStream = useCallback(
+    (messageId: string) => {
+      abortRef.current?.abort()
 
-type ChatAction =
-  | { type: 'LOAD_HISTORY'; messages: ChatMessage[] }
-  | { type: 'SEND_MESSAGE'; message: ChatMessage }
-  | { type: 'STREAM_START'; agentType: AgentType }
-  | { type: 'STREAM_TEXT'; text: string }
-  | { type: 'STREAM_TOOL_CALL'; toolName: string }
-  | { type: 'STREAM_TOOL_RESULT' }
-  | { type: 'STREAM_DONE' }
-  | { type: 'STREAM_ERROR'; error: Error }
-  | { type: 'RESET' }
+      store.streamStart(sessionId, 'claude-code')
 
-const initialState: ChatState = {
-  status: 'idle',
-  messages: [],
-  streamingContent: '',
-  streamingAgentType: undefined,
-  error: null,
-  toolName: undefined,
-}
+      const controller = connectSSE({
+        url: `/api/tasks/${taskId}/stream`,
+        params: { session_id: sessionId, message_id: messageId },
+        reconnect: true,
+        onEvent: (event: StreamEvent) => {
+          switch (event.type) {
+            case EventTypeValues.Init:
+              store.streamStart(sessionId, 'claude-code')
+              break
+            case EventTypeValues.Text:
+              store.streamText(sessionId, (event.content?.text as string) ?? '')
+              break
+            case EventTypeValues.ToolCall:
+              store.streamToolCall(sessionId, (event.content?.name as string) ?? 'unknown')
+              break
+            case EventTypeValues.ToolResult:
+              store.streamToolResult(sessionId)
+              break
+            case EventTypeValues.Done:
+              store.streamDone(sessionId)
+              break
+            case EventTypeValues.Error:
+              store.streamError(
+                sessionId,
+                new Error((event.content?.message as string) ?? 'Unknown error'),
+              )
+              break
+          }
+        },
+        onError: (error) => {
+          store.streamError(sessionId, error)
+        },
+      })
 
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
-  switch (action.type) {
-    case 'LOAD_HISTORY':
-      return {
-        ...state,
-        status: 'done',
-        messages: action.messages,
-      }
+      abortRef.current = controller
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [taskId, sessionId],
+  )
 
-    case 'SEND_MESSAGE':
-      return {
-        ...state,
-        status: 'loading',
-        messages: [...state.messages, action.message],
-        streamingContent: '',
-        error: null,
-      }
-
-    case 'STREAM_START':
-      return {
-        ...state,
-        status: 'streaming',
-        streamingAgentType: action.agentType,
-      }
-
-    case 'STREAM_TEXT':
-      return {
-        ...state,
-        status: state.status === 'tool_running' ? 'streaming' : state.status,
-        streamingContent: state.streamingContent + action.text,
-      }
-
-    case 'STREAM_TOOL_CALL':
-      return {
-        ...state,
-        status: 'tool_running',
-        toolName: action.toolName,
-      }
-
-    case 'STREAM_TOOL_RESULT':
-      return {
-        ...state,
-        status: 'streaming',
-        toolName: undefined,
-      }
-
-    case 'STREAM_DONE': {
-      const agentMessage: ChatMessage = {
-        id: `agent-${Date.now()}`,
-        role: 'agent',
-        content: state.streamingContent,
-        agentType: state.streamingAgentType,
+  const sendMessage = useCallback(
+    async (message: string, agentType: AgentType = 'claude-code') => {
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message,
         timestamp: Date.now(),
       }
-      return {
-        ...state,
-        status: 'done',
-        messages: [...state.messages, agentMessage],
-        streamingContent: '',
-        streamingAgentType: undefined,
-      }
-    }
 
-    case 'STREAM_ERROR':
-      return {
-        ...state,
-        status: 'error',
-        error: action.error,
-        streamingContent: '',
-      }
+      const result = await submitMessage(taskId, {
+        message,
+        session_id: sessionId,
+        agent_type: agentType,
+      })
 
-    case 'RESET':
-      return initialState
+      store.sendMessage(sessionId, userMessage, {
+        messageId: result.message_id,
+        sessionId,
+      })
 
-    default:
-      return state
-  }
-}
+      connectToStream(result.message_id)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [taskId, sessionId, connectToStream],
+  )
 
-export function useChatStream(taskId: string) {
-  const [state, dispatch] = useReducer(chatReducer, initialState)
-  const abortRef = useRef<AbortController | null>(null)
-
-  // Load history on mount
+  // Load history on mount; auto-reconnect if streaming message found
   useEffect(() => {
     let cancelled = false
+
     getTaskMessages(taskId)
       .then((msgs) => {
         if (cancelled || msgs.length === 0) return
@@ -140,73 +100,30 @@ export function useChatStream(taskId: string) {
           content: m.content,
           agentType: m.agent_type as AgentType | undefined,
           timestamp: new Date(m.created_at).getTime(),
+          messageId: m.message_id,
+          status: m.status,
         }))
-        dispatch({ type: 'LOAD_HISTORY', messages: chatMessages })
+        store.loadHistory(sessionId, chatMessages)
+
+        const streaming = msgs.find((m) => m.role === 'agent' && m.status === 'streaming')
+        if (streaming && streaming.message_id) {
+          connectToStream(streaming.message_id)
+        }
       })
       .catch(() => {
         // silently ignore — empty state is fine
       })
+
     return () => {
       cancelled = true
     }
-  }, [taskId])
-
-  const sendMessage = useCallback(
-    (message: string, sessionId: string, agentType: AgentType = 'claude-code') => {
-      const userMessage: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message,
-        timestamp: Date.now(),
-      }
-
-      dispatch({ type: 'SEND_MESSAGE', message: userMessage })
-
-      const controller = connectSSE({
-        url: `/api/tasks/${taskId}/run`,
-        body: { message, session_id: sessionId, agent_type: agentType },
-        onEvent: (event: StreamEvent) => {
-          switch (event.type) {
-            case EventTypeValues.Init:
-              dispatch({ type: 'STREAM_START', agentType })
-              break
-            case EventTypeValues.Text:
-              dispatch({ type: 'STREAM_TEXT', text: (event.content?.text as string) ?? '' })
-              break
-            case EventTypeValues.ToolCall:
-              dispatch({
-                type: 'STREAM_TOOL_CALL',
-                toolName: (event.content?.name as string) ?? 'unknown',
-              })
-              break
-            case EventTypeValues.ToolResult:
-              dispatch({ type: 'STREAM_TOOL_RESULT' })
-              break
-            case EventTypeValues.Done:
-              dispatch({ type: 'STREAM_DONE' })
-              break
-            case EventTypeValues.Error:
-              dispatch({
-                type: 'STREAM_ERROR',
-                error: new Error((event.content?.message as string) ?? 'Unknown error'),
-              })
-              break
-          }
-        },
-        onError: (error) => {
-          dispatch({ type: 'STREAM_ERROR', error })
-        },
-      })
-
-      abortRef.current = controller
-    },
-    [taskId],
-  )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, sessionId, connectToStream])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
   }, [])
 
-  return { state, sendMessage, abort }
+  return { state: session, sendMessage, abort }
 }

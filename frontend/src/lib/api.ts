@@ -164,13 +164,34 @@ export async function createConversation(
 // Task messages
 export interface TaskMessage {
   id: number
+  message_id?: string
   task_id: string
   session_id: string
   role: 'user' | 'agent'
   content: string
+  status?: string
+  last_seq?: string
   agent_type?: string
   agent_name?: string
   created_at: string
+}
+
+// Submit a message and get back the agent message_id for streaming
+export async function submitMessage(
+  taskId: string,
+  body: { message: string; session_id: string; agent_type?: string },
+): Promise<{ message_id: string; status: string }> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new Error(json.msg || `HTTP ${res.status}`)
+  }
+  const json = await res.json()
+  return json.data
 }
 
 export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {

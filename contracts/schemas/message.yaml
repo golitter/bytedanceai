@@ -13,6 +13,15 @@ definitions:
       - user   # 用户消息
       - agent  # Agent 回复
 
+  MessageStatus:
+    title: "MessageStatus"
+    type: string
+    description: "消息流式状态"
+    enum:
+      - streaming   # 正在流式输出
+      - completed   # 流式完成
+      - failed      # 流式失败
+
   Message:
     title: "Message"
     type: object
@@ -21,6 +30,11 @@ definitions:
       id:
         type: integer
         description: "主键"
+      message_id:
+        type:
+          - string
+          - "null"
+        description: "对外唯一标识（UUID），用于流式追踪和重连"
       task_id:
         type: string
         description: "关联的 task ID"
@@ -33,6 +47,14 @@ definitions:
       content:
         type: string
         description: "消息内容"
+      status:
+        type: string
+        description: "流式状态（仅 agent 消息有意义）"
+        default: "completed"
+      last_seq:
+        type: string
+        description: "Redis Stream 最后已 flush 的 event ID，用于断线重连续接"
+        default: ""
       agent_type:
         type:
           - string

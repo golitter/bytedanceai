@@ -9,10 +9,12 @@ import (
 	"agenthub/backend/internal/handler"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/model"
+	"agenthub/backend/internal/stream"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
 	"agenthub/backend/pkg/qiniu"
+	"agenthub/backend/pkg/redis"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,6 +36,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := redis.Init(&cfg.Redis); err != nil {
+		slog.Error("init redis", "error", err)
+		os.Exit(1)
+	}
+
+	stream.CleanupStaleMessages()
+
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 	qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
 
@@ -42,6 +51,7 @@ func main() {
 	sessionHandler := handler.NewSessionHandler()
 	messageHandler := handler.NewMessageHandler()
 	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
+	streamHandler := handler.NewStreamHandler()
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -60,6 +70,7 @@ func main() {
 		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
 
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
+		api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
 		api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
 
 		api.GET("/agent-types", agentHandler.ListAgentTypes)

@@ -3,7 +3,7 @@ import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
-import type { ChatMessage } from '@/hooks/use-chat-stream'
+import type { ChatMessage } from '@/stores/chat'
 
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
 import { MessageBubble } from './MessageBubble'

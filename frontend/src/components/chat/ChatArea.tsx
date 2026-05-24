@@ -27,7 +27,7 @@ export function ChatArea({
   avatarUrl,
   repoPath,
 }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId)
+  const { state, sendMessage } = useChatStream(taskId, sessionId)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
   const [editOpen, setEditOpen] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -53,7 +53,7 @@ export function ChatArea({
       setValidating(false)
     }
 
-    sendMessage(message, sessionId, agentType)
+    sendMessage(message, agentType)
   }
 
   const displayName = agentName ?? AGENT_NAMES[agentType] ?? agentType

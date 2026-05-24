@@ -44,11 +44,23 @@ type QiniuConfig struct {
 	Region    string `yaml:"region"`
 }
 
+type RedisConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+}
+
+func (c *RedisConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
 type Config struct {
 	MySQL    MySQLConfig    `yaml:"mysql"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	AgentEnd AgentEndConfig `yaml:"agentend"`
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
+	Redis    RedisConfig    `yaml:"redis"`
 }
 
 func Load(path string) (*Config, error) {
