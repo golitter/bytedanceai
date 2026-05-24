@@ -25,7 +25,6 @@ export function AgentEditDialog({
   const fileRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
-  // Reset form state when dialog opens
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       setName(initialName)
@@ -53,7 +52,6 @@ export function AgentEditDialog({
       if (avatarUrl !== initialAvatarUrl) data.avatar_url = avatarUrl
       if (Object.keys(data).length > 0) {
         await updateSession(sessionId, data)
-        // Refresh conversation list so avatar/name update is visible
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       }
       onOpenChange(false)
@@ -66,40 +64,24 @@ export function AgentEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="max-w-sm"
-        style={{
-          backgroundColor: 'var(--card)',
-          borderColor: 'rgba(255,255,255,0.06)',
-        }}
-      >
+      <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle style={{ color: 'var(--text-primary)' }}>编辑 Agent</DialogTitle>
+          <DialogTitle className="text-foreground">编辑 Agent</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg"
-              style={{
-                backgroundColor: 'var(--bg-canvas)',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-background border border-border">
               {avatarUrl ? (
                 <img src={avatarUrl} alt={name} width={48} height={48} className="rounded-lg" />
               ) : (
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <span className="text-sm font-semibold text-foreground">
                   {name.charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
             <button
-              className="rounded-md px-3 py-1.5 text-xs"
-              style={{
-                border: '1px solid rgba(255,255,255,0.06)',
-                color: 'var(--text-secondary)',
-              }}
+              className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground"
               onClick={() => fileRef.current?.click()}
             >
               上传头像
@@ -114,24 +96,16 @@ export function AgentEditDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              名称
-            </label>
+            <label className="mb-1 block text-xs text-tertiary">名称</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm outline-none"
-              style={{
-                borderColor: 'rgba(255,255,255,0.06)',
-                backgroundColor: 'var(--bg-canvas)',
-                color: 'var(--text-primary)',
-              }}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
             />
           </div>
 
           <button
-            className="mt-1 w-full rounded-md py-2 text-sm font-medium"
-            style={{ backgroundColor: 'var(--color-brand)', color: 'var(--text-primary)' }}
+            className="mt-1 w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground"
             onClick={handleSave}
             disabled={saving || !name.trim()}
           >

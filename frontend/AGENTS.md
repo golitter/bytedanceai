@@ -6,13 +6,28 @@
 
 ```
 src/
-├── main.tsx            # 应用入口（StrictMode + QueryClient + BrowserRouter）
-├── App.tsx             # 主页面组件
-├── index.css           # 全局样式（Tailwind + CSS 变量主题）
-├── assets/             # 静态资源
-├── components/ui/      # shadcn/ui 组件（button, card, input, dialog）
-├── lib/utils.ts        # cn() 工具函数
-└── stores/app.ts       # Zustand store
+├── main.tsx                # 应用入口（StrictMode + QueryClient + BrowserRouter）
+├── index.css               # 全局样式（Tailwind + shadcn 语义 token + 自定义扩展 token）
+├── assets/                 # 静态资源
+├── components/
+│   ├── chat/               # 聊天模块（ChatArea, MessageBubble, MessageInput, MessageList, AgentAvatar, AgentEditDialog）
+│   ├── im/                 # 会话列表模块（ConversationList, ConversationItem, NewChatDialog）
+│   ├── markdown/           # Markdown 渲染（MarkdownRenderer, CodeBlock）
+│   └── ui/                 # shadcn/ui 基础组件（button, card, input, dialog）
+├── pages/
+│   └── ImPage.tsx          # 主页面（会话列表 + 聊天区布局）
+├── hooks/
+│   ├── use-chat-stream.ts  # 聊天 SSE 流式数据 hook
+│   ├── use-conversations.ts # 会话列表 CRUD hook
+│   └── use-hover-style.ts  # 通用 hover 样式 hook
+├── stores/
+│   └── chat.ts             # Zustand store（聊天导航 + 消息状态）
+├── lib/
+│   ├── api.ts              # API 请求封装
+│   ├── constants.ts        # 常量（Agent 名称、描述）
+│   ├── sse.ts              # SSE 连接工具
+│   └── utils.ts            # cn() 工具函数
+└── generated/              # 契约生成的 TypeScript 类型（events, request, response, session）
 ```
 
 ## 常用命令

@@ -85,39 +85,24 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-sm"
-        style={{
-          backgroundColor: 'var(--card)',
-          borderColor: 'rgba(255,255,255,0.06)',
-        }}
-      >
+      <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle style={{ color: 'var(--text-primary)' }}>新建对话</DialogTitle>
+          <DialogTitle className="text-foreground">新建对话</DialogTitle>
         </DialogHeader>
-        <p className="mb-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          选择一个 Agent 开始对话
-        </p>
+        <p className="mb-3 text-xs text-tertiary">选择一个 Agent 开始对话</p>
         <div className="mb-3">
-          <label
-            className="mb-1 block text-xs font-medium"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            仓库路径
-          </label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">仓库路径</label>
           <div className="flex items-center gap-2">
             <input
               ref={repoPathRef}
               placeholder="/path/to/repo"
-              className="flex-1 rounded-md border px-2 py-1.5 text-xs outline-none"
+              className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
               style={{
                 borderColor: repoPathError
-                  ? '#EF4444'
+                  ? 'var(--destructive)'
                   : repoPathValidated
-                    ? '#22C55E'
-                    : 'rgba(255,255,255,0.06)',
-                backgroundColor: 'var(--bg-canvas)',
-                color: 'var(--text-primary)',
+                    ? 'var(--color-success)'
+                    : 'var(--border)',
               }}
               onChange={handleRepoPathChange}
               onKeyDown={(e) => {
@@ -125,25 +110,17 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               }}
             />
             <button
-              className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium"
-              style={{
-                backgroundColor: 'var(--color-brand)',
-                color: 'var(--text-primary)',
-                opacity: validating ? 0.6 : 1,
-              }}
+              className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+              style={{ opacity: validating ? 0.6 : 1 }}
               onClick={handleValidate}
               disabled={validating}
             >
               {validating ? '校验中...' : '校验'}
             </button>
           </div>
-          {repoPathError && (
-            <p className="mt-1 text-xs" style={{ color: '#EF4444' }}>
-              {repoPathError}
-            </p>
-          )}
+          {repoPathError && <p className="mt-1 text-xs text-destructive">{repoPathError}</p>}
           {repoPathValidated && (
-            <p className="mt-1 text-xs" style={{ color: '#22C55E' }}>
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-success)' }}>
               路径校验通过
             </p>
           )}
@@ -152,11 +129,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           {types.map((agent) => (
             <div key={agent.type}>
               <button
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors"
-                style={{
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  opacity: !repoPathValidated ? 0.4 : 1,
-                }}
+                className="flex w-full items-center gap-3 rounded-lg border border-border px-3 py-3 text-left transition-colors"
+                style={{ opacity: !repoPathValidated ? 0.4 : 1 }}
                 onClick={() => {
                   if (!repoPathValidated) return
                   if (expandedAgent === agent.type) {
@@ -171,10 +145,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               >
                 <AgentAvatar agentType={agent.type as AgentType} status="ready" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {agent.name}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-sm font-medium text-foreground">{agent.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-tertiary">
                     {agent.description || AGENT_DESCRIPTIONS[agent.type]}
                   </p>
                 </div>
@@ -184,12 +156,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   <input
                     ref={nameRef}
                     placeholder="自定义名称（可选）"
-                    className="flex-1 rounded-md border px-2 py-1.5 text-xs outline-none"
-                    style={{
-                      borderColor: 'rgba(255,255,255,0.06)',
-                      backgroundColor: 'var(--bg-canvas)',
-                      color: 'var(--text-primary)',
-                    }}
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
@@ -197,8 +164,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     }}
                   />
                   <button
-                    className="rounded-md px-3 py-1.5 text-xs font-medium"
-                    style={{ backgroundColor: 'var(--color-brand)', color: 'var(--text-primary)' }}
+                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                     onClick={() =>
                       handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
                     }

@@ -134,18 +134,13 @@ export function MessageList({
 
       {!autoScroll && (
         <button
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-xl transition-colors"
-          style={{ backgroundColor: 'var(--bg-hover)' }}
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-xl bg-accent transition-colors"
           onClick={() => {
             scrollToBottom()
             setAutoScroll(true)
           }}
         >
-          <ArrowDown
-            className="h-4 w-4"
-            style={{ color: 'var(--text-secondary)' }}
-            strokeWidth={1.25}
-          />
+          <ArrowDown className="h-4 w-4 text-muted-foreground" strokeWidth={1.25} />
         </button>
       )}
     </div>

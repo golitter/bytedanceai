@@ -31,13 +31,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
       <div className="flex justify-end">
-        <div
-          className="max-w-[80%] rounded-[10px] border px-4 py-3 text-sm"
-          style={{
-            backgroundColor: 'rgba(99,102,241,0.08)',
-            borderColor: 'rgba(99,102,241,0.15)',
-          }}
-        >
+        <div className="max-w-[80%] rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm">
           {props.children}
         </div>
       </div>
@@ -55,10 +49,7 @@ export function MessageBubble(props: MessageBubbleProps) {
             agentName={props.agentName}
           />
         </div>
-        <div
-          className="relative max-w-[80%] rounded-[10px] px-4 py-3 text-sm"
-          style={{ backgroundColor: 'var(--card)' }}
-        >
+        <div className="relative max-w-[80%] rounded-[10px] bg-card px-4 py-3 text-sm">
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
@@ -67,7 +58,9 @@ export function MessageBubble(props: MessageBubbleProps) {
           />
           <div>
             {props.children}
-            {props.isStreaming && <span className="inline-block animate-pulse text-brand">▌</span>}
+            {props.isStreaming && (
+              <span className="inline-block animate-pulse text-primary">▌</span>
+            )}
           </div>
         </div>
       </div>
@@ -77,9 +70,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   // system
   return (
     <div className="flex justify-center">
-      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-        {props.children}
-      </p>
+      <p className="text-xs text-muted-foreground">{props.children}</p>
     </div>
   )
 }

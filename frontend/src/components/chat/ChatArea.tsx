@@ -59,12 +59,9 @@ export function ChatArea({
   const displayName = agentName ?? AGENT_NAMES[agentType] ?? agentType
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: 'var(--bg-canvas)' }}>
+    <div className="flex h-full flex-col bg-background">
       {/* Header — IM style: agent avatar + name */}
-      <div
-        className="flex h-12 shrink-0 items-center gap-3 border-b px-6"
-        style={{ borderColor: 'var(--divider)' }}
-      >
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-6">
         <button className="cursor-pointer" onClick={() => setEditOpen(true)}>
           <AgentAvatar
             agentType={agentType}
@@ -75,23 +72,14 @@ export function ChatArea({
           />
         </button>
         <button className="cursor-pointer" onClick={() => setEditOpen(true)}>
-          <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-            {displayName}
-          </h2>
+          <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
         </button>
-        {isStreaming && (
-          <p className="text-[11px]" style={{ color: 'var(--color-brand)' }}>
-            正在回复...
-          </p>
-        )}
+        {isStreaming && <p className="text-[11px] text-primary">正在回复...</p>}
       </div>
 
       {/* Validation error banner */}
       {validationError && (
-        <div
-          className="shrink-0 px-4 py-2 text-xs"
-          style={{ backgroundColor: 'var(--color-danger-bg)', color: 'var(--color-error)' }}
-        >
+        <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
           {validationError}
           <button className="ml-2 underline" onClick={() => setValidationError(null)}>
             关闭
@@ -109,12 +97,8 @@ export function ChatArea({
             avatarUrl={avatarUrl}
             agentName={agentName}
           />
-          <p className="mt-2 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-            {displayName}
-          </p>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            发送消息开始对话
-          </p>
+          <p className="mt-2 text-sm font-medium text-foreground">{displayName}</p>
+          <p className="text-xs text-tertiary">发送消息开始对话</p>
         </div>
       ) : (
         <MessageList

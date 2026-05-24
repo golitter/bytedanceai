@@ -16,10 +16,10 @@ const AGENT_SHADOW_COLORS: Record<AgentType, string> = {
 type Status = 'ready' | 'running' | 'offline' | 'error'
 
 const STATUS_COLORS: Record<Status, string> = {
-  ready: '#22C55E',
-  running: '#F59E0B',
-  offline: '#5A6070',
-  error: '#EF4444',
+  ready: 'var(--color-success)',
+  running: 'var(--color-warning)',
+  offline: 'var(--text-tertiary)',
+  error: 'var(--destructive)',
 }
 
 function diceBearUrl(name: string): string {
@@ -41,8 +41,8 @@ export function AgentAvatar({
   avatarUrl,
   agentName,
 }: AgentAvatarProps) {
-  const color = AGENT_COLORS[agentType] ?? 'var(--color-brand)'
-  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? 'var(--color-brand)'
+  const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
+  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? 'var(--primary)'
   const label = agentName ?? AGENT_NAMES[agentType] ?? agentType
 
   const statusAnimation =
@@ -81,7 +81,7 @@ export function AgentAvatar({
       </div>
       {status && (
         <span
-          className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-[var(--bg-canvas)]"
+          className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-background"
           style={{
             width: 4,
             height: 4,

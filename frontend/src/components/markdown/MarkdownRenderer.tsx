@@ -22,9 +22,8 @@ const components: Components = {
 
     return (
       <code
-        className="rounded px-1.5 py-0.5 text-[13px]"
+        className="rounded bg-code px-1.5 py-0.5 text-[13px]"
         style={{
-          backgroundColor: 'var(--code-bg)',
           fontFamily: "'Geist Mono', monospace",
           letterSpacing: 0,
         }}
@@ -37,41 +36,25 @@ const components: Components = {
   table({ children }) {
     return (
       <div className="overflow-x-auto">
-        <table
-          className="w-full border-collapse text-sm"
-          style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-        >
-          {children}
-        </table>
+        <table className="w-full border-collapse text-sm border-border">{children}</table>
       </div>
     )
   },
   th({ children }) {
     return (
-      <th
-        className="border-b px-3 py-2 text-left font-medium"
-        style={{
-          borderColor: 'rgba(255,255,255,0.06)',
-          backgroundColor: 'var(--bg-hover)',
-          color: 'var(--text-secondary)',
-        }}
-      >
+      <th className="border-b border-border bg-accent px-3 py-2 text-left font-medium text-muted-foreground">
         {children}
       </th>
     )
   },
   td({ children }) {
-    return (
-      <td className="border-b px-3 py-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        {children}
-      </td>
-    )
+    return <td className="border-b border-border px-3 py-2">{children}</td>
   },
 }
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
-    <div className="prose-invert max-w-none text-sm" style={{ color: 'var(--text-primary)' }}>
+    <div className="prose-invert max-w-none text-sm text-foreground">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

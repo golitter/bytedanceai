@@ -12,7 +12,7 @@ export function ImPage() {
   const active = conversations?.find((c) => c.sessionId === currentSessionId)
 
   return (
-    <div className="flex h-screen" style={{ backgroundColor: 'var(--bg-canvas)' }}>
+    <div className="flex h-screen bg-background">
       <ConversationList />
       <div className="flex-1">
         {active ? (
@@ -26,14 +26,8 @@ export function ImPage() {
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            <MessageSquare
-              className="h-10 w-10"
-              style={{ color: 'var(--text-tertiary)' }}
-              strokeWidth={1}
-            />
-            <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              选择一个对话开始聊天
-            </p>
+            <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1} />
+            <p className="text-sm text-tertiary">选择一个对话开始聊天</p>
           </div>
         )}
       </div>

@@ -42,16 +42,11 @@ export function MessageInput({
   )
 
   return (
-    <div
-      className="flex items-end gap-2 border-t px-4 py-3"
-      style={{ borderColor: 'var(--divider)' }}
-    >
+    <div className="flex items-end gap-2 border-t border-border px-4 py-3">
       <textarea
         ref={textareaRef}
-        className="flex-1 resize-none rounded-lg px-3 py-2.5 text-sm outline-none placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
+        className="flex-1 resize-none rounded-lg bg-card px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
         style={{
-          backgroundColor: 'var(--card)',
-          color: 'var(--text-primary)',
           minHeight: 48,
           maxHeight: 200,
         }}
@@ -62,12 +57,11 @@ export function MessageInput({
         onKeyDown={handleKeyDown}
       />
       <button
-        className="flex h-[48px] w-[40px] shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-40"
-        style={{ backgroundColor: 'var(--color-brand)' }}
+        className="flex h-[48px] w-[40px] shrink-0 items-center justify-center rounded-lg bg-primary transition-colors disabled:opacity-40"
         onClick={handleSend}
         disabled={disabled}
       >
-        <Send className="h-4 w-4" style={{ color: 'var(--text-primary)' }} strokeWidth={1.25} />
+        <Send className="h-4 w-4 text-primary-foreground" strokeWidth={1.25} />
       </button>
     </div>
   )

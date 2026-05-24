@@ -46,9 +46,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
 
   return (
     <div
-      className="overflow-x-auto rounded-lg text-[13px] leading-[1.65]"
+      className="overflow-x-auto rounded-lg bg-code text-[13px] leading-[1.65]"
       style={{
-        backgroundColor: 'var(--code-bg)',
         fontFamily: "'Geist Mono', monospace",
         letterSpacing: 0,
       }}
@@ -57,7 +56,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         <div dangerouslySetInnerHTML={{ __html: html }} />
       ) : (
         <div className="flex">
-          <div className="select-none pr-4 pl-4 text-right" style={{ color: '#5A6070' }}>
+          <div className="select-none pr-4 pl-4 text-right text-tertiary">
             {lines.map((_, i) => (
               <div key={i}>{i + 1}</div>
             ))}

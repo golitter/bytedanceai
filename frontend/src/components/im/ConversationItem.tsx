@@ -30,8 +30,8 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
     <button
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out"
       style={{
-        backgroundColor: isActive ? 'var(--bg-hover)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--color-brand)' : '2px solid transparent',
+        backgroundColor: isActive ? 'var(--accent)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--primary)' : '2px solid transparent',
       }}
       onClick={onClick}
       {...(!isActive && hoverStyle)}
@@ -46,17 +46,15 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
         <div className="flex items-center justify-between">
           <span
             className="truncate text-sm font-medium"
-            style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+            style={{ color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)' }}
           >
             {name}
           </span>
-          <span className="shrink-0 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+          <span className="shrink-0 text-[11px] text-tertiary">
             {relativeTime(conversation.lastActiveAt)}
           </span>
         </div>
-        <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          {conversation.taskTitle}
-        </p>
+        <p className="mt-0.5 truncate text-xs text-tertiary">{conversation.taskTitle}</p>
       </div>
     </button>
   )
