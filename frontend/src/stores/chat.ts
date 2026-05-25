@@ -90,7 +90,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         [sessionId]: {
           ...ensureSession(s, sessionId),
           status: 'done',
-          messages,
+          messages: messages.map((msg) =>
+            msg.role === 'agent' && msg.content
+              ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+              : msg,
+          ),
         },
       },
     })),
