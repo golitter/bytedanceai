@@ -128,6 +128,7 @@ export function MessageList({
                   isStreaming={isStreaming && msg.id === 'streaming'}
                   avatarUrl={avatarUrl}
                   agentName={agentName}
+                  sessionId={sessionId}
                 />
               </div>
             ))}

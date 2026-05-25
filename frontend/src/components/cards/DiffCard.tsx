@@ -1,5 +1,5 @@
 import { Check, RotateCcw } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import DiffViewer from 'react-diff-viewer-continued'
 
 const API_BASE = '/api'
@@ -13,8 +13,9 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
   const [diff, setDiff] = useState<string | null>(initialDiff ?? null)
   const [loading, setLoading] = useState(!initialDiff && !!sessionId)
   const [error, setError] = useState<string | null>(null)
+  const fetched = useRef(!!initialDiff)
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (!sessionId) return
     setLoading(true)
     setError(null)
@@ -27,7 +28,14 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!fetched.current && sessionId) {
+      fetched.current = true
+      refresh()
+    }
+  }, [sessionId, refresh])
 
   const handleAccept = async () => {
     if (!sessionId) return

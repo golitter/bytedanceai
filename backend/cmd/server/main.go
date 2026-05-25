@@ -99,6 +99,8 @@ func main() {
 			ss.GET("/:sessionId/files/*filepath", workspaceHandler.SessionFileRead)
 			ss.PUT("/:sessionId/files/*filepath", workspaceHandler.SessionFileWrite)
 			ss.GET("/:sessionId/diff", workspaceHandler.SessionGetDiff)
+			ss.POST("/:sessionId/commit", workspaceHandler.SessionCommit)
+			ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
 		}
 	}
 

@@ -76,6 +76,28 @@ func (h *WorkspaceHandler) SessionGetDiff(c *gin.Context) {
 	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", wsID), nil)
 }
 
+// SessionCommit 通过 session_id 查找 workspace 后 proxy commit
+func (h *WorkspaceHandler) SessionCommit(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", wsID), c.Request.Body)
+}
+
+// SessionRevert 通过 session_id 查找 workspace 后 proxy revert
+func (h *WorkspaceHandler) SessionRevert(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", wsID), nil)
+}
+
 func (h *WorkspaceHandler) ReadFile(c *gin.Context) {
 	workspaceID := c.Param("id")
 	filePath := c.Param("filepath")
