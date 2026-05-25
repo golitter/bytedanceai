@@ -3,5 +3,5 @@ export type MessageBlock =
   | { type: 'html-render'; content: string }
   | { type: 'image'; path: string }
   | { type: 'attachment'; path: string }
-  | { type: 'diff' }
+  | { type: 'diff'; snapshotId: string }
   | { type: 'preview'; url: string }

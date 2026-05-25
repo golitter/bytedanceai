@@ -1,6 +1,6 @@
 import 'react-diff-view/style/index.css'
 
-import { Check, Pencil, RotateCcw } from 'lucide-react'
+import { Check, Pencil, RotateCcw, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { DiffFileEditor } from '@/components/diff/DiffFileEditor'
@@ -12,22 +12,81 @@ import { getFileName, parseUnifiedDiff } from '@/lib/diff-parser'
 const API_BASE = '/api'
 
 interface DiffCardProps {
+  snapshotId: string
   sessionId?: string
-  initialDiff?: string
 }
 
-export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
-  const [diff, setDiff] = useState<string | null>(initialDiff ?? null)
-  const [loading, setLoading] = useState(!initialDiff && !!sessionId)
+type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
+
+export function DiffCard({ snapshotId, sessionId }: DiffCardProps) {
+  const [diff, setDiff] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeFileIndex, setActiveFileIndex] = useState(0)
   const [editingFile, setEditingFile] = useState(false)
   const [actionStatus, setActionStatus] = useState<'idle' | 'committing' | 'reverting'>('idle')
-  const [settled, setSettled] = useState<'committed' | 'reverted' | null>(null)
-  const fetched = useRef(!!initialDiff)
+  const [snapshotStatus, setSnapshotStatus] = useState<SnapshotStatus | null>(null)
+  const initialized = useRef(false)
+
+  const isSettled =
+    snapshotStatus === 'committed' ||
+    snapshotStatus === 'reverted' ||
+    snapshotStatus === 'cancelled'
 
   const parsed = useMemo(() => parseUnifiedDiff(diff ?? ''), [diff])
   const activeFile: ParsedDiffFile | undefined = parsed.files[activeFileIndex]
+
+  // Snapshot-first load: GET snapshot → 404 → workspace diff → PUT pending
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Try fetching existing snapshot
+        const snapRes = await fetch(`${API_BASE}/diff-snapshots/${snapshotId}`)
+        if (snapRes.ok) {
+          const snap = await snapRes.json()
+          const data = snap?.data ?? snap
+          setDiff(data.diff_content ?? data.diff ?? '')
+          setSnapshotStatus(data.status ?? 'pending')
+          setLoading(false)
+          return
+        }
+
+        // Snapshot not found — fetch workspace diff and create pending snapshot
+        if (!sessionId) {
+          setLoading(false)
+          return
+        }
+
+        const wsRes = await fetch(`${API_BASE}/session/${sessionId}/diff`)
+        let diffText = ''
+        if (wsRes.ok) {
+          diffText = await wsRes.text()
+        }
+
+        if (!diffText?.trim()) {
+          setLoading(false)
+          return
+        }
+
+        // Create pending snapshot
+        await fetch(`${API_BASE}/diff-snapshots/${snapshotId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, diff: diffText, status: 'pending' }),
+        })
+        setDiff(diffText)
+        setSnapshotStatus('pending')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load diff')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [snapshotId, sessionId])
 
   const refresh = useCallback(async () => {
     if (!sessionId) return
@@ -44,15 +103,8 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
     }
   }, [sessionId])
 
-  useEffect(() => {
-    if (!fetched.current && sessionId) {
-      fetched.current = true
-      refresh()
-    }
-  }, [sessionId, refresh])
-
   const handleAccept = async () => {
-    if (!sessionId || actionStatus !== 'idle') return
+    if (!sessionId || actionStatus !== 'idle' || !diff) return
     setActionStatus('committing')
     try {
       await fetch(`${API_BASE}/session/${sessionId}/commit`, {
@@ -60,8 +112,12 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: 'auto commit' }),
       })
-      setSettled('committed')
-      await refresh()
+      await fetch(`${API_BASE}/diff-snapshots/${snapshotId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, diff, status: 'committed' }),
+      })
+      setSnapshotStatus('committed')
     } catch {
       // ignore
     } finally {
@@ -70,14 +126,16 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
   }
 
   const handleReject = async () => {
-    if (!sessionId || actionStatus !== 'idle') return
+    if (!sessionId || actionStatus !== 'idle' || !diff) return
     setActionStatus('reverting')
     try {
-      await fetch(`${API_BASE}/session/${sessionId}/revert`, {
-        method: 'POST',
+      await fetch(`${API_BASE}/session/${sessionId}/revert`, { method: 'POST' })
+      await fetch(`${API_BASE}/diff-snapshots/${snapshotId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, diff, status: 'reverted' }),
       })
-      setSettled('reverted')
-      await refresh()
+      setSnapshotStatus('reverted')
     } catch {
       // ignore
     } finally {
@@ -90,8 +148,8 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
     const filePath = activeFile.newPath
     await fetch(`${API_BASE}/session/${sessionId}/files/${encodeURIComponent(filePath)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      headers: { 'Content-Type': 'text/plain' },
+      body: content,
     })
     setEditingFile(false)
     await refresh()
@@ -114,23 +172,28 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
   }
 
   if (!diff?.trim() || parsed.files.length === 0) {
-    if (!settled) return null
-    return (
-      <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-        {settled === 'committed' ? (
-          <>
-            <Check className="h-3.5 w-3.5 text-green-500" /> 变更已接受
-          </>
-        ) : (
-          <>
-            <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" /> 变更已拒绝
-          </>
-        )}
-      </div>
-    )
+    return null
   }
 
   const { summary } = parsed
+
+  const badgeConfig: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
+    committed: {
+      icon: <Check className="h-3 w-3" />,
+      label: '已接受',
+      className: 'bg-green-500/10 text-green-600',
+    },
+    reverted: {
+      icon: <RotateCcw className="h-3 w-3" />,
+      label: '已拒绝',
+      className: 'bg-muted text-muted-foreground',
+    },
+    cancelled: {
+      icon: <X className="h-3 w-3" />,
+      label: '已取消',
+      className: 'bg-muted text-muted-foreground',
+    },
+  }
 
   return (
     <div className="diff-card my-2 overflow-hidden rounded-lg border border-border">
@@ -141,8 +204,15 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
           <span className="text-green-500">+{summary.additions}</span>{' '}
           <span className="text-red-500">-{summary.deletions}</span>
         </span>
-        <div className="flex gap-1">
-          {sessionId && (
+        <div className="flex items-center gap-1">
+          {snapshotStatus && badgeConfig[snapshotStatus] && (
+            <span
+              className={`mr-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badgeConfig[snapshotStatus].className}`}
+            >
+              {badgeConfig[snapshotStatus].icon} {badgeConfig[snapshotStatus].label}
+            </span>
+          )}
+          {!isSettled && sessionId && (
             <button
               onClick={() => setEditingFile(true)}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -151,22 +221,26 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
               编辑
             </button>
           )}
-          <button
-            onClick={handleAccept}
-            disabled={actionStatus !== 'idle'}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-          >
-            <Check className="h-3 w-3" />
-            {actionStatus === 'committing' ? '提交中...' : '接受变更'}
-          </button>
-          <button
-            onClick={handleReject}
-            disabled={actionStatus !== 'idle'}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-          >
-            <RotateCcw className="h-3 w-3" />
-            {actionStatus === 'reverting' ? '撤销中...' : '拒绝变更'}
-          </button>
+          {!isSettled && (
+            <>
+              <button
+                onClick={handleAccept}
+                disabled={actionStatus !== 'idle'}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              >
+                <Check className="h-3 w-3" />
+                {actionStatus === 'committing' ? '提交中...' : '接受变更'}
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={actionStatus !== 'idle'}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              >
+                <RotateCcw className="h-3 w-3" />
+                {actionStatus === 'reverting' ? '撤销中...' : '拒绝变更'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -179,7 +253,7 @@ export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
 
       {/* Content */}
       {activeFile && (
-        <div className="max-h-96 overflow-auto text-xs">
+        <div className={`max-h-96 overflow-auto text-xs${isSettled ? ' opacity-60' : ''}`}>
           {editingFile ? (
             <DiffFileEditor
               oldContent={activeFile.oldContent}

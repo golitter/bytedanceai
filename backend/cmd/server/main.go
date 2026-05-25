@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -54,6 +54,7 @@ func main() {
 	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 	streamHandler := handler.NewStreamHandler()
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
+	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -82,6 +83,10 @@ func main() {
 
 		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+
+		// Diff snapshot routes
+		api.GET("/diff-snapshots/:snapshotId", diffSnapshotHandler.GetDiffSnapshot)
+		api.PUT("/diff-snapshots/:snapshotId", diffSnapshotHandler.SaveDiffSnapshot)
 
 		ws := api.Group("/workspace")
 		{

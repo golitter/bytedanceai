@@ -96,10 +96,22 @@ func (h *AvatarHandler) UpdateSession(c *gin.Context) {
 		return
 	}
 
-	result := db.GetDB().Model(&model.Session{}).Where("session_id = ?", sessionID).Updates(updates)
-	if result.RowsAffected == 0 {
-		vo.NotFound(c, "session not found")
-		return
+	// Upsert into session_agents table
+	var sa model.SessionAgent
+	result := db.GetDB().Where("session_id = ?", sessionID).First(&sa)
+	if result.Error != nil {
+		// No existing record — create one
+		sa = model.SessionAgent{
+			SessionID: sessionID,
+			AgentName: req.AgentName,
+			AvatarURL: req.AvatarURL,
+		}
+		if err := db.GetDB().Create(&sa).Error; err != nil {
+			vo.InternalError(c, "failed to create session agent")
+			return
+		}
+	} else {
+		db.GetDB().Model(&sa).Updates(updates)
 	}
 
 	vo.OK(c, gin.H{"session_id": sessionID})

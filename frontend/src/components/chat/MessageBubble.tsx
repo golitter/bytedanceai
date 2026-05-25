@@ -18,7 +18,7 @@ function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: 
     case 'attachment':
       return <AttachmentCard path={block.path} sessionId={sessionId} />
     case 'diff':
-      return sessionId ? <DiffCard sessionId={sessionId} /> : null
+      return <DiffCard snapshotId={block.snapshotId} sessionId={sessionId} />
     case 'preview':
       return <PreviewCard url={block.url} />
   }

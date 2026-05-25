@@ -62,8 +62,10 @@ function parseBlockContent(inner: string): MessageBlock | null {
       const path = extractField(lines, 'path')
       return path ? { type: 'attachment', path } : null
     }
-    case 'diff':
-      return { type: 'diff' }
+    case 'diff': {
+      const snapshotId = extractField(lines, 'snapshotId')
+      return snapshotId ? { type: 'diff', snapshotId } : null
+    }
     case 'preview': {
       const url = extractField(lines, 'url')
       return url ? { type: 'preview', url } : null
