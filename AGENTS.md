@@ -13,8 +13,10 @@ bytedanceai/
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md
 ├── contracts/     # 三端共享契约（schemas + logs）→ 参见 contracts/AGENTS.md
 ├── docs/          # 项目文档
-│   ├── common/    #   公共文档（Git 规范、Makefile 指南、契约层说明）
-│   └── architecture/ # 架构设计（三层架构设计）
+│   ├── design/    #   架构设计（三层架构设计）
+│   ├── reference/ #   参考文档（skills）
+│   ├── guides/    #   操作指南（Git 规范、Makefile 指南、契约层说明）
+│   └── testing/   #   测试手册
 ├── scripts/       # 工程脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
@@ -27,7 +29,7 @@ bytedanceai/
 
 ## Makefile
 
-通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/common/makefile-guide.md](docs/common/makefile-guide.md)。
+通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)。
 
 
 ## 契约优先原则
@@ -42,4 +44,8 @@ bytedanceai/
 
 ## Git 规范
 
-详见 [docs/common/git-conventions.md](docs/common/git-conventions.md)。
+详见 [docs/guides/git-conventions.md](docs/guides/git-conventions.md)。
+
+## 文档体系
+
+详见 [docs/AGENTS.md](docs/AGENTS.md) — 文档分类约定、索引、新增规则。

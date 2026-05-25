@@ -37,8 +37,8 @@ make status                 # 查看状态
 make tidy                   # go mod tidy
 ```
 
-- Makefile 完整说明：[docs/common/makefile-guide.md](../docs/common/makefile-guide.md)
+- Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
 
 ## 详细文档
 
-- 技术栈详情：[docs/common/tech-stack.md](docs/common/tech-stack.md)
+- 技术栈详情：[docs/reference/tech-stack.md](docs/reference/tech-stack.md)

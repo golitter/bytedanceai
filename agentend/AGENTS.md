@@ -19,10 +19,10 @@ src/
 └── generated/               # 契约生成的 Python 类型（勿手改）
 
 docs/
-├── common/                  # 公共文档（API 端点、适配器差异）
-├── impl/                    # 实现文档（按功能编号）
-├── playbooks/               # 手动测试流程
-└── todos/                   # 待办事项
+├── design/                  # 设计文档（架构、实现方案）
+├── reference/               # 参考文档（API 端点、适配器差异）
+├── testing/                 # 测试手册（手动测试流程）
+└── backlog/                 # 待办 / 设计笔记
 ```
 
 ## 常用命令
@@ -36,8 +36,8 @@ make restart-agentend      # 重启
 make status                # 查看状态
 ```
 
-- Makefile 完整说明：[docs/common/makefile-guide.md](../docs/common/makefile-guide.md)
+- Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
 
 ## 详细文档
 
-- API 端点、核心架构、配置：[docs/common/details.md](docs/common/details.md)
+- API 端点、核心架构、配置：[docs/reference/details.md](docs/reference/details.md)
