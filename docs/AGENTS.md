@@ -42,6 +42,7 @@ docs/
 ### testing/
 
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能的手动测试手册
+- [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
 
 ### dev-plan/（独立保留）
 

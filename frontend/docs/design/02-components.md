@@ -1,128 +1,260 @@
-# 组件目录
+# Components — 组件体系
 
-## 页面层
+## 实现了什么
 
-### ImPage (`pages/ImPage.tsx`)
+基于三层组件模型（Page / Smart / Dumb）构建的 IM 聊天 UI，分为 IM 侧栏、聊天区、Markdown 渲染三大模块。所有组件使用 Tailwind CSS + CSS 变量驱动样式，无硬编码颜色值。
 
-主页面，双栏布局入口。左侧 `ConversationList`，右侧 `ChatArea` 或空状态占位。
-
-- 从 `useConversations()` 获取对话列表
-- 从 `useChatNav()` 读取当前选中的 `currentSessionId`
-- 选中时渲染 `<ChatArea>`，未选中时显示 "选择一个对话开始聊天" 空状态
-
----
+## 怎么实现的
 
 ## IM 侧栏 (`components/im/`)
 
-### ConversationList
+### ConversationList (`src/components/im/ConversationList.tsx`)
 
-侧栏容器组件，固定宽度 280px，包含四部分：
+侧栏容器组件，固定宽度 280px，包含 Header、搜索栏、对话列表和新建弹窗四部分。数据源为 `useConversations()` (React Query) + `useChatNav()` (Zustand)：
 
-1. **Header**：品牌标识 "AgentHub" + 新建对话按钮（`+`）
-2. **搜索栏**：过滤 `agentType` 和 `taskTitle`
-3. **对话列表**：渲染 `ConversationItem`，支持加载态和空态
-4. **新建弹窗**：`NewChatDialog` 受控组件
+```tsx
+export function ConversationList() {
+  const [search, setSearch] = useState('')
+  const [showNewChat, setShowNewChat] = useState(false)
+  const { data: conversations, isLoading } = useConversations()
+  const { currentSessionId, setCurrentSession } = useChatNav()
 
-数据源：`useConversations()` (React Query) + `useChatNav()` (Zustand)
+  const filtered = conversations?.filter((c) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return c.agentType.includes(q) || c.taskTitle.toLowerCase().includes(q)
+  })
+  // ... 渲染 Header / Search / ConversationItem 列表 / NewChatDialog
+}
+```
 
-### ConversationItem
+搜索支持按 `agentType` 和 `taskTitle` 过滤。空态和加载态分别显示对应占位 UI。
 
-单条对话项，展示：
+### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
-- 左侧：`AgentAvatar`（带状态指示灯）
-- 中间：Agent 名称 + 任务标题（单行截断）
-- 右侧：相对时间（"刚刚"、"5分钟前"、"2小时前"等）
+单条对话项，接收 `Conversation` 数据并渲染 Agent 头像、名称、任务标题和相对时间。通过 `useHoverStyle` hook 实现悬停效果：
 
-交互：
-- 点击 → `setCurrentSession(sessionId)`
-- Active 态：左侧品牌色竖线 + hover 背景色
+```tsx
+export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
+  const name =
+    conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
+  const hoverStyle = useHoverStyle()
 
-### NewChatDialog
+  return (
+    <button
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out"
+      style={{
+        backgroundColor: isActive ? 'var(--accent)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--primary)' : '2px solid transparent',
+      }}
+      onClick={onClick}
+      {...(!isActive && hoverStyle)}
+    >
+```
 
-新建对话弹窗（shadcn Dialog），展示可用 Agent 列表：
+Active 态通过 `borderLeft: 2px solid var(--primary)` 品牌色竖线标识，非 Active 态使用 `useHoverStyle` 提供的 `onMouseEnter/Leave` 切换背景色。
 
-- 通过 `useQuery(['agent-types'])` 从 API 拉取可用 Agent，失败时 fallback 到内置列表
-- 每个 Agent 显示：`AgentAvatar` + 名称 + 描述
-- 点击 → `createConversation` mutation → 成功后自动选中并关闭弹窗
+### NewChatDialog (`src/components/im/NewChatDialog.tsx`)
+
+新建对话弹窗（shadcn Dialog），流程为：输入仓库路径 -> 校验 -> 选择 Agent 类型 -> 创建对话。仓库路径通过 `validateRepoPath()` API 校验后才能选择 Agent：
+
+```tsx
+const handleValidate = async () => {
+  const path = repoPathRef.current?.value?.trim()
+  if (!path) {
+    setRepoPathError('请输入仓库路径')
+    setRepoPathValidated(false)
+    return
+  }
+  setValidating(true)
+  try {
+    const result = await validateRepoPath(path)
+    if (result.valid) {
+      setRepoPathValidated(true)
+    } else {
+      setRepoPathError(result.errors.join('; '))
+    }
+  } finally {
+    setValidating(false)
+  }
+}
+```
+
+可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator']`。选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
 
 ---
 
 ## 聊天区 (`components/chat/`)
 
-### ChatArea
+### ChatArea (`src/components/chat/ChatArea.tsx`)
 
-聊天主容器，纵向三段式布局：
+聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage }`：
 
-1. **Header**（h-12）：`AgentAvatar` + Agent 显示名 + "正在回复..." 状态
-2. **消息区**：空态显示 Agent 大头像 + "发送消息开始对话"；有消息时渲染 `MessageList`
-3. **输入区**：`MessageInput`
+```tsx
+export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentName, avatarUrl, repoPath }: ChatAreaProps) {
+  const { state, sendMessage } = useChatStream(taskId, sessionId)
+  const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
+```
 
-核心 hook：`useChatStream(taskId)` 返回 `{ state, sendMessage, abort }`
+发送消息前会先验证 `repoPath`（如果存在），通过 `validateRepoPath()` API 校验路径有效性。Header 区域显示 `AgentAvatar` + Agent 显示名 + "正在回复..." 状态。点击 Header 中的头像或名称可打开 `AgentEditDialog`。
 
-状态判断：`['loading', 'streaming', 'tool_running'].includes(state.status)` 为活跃态
+### MessageList (`src/components/chat/MessageList.tsx`)
 
-### MessageList
+消息列表组件，支持两种渲染模式，阈值为 50 条消息：
 
-消息列表组件，支持两种模式：
+```tsx
+const VIRTUALIZE_THRESHOLD = 50
 
-- **普通模式**（消息 ≤ 50 条）：直接渲染
-- **虚拟滚动**（消息 > 50 条）：`@tanstack/react-virtual` 优化
+const allMessages =
+  isStreaming && streamingContent
+    ? [
+        ...messages,
+        {
+          id: 'streaming',
+          role: 'agent' as const,
+          content: streamingContent,
+          agentType: streamingAgentType as AgentType | undefined,
+          timestamp: Date.now(),
+        },
+      ]
+    : messages
 
-特性：
-- 流式消息以 `id: 'streaming'` 临时追加到列表末尾
-- 自动滚动到底部（`autoScroll` 状态跟踪）
-- 手动上滑时隐藏自动滚动，显示 "回到底部" 按钮
-- 内部 `MessageRenderer` 根据 `msg.role` 选择气泡变体
+const useVirtual = allMessages.length > VIRTUALIZE_THRESHOLD
+```
 
-### MessageBubble
+流式消息以 `id: 'streaming'` 临时追加到列表末尾。虚拟滚动使用 `@tanstack/react-virtual`，通过 `estimateSize` 根据内容长度估算行高。内置自动滚动逻辑：监听 `scrollHeight - scrollTop - clientHeight < 60` 判断是否在底部，手动上滑时隐藏自动滚动并显示 "回到底部" 按钮。
 
-消息气泡组件，三种变体（discriminated union）：
+### MessageBubble (`src/components/chat/MessageBubble.tsx`)
 
-| 变体 | 布局 | 样式 |
-|------|------|------|
-| `user` | 右对齐 | 半透明品牌色背景 (`rgba(99,102,241,0.08)`) |
-| `agent` | 左对齐 + AgentAvatar | 卡片背景 + 左侧 3px Agent 色竖线 |
-| `system` | 居中 | 小字灰色文本 |
+消息气泡组件，使用 TypeScript discriminated union 定义三种变体：
 
-Agent 气泡流式输出时显示闪烁光标 `▌`。
+```tsx
+interface UserBubbleProps extends BaseProps {
+  variant: 'user'
+}
+interface AgentBubbleProps extends BaseProps {
+  variant: 'agent'
+  agentType: AgentType
+  avatarUrl?: string
+  agentName?: string
+  status?: 'ready' | 'running' | 'offline' | 'error'
+  isStreaming?: boolean
+}
+interface SystemBubbleProps extends BaseProps {
+  variant: 'system'
+}
+type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
+```
 
-### MessageInput
+- **user**：右对齐，`bg-primary-soft` 背景 + `border-primary-border` 边框
+- **agent**：左对齐 + AgentAvatar，`bg-card` 背景 + 左侧 3px Agent 色竖线，流式输出时显示闪烁光标 `▌`
+- **system**：居中，小字 `text-muted-foreground`
 
-输入框组件：
+### MessageInput (`src/components/chat/MessageInput.tsx`)
 
-- `textarea` 自动高度（最小 48px，最大 200px）
-- `Enter` 发送，`Shift+Enter` 换行
-- 发送后清空并重置高度
-- 右侧品牌色发送按钮（Lucide `Send` 图标）
-- `disabled` 状态：流式输出时禁用
+输入框组件，textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行：
 
-### AgentAvatar
+```tsx
+const adjustHeight = useCallback(() => {
+  const el = textareaRef.current
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+}, [])
+```
 
-Agent 头像组件：
+发送后清空输入框并重置高度为 48px。流式输出时 `disabled`，按钮和输入框同时变为不可用。
 
-- 圆角方块，显示 Agent 首字母
-- 颜色映射：`claude-code` → 紫色 `#6366F1`，`opencode` → 琥珀色 `#F59E0B`，`orchestrator` → 绿色 `#22C55E`
-- 状态指示灯（右下角小圆点）：`ready` 绿、`running` 琥珀闪烁、`offline` 灰、`error` 红
-- 可配置 `size`（默认 32px）
+### AgentAvatar (`src/components/chat/AgentAvatar.tsx`)
+
+Agent 头像组件，圆角方块显示首字母或上传的头像图片。颜色映射通过 CSS 变量：
+
+```tsx
+const AGENT_COLORS: Record<AgentType, string> = {
+  'claude-code': 'var(--agent-claude)',
+  opencode: 'var(--agent-opencode)',
+  orchestrator: 'var(--agent-orchestrator)',
+}
+```
+
+状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射，`ready` 脉冲动画 `status-ready-pulse`，`running` 旋转动画 `status-running-spin`。支持自定义头像 URL，无自定义头像时若有 `agentName` 则通过 DiceBear API 生成 initials 头像。
+
+### AgentEditDialog (`src/components/chat/AgentEditDialog.tsx`)
+
+Agent 编辑弹窗，支持修改名称和上传头像。上传头像调用 `uploadAvatar` API，保存时调用 `updateSession` API 并 invalidate `conversations` 缓存：
+
+```tsx
+const handleSave = async () => {
+  const data: { agent_name?: string; avatar_url?: string } = {}
+  if (name !== initialName) data.agent_name = name
+  if (avatarUrl !== initialAvatarUrl) data.avatar_url = avatarUrl
+  if (Object.keys(data).length > 0) {
+    await updateSession(sessionId, data)
+    await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+  }
+}
+```
 
 ---
 
 ## Markdown 渲染 (`components/markdown/`)
 
-### MarkdownRenderer
+### MarkdownRenderer (`src/components/markdown/MarkdownRenderer.tsx`)
 
-基于 `react-markdown` + `remark-gfm` 的 Markdown 渲染器，自定义组件：
+基于 `react-markdown` + `remark-gfm` 的渲染器，通过自定义 `components` 对象覆盖默认渲染：
 
-- **代码块**（`code` + `className` 含 language-）：委托给 `CodeBlock`
-- **行内代码**：深色背景 + Geist Mono 字体
-- **表格**：带边框和表头背景色
-- 输出暗色主题 prose 样式
+```tsx
+const components: Components = {
+  pre({ children }) {
+    return <>{children}</>
+  },
+  code({ className, children, ...props }) {
+    const match = /language-(\w+)/.exec(className ?? '')
+    const code = String(children).replace(/\n$/, '')
+    if (match) {
+      return <CodeBlock code={code} language={match[1]} />
+    }
+    return (
+      <code className="rounded bg-code px-1.5 py-0.5 text-[13px]"
+        style={{ fontFamily: "'Geist Mono', monospace", letterSpacing: 0 }}
+        {...props}>
+        {children}
+      </code>
+    )
+  },
+  table({ children }) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm border-border">{children}</table>
+      </div>
+    )
+  },
+}
+```
 
-### CodeBlock
+代码块（带 `language-` 前缀）委托给 `CodeBlock`，行内代码使用深色背景 + Geist Mono 字体，表格带边框和表头背景色。
 
-代码高亮组件：
+### CodeBlock (`src/components/markdown/CodeBlock.tsx`)
 
-- 使用 Shiki（`tokyo-night` 主题）异步高亮
-- 高亮完成前 fallback 到纯文本 + 行号显示
-- 代码块可横向滚动
-- 字体：`Geist Mono`，字号 13px
+代码高亮组件，使用 Shiki（`tokyo-night` 主题）异步高亮。高亮完成前 fallback 到纯文本 + 行号显示：
+
+```tsx
+useEffect(() => {
+  async function highlight() {
+    const shiki = await import('shiki')
+    const highlighter = await shiki.createHighlighter({
+      themes: ['tokyo-night'],
+      langs: language ? [language] : [],
+    })
+    const result = highlighter.codeToHtml(code, {
+      lang: language ?? 'text',
+      theme: 'tokyo-night',
+    })
+    setHtml(result)
+    highlighter.dispose()
+  }
+  if (language) highlight()
+}, [code, language])
+```
+
+Shiki 通过动态 `import()` 按需加载，`highlighter` 使用后立即 `dispose()` 释放资源。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。

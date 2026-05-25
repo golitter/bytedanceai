@@ -51,8 +51,8 @@ evaluate(context) → (bool, dict)
 
 - `check`：始终通过
 - `enforce`：
-  - 注入安全提示词："不要执行破坏性命令，不要修改系统文件"
-  - 过滤危险工具（如 `dangerouslyDisableSandbox`）
+  - 注入安全提示词："You are operating in a managed environment..."
+  - 从 `allowed_tools` 中过滤危险工具（如 `dangerouslyDisableSandbox`）
 
 #### ScopeRule（priority=5）
 
@@ -61,7 +61,14 @@ evaluate(context) → (bool, dict)
   - `workspace_path` 非绝对路径 → 失败
   - 绝对路径 → 通过
 - `enforce`：
-  - 注入约束："只允许修改指定目录下文件"
+  - 注入约束："Only modify files under: {workspace_path}"
+
+#### TaskctlRule（priority=3）
+
+- `check`：始终通过
+- `enforce`：当消息包含合并关键词（"合并"、"merge"、"git merge"）且有 workspace_path 时，注入 taskctl merge 指令
+  - 根据 agent_type 选择 `.claude` 或 `.opencode` 配置目录
+  - 注入提示："合并分支时必须使用 `{taskctl_path} merge`..."
 
 ### 约束注入流程
 
@@ -70,13 +77,15 @@ AgentRequest
   ↓
 RuleEngine.evaluate(context)
   ↓
-SafetyRule.enforce → system_prompt_append: "安全约束..."
+SafetyRule.enforce → system_prompt_append: "You are operating in a managed environment..."
                     allowed_tools: [...]
   ↓
-ScopeRule.enforce  → system_prompt_append: "只允许修改 /workspace"
+ScopeRule.enforce  → system_prompt_append: "Only modify files under: /workspace"
   ↓
-合并结果 → 传入 ClaudeCodeAdapter._build_command()
+TaskctlRule.enforce → system_prompt_append: "合并分支时必须使用 taskctl merge..."
   ↓
-CLI 参数: --append-system-prompt "安全约束...\n只允许修改 /workspace"
+合并结果 → 传入 Adapter._build_command()
+  ↓
+CLI 参数: --append-system-prompt "managed environment...\nOnly modify...\n合并时..."
           --allowedTools Read,Write
 ```

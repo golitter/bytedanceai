@@ -879,134 +879,91 @@ backend/
 │   └── server/
 │       └── main.go
 ├── internal/
-│   ├── config/
-│   ├── middleware/               # JWT, CORS, Logging
-│   ├── handler/                  # Gin HTTP Handlers
-│   │   ├── agent.go              # SSE 订阅 + 透传到 AgentEnd
-│   │   ├── session.go            # Session CRUD
-│   │   ├── task.go               # Task CRUD + State Machine
-│   │   ├── workspace.go          # Workspace 元数据
-│   │   ├── artifact.go           # Artifact 元数据 + 代理访问
-│   │   ├── project.go            # 项目 CRUD
-│   │   └── user.go               # 用户注册/登录
-│   ├── model/                    # GORM 模型
-│   │   ├── user.go
-│   │   ├── project.go
+│   ├── conf/                        # 配置加载（YAML + env override）
+│   │   └── conf.go
+│   ├── generated/                   # 契约生成的类型文件
+│   ├── middleware/                   # auth, cors, logger
+│   │   ├── auth.go
+│   │   ├── cors.go
+│   │   └── logger.go
+│   ├── handler/                     # Gin HTTP Handlers
+│   │   ├── agent.go                 # SSE 订阅 + 透传到 AgentEnd
+│   │   ├── avatar.go                # 头像上传
+│   │   ├── message.go               # 消息 CRUD
+│   │   ├── session.go               # Session CRUD
+│   │   ├── stream.go                # SSE 流处理
+│   │   └── task.go                  # Task CRUD + State Machine
+│   ├── model/                       # GORM 模型
+│   │   ├── message.go
 │   │   ├── session.go
-│   │   ├── task.go
-│   │   ├── workspace_meta.go
-│   │   ├── artifact_meta.go
-│   │   └── event_log.go
-│   ├── service/
-│   │   ├── agent_service.go      # 调用 AgentEnd client
-│   │   ├── event_store.go        # Event 持久化 + 查询
-│   │   ├── task_state_machine.go # Task 状态机
-│   │   ├── subscription.go       # SSE 订阅管理 + Cursor
-│   │   └── reconciliation.go     # Go ↔ Python 双重 truth 对账 (mark stale + request interrupt)
-│   ├── proxy/
-│   │   └── sse_proxy.go          # AgentEnd SSE → 前端 SSE + DB 写入
-│   └── repository/
+│   │   └── task.go
+│   ├── stream/                      # Redis Stream 写入
+│   │   └── writer.go
+│   └── vo/                          # View Object（API 响应结构）
+│       └── response.go
 ├── pkg/
-│   └── agentend_client/
-│       ├── client.go
-│       ├── sse_reader.go
-│       └── types.go
-├── migrations/
+│   ├── agentend_client/
+│   │   └── client.go
+│   ├── db/                          # MySQL 连接（单例）
+│   ├── qiniu/                       # 七牛云上传
+│   └── redis/                       # Redis 连接
+├── configs/
+│   └── config.yaml
 ├── go.mod
-└── config.yaml
+└── go.sum
 ```
 
 ### 11.3 GORM 数据模型
 
+> 当前已实现的模型仅包含 Session、Task、Message 三张表。以下为设计目标模型，部分尚未实现。
+
 ```go
-type User struct {
-    ID        uint   `gorm:"primaryKey"`
-    Username  string `gorm:"uniqueIndex"`
-    Email     string `gorm:"uniqueIndex"`
-    Password  string
-    CreatedAt time.Time
-}
-
-type Project struct {
-    ID        uint   `gorm:"primaryKey"`
-    Name      string
-    RepoURL   string
-    UserID    uint   `gorm:"index"`
-    CreatedAt time.Time
-}
-
+// 已实现 — backend/internal/model/session.go
 type Session struct {
     ID          uint   `gorm:"primaryKey"`
     SessionID   string `gorm:"uniqueIndex"`
-    ProjectID   uint   `gorm:"index"`
-    UserID      uint   `gorm:"index"`
     Title       string
-    Status      string // active, archived
+    Status      string // active, inactive, completed
     CreatedAt   time.Time
     UpdatedAt   time.Time
 }
 
+// 已实现 — backend/internal/model/task.go
 type Task struct {
-    ID           uint   `gorm:"primaryKey"`
-    TaskID       string `gorm:"uniqueIndex"`
-    SessionID    string `gorm:"index"`
-    ProjectID    uint   `gorm:"index"`
-    UserID       uint
-    ParentTaskID string `gorm:"index"` // Orchestrator 子任务
-    AgentType    string
-    Status       string // created/queued/spawning/running/completed/failed/interrupting/cancelled
-    Message      string
-    Result       string
-    RetryCount   int
-    CreatedAt    time.Time
-    UpdatedAt    time.Time
+    ID         uint   `gorm:"primaryKey"`
+    TaskID     string `gorm:"uniqueIndex"`
+    SessionID  string `gorm:"index"`
+    AgentType  string
+    Status     string // pending, running, completed, failed
+    Message    string
+    Result     string
+    CreatedAt  time.Time
+    UpdatedAt  time.Time
 }
 
-type WorkspaceMeta struct {
+// 已实现 — backend/internal/model/message.go
+type Message struct {
     ID          uint   `gorm:"primaryKey"`
-    WorkspaceID string `gorm:"uniqueIndex"`
+    MessageID   string `gorm:"uniqueIndex"`
+    SessionID   string `gorm:"index"`
     TaskID      string `gorm:"index"`
-    ProjectID   uint
-    OwnerID     uint
-    Branch      string
-    Status      string // active, cleaned, merged
+    Role        string // user, agent
+    Content     string
+    Status      string // streaming, completed, failed
     CreatedAt   time.Time
+    UpdatedAt   time.Time
 }
+```
 
-type ArtifactMeta struct {
-    ID            uint   `gorm:"primaryKey"`
-    ArtifactID    string `gorm:"uniqueIndex"`
-    TaskID        string `gorm:"index"`
-    SessionID     string `gorm:"index"`
-    OwnerID       uint
-    ArtifactType  string // file, image, deploy, sandbox, structured
-    Filename      string
-    MimeType      string
-    Size          int64
-    StoragePath   string // Python 端的真实路径 (不暴露给前端)
-    PreviewURL    string
-    Status        string // active, expired
-    ExpiresAt     *time.Time
-    CreatedAt     time.Time
-}
+设计目标（尚未实现）：
 
-type EventLog struct {
-    ID            uint   `gorm:"primaryKey"`
-    TaskID        string `gorm:"index"`
-    SessionID     string `gorm:"index"`
-    EventID       string `gorm:"index"`
-    Sequence      int
-    EventType     string
-    SourceType    string // agent, system, user
-    SourceID      string // claude-code, opencode, orchestrator
-    UIType        string
-    RenderKind    string // semantic hint (conversation, thinking, tool-output...)
-    RenderGroup   string
-    Payload       JSON
-    TraceID       string `gorm:"index"`
-    ParentEventID string
-    Timestamp     float64
-}
+```go
+// 规划中
+type User struct { ... }
+type Project struct { ... }
+type WorkspaceMeta struct { ... }
+type ArtifactMeta struct { ... }
+type EventLog struct { ... }
 ```
 
 ### 11.4 Workspace 元数据归属
@@ -1043,6 +1000,8 @@ Derived View Model
 events[] 仍然是原始层（支持 replay / time travel / filtering），但 derived view 是增量计算的。
 
 ### 12.2 项目结构
+
+> 以下为设计目标结构。当前实际结构参见 frontend/AGENTS.md。
 
 ```
 frontend/

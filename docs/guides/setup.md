@@ -8,7 +8,7 @@
 
 | 工具       | 版本要求     | 安装                                |
 | ---------- | ---------- | ----------------------------------- | ------- |
-| Go         | >= 1.22    | `brew install go`                   |
+| Go         | >= 1.26    | `brew install go`                   |
 | Node.js    | >= 18      | `brew install node`                 |
 | pnpm       | >= 8       | `npm i -g pnpm`                     |
 | Python     | >= 3.10    | 系统自带 / `brew install python`     |
@@ -50,7 +50,7 @@ cd agentend
 uv sync
 
 # 启动
-uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8001 --reload
+uv run uvicorn src.app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 验证：`curl http://localhost:8001/docs` → FastAPI Swagger 页面。
@@ -75,10 +75,10 @@ go get github.com/gin-gonic/gin \
        gopkg.in/yaml.v3 \
        github.com/golang-jwt/jwt/v5 \
        github.com/gin-contrib/cors \
-       github.com/swaggo/swag \
-       github.com/swaggo/gin-swagger \
-       github.com/swaggo/files \
-       golang.org/x/time
+       github.com/google/uuid \
+       github.com/joho/godotenv \
+       github.com/qiniu/go-sdk/v7 \
+       github.com/redis/go-redis/v9
 ```
 
 ### 2.3 创建目录结构
@@ -86,33 +86,37 @@ go get github.com/gin-gonic/gin \
 ```bash
 cd backend
 mkdir -p cmd/server
-mkdir -p internal/{conf,controller/impl,dao/gorm,dao/mock,model,service/impl,middleware,vo}
-mkdir -p pkg/db
-mkdir -p configs docs/api
+mkdir -p internal/{conf,generated,handler,middleware,model,stream,vo}
+mkdir -p pkg/{agentend_client,db,qiniu,redis}
+mkdir -p configs
 ```
 
-目标结构（参考 gormlab 分层模式）：
+目标结构：
 
 ```
 backend/
 ├── cmd/server/main.go            # 入口：加载配置 → 连 DB → 注册路由 → 启动
 ├── internal/
-│   ├── conf/conf.go              # 配置加载（YAML → struct）
-│   ├── controller/               # 控制器接口
-│   │   └── impl/                 # 控制器实现（路由注册 + Handler）
-│   ├── dao/                      # 数据访问接口
-│   │   ├── gorm/                 # GORM 实现
-│   │   └── mock/                 # Mock 实现（测试用）
-│   ├── model/                    # GORM 模型（表映射）
-│   ├── service/                  # 业务逻辑接口
-│   │   └── impl/                 # 业务逻辑实现
-│   ├── middleware/                # Gin 中间件（CORS, Auth, Logger, RateLimit）
+│   ├── conf/conf.go              # 配置加载（YAML → struct + env override）
+│   ├── generated/                # 契约生成的类型文件
+│   ├── handler/                  # Gin HTTP Handlers
+│   │   ├── agent.go              # SSE 订阅 + 透传到 AgentEnd
+│   │   ├── avatar.go             # 头像上传
+│   │   ├── message.go            # 消息 CRUD
+│   │   ├── session.go            # Session CRUD
+│   │   ├── stream.go             # SSE 流处理
+│   │   └── task.go               # Task CRUD + 运行
+│   ├── middleware/                # Gin 中间件（auth, cors, logger）
+│   ├── model/                    # GORM 模型（session, task, message）
+│   ├── stream/                   # Redis Stream 写入
+│   │   └── writer.go
 │   └── vo/                       # View Object（API 响应结构）
 ├── pkg/
-│   └── db/mysql.go               # MySQL 连接（单例）
+│   ├── agentend_client/          # AgentEnd HTTP Client
+│   ├── db/                       # MySQL 连接（单例）
+│   ├── qiniu/                    # 七牛云上传
+│   └── redis/                    # Redis 连接
 ├── configs/config.yaml
-├── docs/api/                     # Swagger 生成文件
-├── Makefile
 ├── go.mod
 └── go.sum
 ```
@@ -123,15 +127,26 @@ backend/
 
 ```yaml
 mysql:
-  host: localhost
+  host: 127.0.0.1
   port: 3306
   user: root
   password: "123456"
   dbname: agenthub
+  charset: utf8mb4
 
 jwt:
   secret: "dev-secret-key"
-  expire: 86400
+  expire_hours: 24
+
+agentend:
+  host: http://localhost
+  port: 8001
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
 ```
 
 ### 2.5 配置加载
@@ -145,250 +160,42 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
-type MySQLConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	DBName   string `yaml:"dbname"`
-}
-
-type JWTConfig struct {
-	Secret string `yaml:"secret"`
-	Expire int    `yaml:"expire"`
-}
-
+type MySQLConfig struct { ... }
+type JWTConfig struct { ... }
+type AgentEndConfig struct { ... }
+type RedisConfig struct { ... }
+type QiniuConfig struct { ... }
 type Config struct {
-	MySQL MySQLConfig `yaml:"mysql"`
-	JWT   JWTConfig   `yaml:"jwt"`
+	MySQL    MySQLConfig    `yaml:"mysql"`
+	JWT      JWTConfig      `yaml:"jwt"`
+	AgentEnd AgentEndConfig `yaml:"agentend"`
+	Redis    RedisConfig    `yaml:"redis"`
+	Qiniu    QiniuConfig    `yaml:"qiniu"`
 }
 
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config file failed: %w", err)
-	}
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config file failed: %w", err)
-	}
-	return &cfg, nil
+	_ = godotenv.Load()
+	// YAML parse + env override for secrets
 }
 ```
+
+> 完整代码参见 `backend/internal/conf/conf.go`。
 
 ### 2.6 MySQL 连接
 
-创建 `backend/pkg/db/mysql.go`：
-
-```go
-package db
-
-import (
-	"fmt"
-	"sync"
-
-	"agenthub/backend/internal/conf"
-
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-)
-
-var (
-	globalDB *gorm.DB
-	once     sync.Once
-)
-
-func dsn(cfg *conf.MySQLConfig) string {
-	return fmt.Sprintf("%s:%s@(%s:%d)/%s?charset=utf8mb4&parseTime=true&loc=Local",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName,
-	)
-}
-
-func Init(cfg *conf.MySQLConfig) (*gorm.DB, error) {
-	var err error
-	once.Do(func() {
-		globalDB, err = gorm.Open(mysql.Open(dsn(cfg)), &gorm.Config{})
-	})
-	return globalDB, err
-}
-
-func GetDB() *gorm.DB {
-	return globalDB
-}
-```
+创建 `backend/pkg/db/mysql.go` — 单例 MySQL 连接。详见实际文件。
 
 ### 2.7 统一响应
 
-创建 `backend/internal/vo/response.go`：
-
-```go
-package vo
-
-import (
-	"net/http"
-	"github.com/gin-gonic/gin"
-)
-
-type Response struct {
-	Code int         `json:"code"`
-	Data interface{} `json:"data,omitempty"`
-	Msg  string      `json:"msg,omitempty"`
-}
-
-func OK(ctx *gin.Context, data interface{}) {
-	ctx.JSON(http.StatusOK, Response{Code: 0, Data: data})
-}
-
-func Created(ctx *gin.Context, data interface{}) {
-	ctx.JSON(http.StatusCreated, Response{Code: 0, Data: data})
-}
-
-func BadRequest(ctx *gin.Context, msg string) {
-	ctx.JSON(http.StatusBadRequest, Response{Code: 400, Msg: msg})
-}
-
-func NotFound(ctx *gin.Context, msg string) {
-	ctx.JSON(http.StatusNotFound, Response{Code: 404, Msg: msg})
-}
-
-func InternalError(ctx *gin.Context, msg string) {
-	ctx.JSON(http.StatusInternalServerError, Response{Code: 500, Msg: msg})
-}
-```
+创建 `backend/internal/vo/response.go` — 统一 API 响应格式。详见实际文件。
 
 ### 2.8 中间件
 
-创建 `backend/internal/middleware/cors.go`：
-
-```go
-package middleware
-
-import (
-	"time"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-)
-
-func CORS() gin.HandlerFunc {
-	return cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	})
-}
-```
-
-创建 `backend/internal/middleware/logger.go`：
-
-```go
-package middleware
-
-import (
-	"log/slog"
-	"time"
-	"github.com/gin-gonic/gin"
-)
-
-func Logger() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		start := time.Now()
-		path := ctx.Request.URL.Path
-		ctx.Next()
-		latency := time.Since(start)
-		status := ctx.Writer.Status()
-		attrs := []any{
-			slog.Int("status", status),
-			slog.String("method", ctx.Request.Method),
-			slog.String("path", path),
-			slog.Duration("latency", latency),
-			slog.String("client_ip", ctx.ClientIP()),
-		}
-		switch {
-		case status >= 500:
-			slog.Error("request", attrs...)
-		case status >= 400:
-			slog.Warn("request", attrs...)
-		default:
-			slog.Info("request", attrs...)
-		}
-	}
-}
-```
-
-创建 `backend/internal/middleware/auth.go`：
-
-```go
-package middleware
-
-import (
-	"net/http"
-	"strings"
-	"time"
-	"github.com/gin-gonic/gin"
-	jwt5 "github.com/golang-jwt/jwt/v5"
-)
-
-var (
-	jwtSecret []byte
-	jwtExpire int
-)
-
-func SetJWTConfig(secret string, expire int) {
-	jwtSecret = []byte(secret)
-	jwtExpire = expire
-}
-
-type Claims struct {
-	UserID uint   `json:"user_id"`
-	Name   string `json:"name"`
-	jwt5.RegisteredClaims
-}
-
-func GenerateToken(userID uint, name string) (string, error) {
-	now := time.Now()
-	claims := Claims{
-		UserID: userID,
-		Name:   name,
-		RegisteredClaims: jwt5.RegisteredClaims{
-			ExpiresAt: jwt5.NewNumericDate(now.Add(time.Duration(jwtExpire) * time.Second)),
-			IssuedAt:  jwt5.NewNumericDate(now),
-		},
-	}
-	token := jwt5.NewWithClaims(jwt5.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
-}
-
-func Auth() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		header := ctx.GetHeader("Authorization")
-		if header == "" {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
-			return
-		}
-		parts := strings.SplitN(header, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
-			return
-		}
-		claims := &Claims{}
-		token, err := jwt5.ParseWithClaims(parts[1], claims, func(t *jwt5.Token) (any, error) {
-			return jwtSecret, nil
-		})
-		if err != nil || !token.Valid {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
-			return
-		}
-		ctx.Set("userID", claims.UserID)
-		ctx.Set("userName", claims.Name)
-		ctx.Next()
-	}
-}
-```
+创建 `backend/internal/middleware/` 下的 `cors.go`、`logger.go`、`auth.go`。详见实际文件。
 
 ### 2.9 main.go
 
@@ -398,102 +205,74 @@ func Auth() gin.HandlerFunc {
 package main
 
 import (
-	"fmt"
-	"github.com/gin-gonic/gin"
+	"log/slog"
+	"net/http"
+	"os"
+
 	"agenthub/backend/internal/conf"
+	"agenthub/backend/internal/handler"
 	"agenthub/backend/internal/middleware"
+	"agenthub/backend/internal/model"
+	"agenthub/backend/internal/stream"
+	"agenthub/backend/internal/vo"
+	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
+	"agenthub/backend/pkg/qiniu"
+	"agenthub/backend/pkg/redis"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	cfg, err := conf.Load("configs/config.yaml")
 	if err != nil {
-		panic("load config failed: " + err.Error())
+		slog.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
-	middleware.SetJWTConfig(cfg.JWT.Secret, cfg.JWT.Expire)
-
-	database, err := db.Init(&cfg.MySQL)
-	if err != nil {
-		panic("failed to connect database: " + err.Error())
+	if err := db.Init(&cfg.MySQL); err != nil {
+		slog.Error("init db", "error", err)
+		// ...
 	}
-	_ = database
-	fmt.Println("database connected")
-
-	r := gin.Default()
-	r.Use(middleware.CORS())
-	r.Use(middleware.Logger())
-
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "pong"})
-	})
-
-	fmt.Println("server running on :8080")
-	if err := r.Run(":8080"); err != nil {
-		panic("failed to start server: " + err.Error())
-	}
+	// ...
 }
 ```
 
-### 2.10 Makefile
+> 完整代码参见 `backend/cmd/server/main.go`。
 
-创建 `backend/Makefile`：
-
-```makefile
-.PHONY: build run swagger fmt tidy
-
-BINARY := server
-MAIN   := cmd/server/main.go
-
-build:
-	go build -o $(BINARY) $(MAIN)
-
-run: build
-	./$(BINARY)
-
-swagger:
-	swag init -g $(MAIN) -o docs/api
-
-fmt:
-	gofmt -w .
-
-tidy:
-	go mod tidy
-```
-
-### 2.11 启动 Backend
+### 2.10 启动 Backend
 
 ```bash
-cd backend
-make run
+# 开发模式（Air 热重载）
+cd backend && air
+
+# 或通过根目录 Makefile
+make run-backend
 ```
 
 验证：`curl http://localhost:8080/ping` → `{"message":"pong"}`
 
 ---
 
-## 3. Frontend（Next.js）— 从零初始化
+## 3. Frontend（React + Vite）— 从零初始化
 
-### 3.1 创建 Next.js 项目
+### 3.1 创建 Vite 项目
 
 ```bash
 # 在项目根目录执行
-npx create-next-app@latest frontend \
-  --typescript \
-  --tailwind \
-  --eslint \
-  --app \
-  --src-dir \
-  --use-pnpm \
-  --turbopack
+pnpm create vite frontend --template react-ts
 ```
-
-交互项全部选 YES（import alias 选默认 `@/*`）。
 
 ### 3.2 安装核心依赖
 
 ```bash
 cd frontend
+
+# Tailwind CSS
+pnpm add -D tailwindcss @tailwindcss/vite
+
+# React Router
+pnpm add react-router
 
 # 状态管理
 pnpm add zustand
@@ -503,9 +282,6 @@ pnpm add @tanstack/react-query
 
 # UI 组件库
 npx shadcn@latest init
-# Style: Default, Base color: Slate, CSS variables: Yes
-
-# 常用组件
 npx shadcn@latest add button card input dialog
 
 # 图标
@@ -513,66 +289,54 @@ pnpm add lucide-react
 
 # Markdown 渲染
 pnpm add react-markdown remark-gfm
+
+# 代码高亮
+pnpm add shiki
 ```
 
 ### 3.3 目录结构
 
 ```
 frontend/src/
-├── app/                # Next.js App Router pages
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── globals.css
 ├── components/         # 通用组件
+│   ├── chat/           # 聊天相关组件
+│   ├── im/             # IM 会话管理组件
+│   ├── markdown/       # Markdown 渲染组件
 │   └── ui/             # shadcn/ui 组件（自动生成）
-├── features/           # 业务模块
-│   ├── chat/
-│   ├── runtime/
-│   └── agent/
+├── pages/              # 页面组件
 ├── hooks/              # 自定义 hooks
 ├── stores/             # Zustand stores
-├── services/           # API 调用封装
-├── types/              # TypeScript 类型
-└── lib/                # 工具函数
+├── lib/                # API 调用 + SSE + 工具函数
+├── generated/          # 契约生成的类型文件
+└── main.tsx            # 入口
 ```
 
-### 3.4 最小 API 服务层
+### 3.4 Vite 代理配置
 
-创建 `frontend/src/services/api.ts`：
+`frontend/vite.config.ts` 已配置代理：
 
 ```typescript
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-
-export const api = {
-  ping: () => fetchAPI<{ message: string }>("/ping"),
-};
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
+})
 ```
 
-### 3.5 环境变量
-
-创建 `frontend/.env.local`：
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8080
-```
-
-### 3.6 启动 Frontend
+### 3.5 启动 Frontend
 
 ```bash
 cd frontend
 pnpm dev
 ```
 
-验证：浏览器打开 `http://localhost:3000` → Next.js 默认页面。
+验证：浏览器打开 `http://localhost:5173` → React 页面。
 
 ---
 
@@ -626,63 +390,30 @@ brew services start redis
 
 ## 5. 统一环境变量
 
-创建项目根目录 `.env`：
+创建项目根目录 `.env`（示例）：
 
 ```env
-# Backend
-DATABASE_URL=root:123456@tcp(localhost:3306)/agenthub?charset=utf8mb4&parseTime=true&loc=Local
-REDIS_URL=redis://localhost:6379
-AGENTEND_URL=http://localhost:8001
-
-# Frontend
-VITE_API_URL=http://localhost:8080
+# Backend — 通过 backend/configs/config.yaml 配置，秘密字段支持环境变量覆盖
+# AgentEnd — 通过 agentend/.env 配置
 ```
 
 ---
 
 ## 6. Makefile
 
-创建项目根目录 `Makefile`：
+根目录 `Makefile` 已配置，通过 `scripts/run.sh` 统一管理三端服务。常用命令：
 
-```makefile
-.PHONY: dev frontend backend agentend db migrate
-
-# 一键启动所有服务
-dev:
-	@make -j3 _frontend _backend _agentend
-
-_frontend:
-	cd frontend && pnpm dev
-
-_backend:
-	cd backend && make run
-
-_agentend:
-	cd agentend && uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8001 --reload
-
-# 单独启动
-frontend:
-	cd frontend && pnpm dev
-
-backend:
-	cd backend && make run
-
-agentend:
-	cd agentend && uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8001 --reload
-
-# 数据库
-db:
-	docker compose up -d
-
-db-down:
-	docker compose down
-
-# 安装所有依赖
-install:
-	cd frontend && pnpm install
-	cd backend && go mod download
-	cd agentend && uv sync
+```bash
+make run-frontend     # 启动前端（Vite HMR, :5173）
+make run-backend      # 启动后端（Air 热重载, :8080）
+make run-agentend     # 启动 Agent 端（uvicorn --reload, :8001）
+make stop             # 停止全部服务
+make status           # 查看三端运行状态
+make generate         # 从 contracts/schemas/ 生成三端类型文件
+make tidy             # 执行 go mod tidy
 ```
+
+详见 [makefile-guide.md](makefile-guide.md)。
 
 ---
 
@@ -713,19 +444,18 @@ cd backend && air
 ## 8. 完整启动流程
 
 ```bash
-# 1. 启动基础设施
-make db
+# 1. 启动基础设施（MySQL + Redis）
+make db          # Docker Compose，或手动 brew services start mysql/redis
 
 # 2. 安装依赖（首次）
-make install
+cd frontend && pnpm install
+cd backend && go mod download
+cd agentend && uv sync
 
-# 3. 启动所有服务
-make dev
-
-# 或者分别启动（推荐开发时用，每个终端一个）
-make backend     # → :8080
-make agentend    # → :8001
-make frontend    # → :3000
+# 3. 分别启动（推荐开发时用，每个终端一个）
+make run-backend     # → :8080
+make run-agentend    # → :8001
+make run-frontend    # → :5173
 ```
 
 ---
@@ -733,12 +463,12 @@ make frontend    # → :3000
 ## 端口分配
 
 | 服务         | 端口   |
-| ------------ | ---- |
-| Frontend     | 5173 |
-| Backend      | 8080 |
-| AgentEnd     | 8001 |
-| MySQL        | 3306 |
-| Redis        | 6379 |
+| ------------ | ------ |
+| Frontend     | 5173   |
+| Backend      | 8080   |
+| AgentEnd     | 8001   |
+| MySQL        | 3306   |
+| Redis        | 6379   |
 
 ---
 
@@ -767,7 +497,7 @@ mysql -u root -p agenthub
 
 ### Frontend 无法连接 Backend
 
-检查 `frontend/.env.local` 中 `VITE_API_URL` 是否正确，重启 dev server。
+检查 `frontend/vite.config.ts` 中的 proxy target 是否正确（默认 `http://localhost:8080`），重启 dev server。
 
 ### Go 依赖下载慢
 

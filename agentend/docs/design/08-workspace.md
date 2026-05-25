@@ -11,7 +11,7 @@
 
 ## 解决方案
 
-使用 git worktree 实现物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构、持久化存储、并发锁、启动恢复和 TTL 清理，构成生产级的多 Agent 隔离方案。
+使用 git worktree 实现物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构、持久化存储、并发锁、启动恢复和 DB inactive 清理，构成生产级的多 Agent 隔离方案。
 
 ## 分支结构设计
 
@@ -69,9 +69,10 @@ src/workspace/
 | `src/workspace/models.py` | **修改** — 新增 `container_id` 字段、`task_branch_name()` 函数 |
 | `src/workspace/store.py` | **新建** — 持久化存储抽象接口与 JSON 文件实现 |
 | `src/workspace/git_ops.py` | **修改** — 新增 `task_branch_create`、`worktree_list`，`worktree_add` 增加 `base_branch` 参数 |
-| `src/workspace/manager.py` | **重写** — 接受 store 参数，增加 per-task 锁、TTL 后台清理 |
+| `src/workspace/manager.py` | **重写** — 接受 store 参数，增加 per-task 锁、DB inactive 清理 |
 | `src/workspace/recovery.py` | **新建** — 启动时 worktree 恢复与孤儿清理 |
-| `src/app/config.py` | **修改** — 新增 TTL 配置项 |
+| `src/workspace/db.py` | **新建** — DBReader 只读查询（inactive session + task 状态） |
+| `src/app/config.py` | **修改** — 新增 database 配置分区 |
 | `src/app/dependencies.py` | **修改** — 组装 store → manager 的依赖注入 |
 | `src/app/main.py` | **修改** — lifespan 中加入恢复和 TTL 启动/停止 |
 | `src/api/v1/workspace.py` | API 端点（已有，未修改） |
@@ -301,13 +302,13 @@ git checkout <原分支>
 #### 构造函数
 
 ```python
-def __init__(self, store: WorkspaceStoreProtocol, ttl_seconds: int = 3600):
+def __init__(self, store: WorkspaceStoreProtocol):
     self._store = store          # 持久化存储
-    self._ttl = ttl_seconds      # TTL 超时秒数
     self._git = GitOps()         # git 操作
+    self._provisioner = SkillProvisioner()  # 技能分发
     self._workspaces: dict[str, Workspace] = {}  # 内存缓存
     self._locks: dict[str, asyncio.Lock] = {}    # per-task 并发锁
-    self._ttl_task: asyncio.Task | None = None   # TTL 后台任务
+    self._cleanup_task: asyncio.Task | None = None  # inactive 清理后台任务
 ```
 
 #### 并发锁机制
@@ -329,12 +330,16 @@ def _get_lock(self, task_id: str) -> asyncio.Lock:
 
 ```
 1. 获取 per-task lock
-2. 创建 task branch（task/task-123 from main）   ← 幂等，已存在则跳过
-3. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
-4. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
-5. 存入内存 dict
-6. 持久化到 store
-7. 释放 lock
+2. 检查是否已有 ACTIVE workspace（同一 task_id + session_id）→ 有则直接返回
+3. 创建 task branch（task/task-123 from main）   ← 幂等，已存在则跳过
+4. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
+5. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
+6. 分发技能到 worktree（SkillProvisioner.provision）
+7. 初始化 shared 目录（memory/common/ 等）
+8. 写入 git exclude 排除 agent 配置目录
+9. 存入内存 dict
+10. 持久化到 store
+11. 释放 lock
 ```
 
 失败时抛出 `RuntimeError`。
@@ -364,23 +369,32 @@ async def merge(self, workspace_id: str, target_branch: str | None = None) -> bo
 
 遍历指定 task_id 下所有 ACTIVE workspace，逐个调用 `cleanup()`。
 
-#### TTL 自动清理
+#### Inactive 自动清理
+
+基于 DB 查询的 inactive session 清理：
 
 ```python
-async def _ttl_cleanup_loop(self, check_interval: int) -> None:
+async def _inactive_cleanup_loop(self, db_reader: DBReader, interval: int) -> None:
     while True:
-        await asyncio.sleep(check_interval)
-        active = await self._store.query_by_status(WorkspaceStatus.ACTIVE)
-        for ws in active:
-            age = (now - ws.created_at).total_seconds()
-            if age > self._ttl:
-                await self.cleanup(ws.id)
+        await asyncio.sleep(interval)
+        inactive_pairs = await db_reader.query_inactive_sessions()
+        task_statuses = await db_reader.query_task_session_statuses()
+
+        for session_id, task_id in inactive_pairs:
+            # 清理该 session 对应的 ACTIVE workspace
+            ...
+
+        for task_id, statuses in task_statuses.items():
+            if statuses == {"inactive"}:
+                # 该 task 下所有 session 都 inactive，清理 task 分支
+                await self.cleanup_by_task(task_id)
 ```
 
-- `start_ttl_cleanup(check_interval)` — 启动后台 asyncio task
-- `stop_ttl_cleanup()` — 取消后台 task
-- 通过 `store.query_by_status(ACTIVE)` 查询，避免全量扫描
-- 日志输出：`TTL cleanup: checked X workspaces, cleaned Y expired`
+- `start_inactive_cleanup(db_reader, interval)` — 启动后台 asyncio task
+- `stop_inactive_cleanup()` — 取消后台 task
+- 通过 `DBReader.query_inactive_sessions()` 查询 inactive 状态的 session
+- 通过 `DBReader.query_task_session_statuses()` 判断 task 是否可整体清理
+- 日志输出：`Inactive cleanup: scanned X sessions, cleaned Y sessions, cleaned Z tasks`
 
 ---
 
@@ -420,23 +434,41 @@ Reconcile 规则：
 
 #### 配置项（`src/app/config.py`）
 
-```python
-class Settings(BaseSettings):
-    WORKSPACE_TTL_SECONDS: int = 3600       # workspace 超时时长，默认 1 小时
-    WORKSPACE_TTL_CHECK_INTERVAL: int = 300  # TTL 检查间隔，默认 5 分钟
-```
+配置来自 `config.yaml`，主要字段：
 
-通过环境变量覆盖（如 `WORKSPACE_TTL_SECONDS=7200`）。
+```yaml
+workspace:
+  base_dir: ...              # worktree 根目录
+  cleanup_interval: 300      # inactive 清理检查间隔（秒）
+  store_path: logs/workspaces.json
+  git_default_branch: main
+
+database:
+  host: ...
+  port: 3306
+  user: ...
+  password: ...
+  dbname: ...
+```
 
 #### 依赖注入（`src/app/dependencies.py`）
 
 ```python
 def create_workspace_manager() -> WorkspaceManager:
     store = JsonFileWorkspaceStore()
-    return WorkspaceManager(store, ttl_seconds=settings.WORKSPACE_TTL_SECONDS)
+    return WorkspaceManager(store)
+
+def create_db_reader() -> DBReader:
+    return DBReader(
+        host=settings.database.host,
+        port=settings.database.port,
+        user=settings.database.user,
+        password=settings.database.password,
+        db=settings.database.dbname,
+    )
 ```
 
-组装 Store → Manager 的依赖链，TTL 配置从 Settings 读取。
+组装 Store → Manager 和 DBReader 的依赖链。
 
 #### 生命周期（`src/app/main.py`）
 
@@ -445,12 +477,12 @@ Startup:
   1. create_workspace_manager()      → 实例化 store + manager
   2. _load_from_store()              → 从 JSON 文件加载 workspace 到内存
   3. recover_workspaces()            → 逐 repo_path 执行 reconcile
-  4. start_ttl_cleanup()             → 启动 TTL 后台扫描
+  4. create_db_reader() + connect()  → 连接 MySQL
+  5. start_inactive_cleanup()        → 启动 DB inactive 后台扫描
 
 Shutdown:
-  5. stop_ttl_cleanup()              → 取消 TTL 后台 task
-  6. cleanup all ACTIVE workspaces   → 清理所有活跃 workspace
-  7. destroy all sessions            → 清理所有会话
+  6. stop_inactive_cleanup()         → 取消清理后台 task
+  7. db_reader.close()               → 关闭 DB 连接
 ```
 
 #### API 端点（`src/api/v1/workspace.py`）
@@ -543,6 +575,6 @@ DELETE /v1/workspace/{workspace_b_id}
 
 1. **container_id 预留字段**：已添加但未使用，为后续 Docker 容器隔离预留
 2. **JSON 文件存储**：适合单实例开发环境，生产环境需替换为 SQLite/Redis
-3. **TTL 基于创建时间**：当前基于 `created_at` 判断过期，后续可改为基于最后活跃时间
+3. **Inactive 清理依赖 DB**：需要 MySQL 中 sessions 表的 status 字段准确标记，否则清理不触发
 4. **冲突处理**：merge 冲突时直接 abort 返回错误，不做自动冲突解决
 5. **recovery 按 repo_path 粒度**：当前逐个 repo 执行恢复，多 repo 场景下可优化为并行

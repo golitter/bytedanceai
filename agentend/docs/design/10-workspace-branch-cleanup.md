@@ -37,6 +37,6 @@
 
 `src/workspace/recovery.py` — 移除孤儿 worktree 后，也删除其对应分支。
 
-### 5. shutdown 使用 `cleanup_by_task()`
+### 5. shutdown 清理
 
-`src/app/main.py` — 关闭时按 task_id 分组调用 `cleanup_by_task()`，确保 task 分支被正确清理。
+`src/app/main.py` — 关闭时停止 inactive 清理任务并关闭 DB 连接，workspace 清理由 inactive cleanup loop 负责。

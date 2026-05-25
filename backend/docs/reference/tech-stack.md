@@ -90,7 +90,7 @@ backend/
 │   ├── dao/                 # （预留）
 │   └── service/impl/        # （预留）
 ├── pkg/
-│   ├── db/                  # MySQL 单例连接（sync.Once + AutoMigrate）
+│   ├── db/                  # MySQL 单例连接（sync.Once）
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
 │   ├── agentend_client/     # AgentEnd HTTP 客户端
 │   └── qiniu/               # 七牛云上传
@@ -115,7 +115,7 @@ backend/
 
 ## 关键设计决策
 
-- **分层架构**：handler / stream / model / vo 四层，interface 与 impl 分离，每层可独立测试
+- **分层架构**：handler / stream / model / vo 四层，职责清晰，每层可独立测试（interface/impl 预留目录已创建）
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
 - **SSE 流式**：StreamWriter 发布到 Redis Stream → Handler.ServeStream 消费并分块推送，30min 超时保护

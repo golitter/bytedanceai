@@ -148,7 +148,7 @@ cmd = [settings.cli.claude_path, "-p", message, "--output-format", "stream-json"
 | `tool_result` | `TOOL_RESULT` | `{tool, result}` |
 | `result` | `DONE` | `{text, usage}` |
 
-**进程管理**：`_processes` 字典按 session_id 存储活跃进程，`interrupt()` 先 terminate 后 kill（超时来自 config.yaml）。`_BLOCKED_TOOLS` 拦截危险工具。
+**进程管理**：`_processes` 字典按 session_id 存储活跃进程，`interrupt()` 先 terminate 后 kill（超时来自 config.yaml 的 `execution.process_terminate_timeout`）。危险工具通过 `SafetyRule` 在 `RuleEngine` 层过滤，不直接在适配器内拦截。
 
 ### 3.3 OpenCodeAdapter
 

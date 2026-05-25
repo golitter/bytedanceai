@@ -60,20 +60,39 @@ agentend/
 
 ## 配置
 
-统一通过 `config.yaml` 管理，LLM 密钥通过 `.env` 读取。配置项分组如下：
+统一通过 `config.yaml` 管理（`pydantic-settings` + `YamlConfigSettingsSource`），LLM 密钥通过 `.env` 读取。配置项分组如下：
 
 - **server** — 监听地址、端口、CORS、热重载
+- **app** — 应用标题和版本
 - **cli** — Claude / OpenCode CLI 路径
-- **workspace** — Worktree 根目录、TTL 过期、清理巡检间隔、存储路径、默认分支
+- **workspace** — Worktree 根目录、清理巡检间隔、存储路径、默认分支
 - **session** — 会话映射持久化路径
+- **database** — MySQL 连接信息（用于 inactive session 清理查询）
 - **execution** — 最大轮次、执行超时、进程终止超时
 - **skills** — 内置技能目录与分发清单
-- **llm** — Orchestrator LLM 配置（从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
+- **llm** — Orchestrator LLM 配置（优先从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
 
 详见 [config.yaml](../../config.yaml) 中的注释。
 
 ## 文档索引
 
-- [架构总览](../design/architecture.md)
-- [适配器差异对比](adapter-diff.md)
-- [测试手册](../testing/)
+### design/（开发实施文档）
+
+- [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
+- [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Orchestrator）
+- [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
+- [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Scope / Taskctl）
+- [05-api.md](../design/05-api.md) — API 端点（SSE 流式 / 同步执行 / Session CRUD）
+- [06-app-wiring.md](../design/06-app-wiring.md) — 应用组装（FastAPI 生命周期 + DI）
+- [07-session-mapping.md](../design/07-session-mapping.md) — CLI Session ID 映射
+- [08-workspace.md](../design/08-workspace.md) — 工作区管理（Git Worktree 隔离）
+- [11-orchestrator-planning.md](../design/11-orchestrator-planning.md) — Orchestrator 规划（LangGraph）
+- [architecture.md](../design/architecture.md) — 架构总览
+
+### reference/
+
+- [adapter-diff.md](adapter-diff.md) — 适配器差异对比
+
+### testing/
+
+- [测试手册目录](../testing/)

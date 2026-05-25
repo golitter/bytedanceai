@@ -31,20 +31,18 @@
 
 ### SessionMappingStore（`src/session/store.py`）
 
-- 存储路径：`logs/session_mappings.json`（项目根目录下）
-- 格式：`{"request_session_id": "cli_session_uuid", ...}`
+- 存储路径：来自 `config.yaml` 的 `session.store_path`（默认 `logs/session_mappings.json`）
+- Key 格式：`{session_id}::{task_id}`（复合键，同一 session 不同 task 有独立映射）
+- 格式：`{"session_id::task_id": "cli_session_uuid", ...}`
 - 每次写入后立即持久化到文件
 
 ### _resolve_session 流程（`src/api/v1/agent.py`）
 
 ```
-request.session_id 有值？
-  ├─ 是 → store 里有映射？
-  │     ├─ 是 → 返回 (internal_id, cli_uuid, is_resume=True)  → 用 --resume
-  │     └─ 否 → 生成新 UUID，存入 store
-  │              返回 (internal_id, new_cli_uuid, is_resume=False) → 用 --session-id
-  └─ 否 → 创建一次性内部 session
-           返回 (internal_id, None, is_resume=False) → 不传 session 参数
+查询 store.get_cli_session_id(session_id, task_id)
+  ├─ 有映射 → 返回 (internal_id, cli_uuid, is_resume=True)  → 用 --resume / --session --fork
+  └─ 无映射 → 返回 (internal_id, "", is_resume=False) → 不传 session 参数
+              CLI 自建 session → INIT 事件回写 → 后续调用走映射
 ```
 
 ### Claude CLI 参数映射
@@ -73,3 +71,4 @@ CLI `stream-json --verbose` 输出的 `assistant` 消息结构：
 
 1. **不传 `session_id` 的场景**：当前返回内部 UUID 但未建立映射，用该 UUID 再次调用会报错。需要统一处理，使所有调用都走映射流程。
 2. **存储方式**：当前使用 JSON 文件，仅适合单实例开发环境，生产环境需替换为 Redis/MySQL。
+3. **INIT 回写依赖事件流**：如果 CLI 未输出 INIT 事件（异常退出），mapping 不会被建立，后续无法 resume。

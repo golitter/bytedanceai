@@ -8,13 +8,16 @@
 
 ### Session 数据模型 (`src/session/models.py`)
 
+`SessionState` 枚举定义在 `src/generated/session.py`，Session dataclass 在 models.py 中使用：
+
 ```python
-class SessionState(str, Enum):
+class SessionState(str, Enum):     # 来自 generated/session.py
     IDLE = "idle"                  # 空闲
     RUNNING = "running"            # 执行中
     COMPLETED = "completed"        # 已完成
     INTERRUPTED = "interrupted"    # 已中断
     ERROR = "error"                # 错误
+    INACTIVE = "inactive"          # 不活跃（DB 清理标记）
 
 @dataclass
 class Session:
@@ -22,7 +25,7 @@ class Session:
     agent_type: str                      # Agent 类型
     state: SessionState = IDLE
     process: asyncio.subprocess.Process | None = None  # 进程句柄
-    workspace_path: str | None = None
+    workspace_path: str = ""             # 工作区路径
     created_at: datetime
     last_active: datetime
     history: list[dict] = []             # 消息历史
@@ -59,6 +62,6 @@ IDLE → RUNNING → COMPLETED
 #### 销毁流程 (`destroy`)
 
 1. 检查 Session 是否存在
-2. 如果有运行中进程：SIGTERM → 等待 5s → SIGKILL
+2. 如果有运行中进程：SIGTERM → 等待超时（`config.yaml` 的 `execution.process_terminate_timeout`）→ SIGKILL
 3. 从 `_sessions` 字典中移除
 4. 返回 `True`（存在）/ `False`（不存在）
