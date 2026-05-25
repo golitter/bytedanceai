@@ -9,7 +9,6 @@
 ```
 src/
 ├── main.tsx                          # 应用入口：StrictMode + QueryClient + BrowserRouter
-├── App.tsx                           # 空壳（当前未使用）
 ├── index.css                         # 全局样式：Tailwind + CSS 变量暗色主题
 │
 ├── pages/
@@ -26,7 +25,8 @@ src/
 │   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动）
 │   │   ├── MessageBubble.tsx         # 消息气泡（user / agent / system 三种变体）
 │   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送 + Shift+Enter 换行）
-│   │   └── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯）
+│   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯）
+│   │   └── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
 │   │
 │   ├── markdown/                     # Markdown 渲染
 │   │   ├── MarkdownRenderer.tsx      # react-markdown + remark-gfm + 自定义组件
@@ -41,20 +41,22 @@ src/
 ├── hooks/
 │   ├── use-chat-stream.ts            # 聊天流：useReducer 状态机 + SSE 连接
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
-│   └── use-sessions.ts               # Session 查询 + 停用 mutation
+│   └── use-hover-style.ts            # 悬停样式工具 hook
 │
 ├── lib/
-│   ├── api.ts                        # REST API 封装（Task / Session / Conversation）
+│   ├── api.ts                        # REST API 封装（Task / Session / Avatar 上传）
 │   ├── sse.ts                        # SSE 客户端（fetch ReadableStream 解析）
+│   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   └── utils.ts                      # cn() 工具函数
 │
 ├── stores/
-│   ├── app.ts                        # 全局 store（当前未使用）
-│   └── chat.ts                       # 聊天导航状态（currentSessionId / currentTaskId）
+│   └── chat.ts                       # 聊天导航状态（currentSessionId）
 │
-├── generated/                        # 契约生成的类型文件
+├── generated/                        # 契约生成的类型文件（勿手改）
 │   ├── events.ts                     # StreamEvent 类型
-│   └── request.ts                    # AgentType 等请求类型
+│   ├── request.ts                    # AgentType 等请求类型
+│   ├── response.ts                   # AgentResponse 类型
+│   └── session.ts                    # SessionState 类型
 │
 └── assets/                           # 静态资源
 ```

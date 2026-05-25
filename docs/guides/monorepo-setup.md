@@ -115,7 +115,7 @@ pnpm dev
 
 | 工具 | 版本 | 安装 |
 |------|------|------|
-| Go | >= 1.22 | `brew install go` |
+| Go | >= 1.26 | `brew install go` |
 | MySQL | >= 8.0 | `brew install mysql` 或 Docker |
 
 ### 核心依赖

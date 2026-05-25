@@ -21,9 +21,12 @@ agentend/
 │   ├── api/            # FastAPI HTTP 端点
 │   │   └── v1/         # v1 版本 API
 │   ├── app/            # 应用入口、配置、DI
+│   ├── orchestrator/   # Orchestrator 规划模块（LangGraph + LLM 任务拆解）
 │   ├── rules/          # Rule Engine 规则引擎
 │   ├── schemas/        # 数据模型
-│   └── session/        # Session 会话管理
+│   ├── session/        # Session 会话管理
+│   ├── skills/         # 技能供给系统（内置 taskctl）
+│   └── workspace/      # 工作区管理（Git Worktree 隔离）
 ├── tests/              # 测试
 ├── pyproject.toml      # 项目配置与依赖
 └── ruff.toml           # 代码风格

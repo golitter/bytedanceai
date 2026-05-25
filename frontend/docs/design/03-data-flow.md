@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────┐
 │  Zustand Store (chat.ts)                        │
 │  ─ 纯客户端导航状态                              │
-│  ─ currentSessionId / currentTaskId             │
+│  ─ currentSessionId                             │
 ├─────────────────────────────────────────────────┤
 │  React Query (use-conversations / use-sessions) │
 │  ─ 服务端数据缓存 + 自动刷新                     │

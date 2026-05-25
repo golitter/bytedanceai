@@ -97,5 +97,5 @@ frontend/
 - **CSS 变量主题**：通过 oklch 色彩空间定义 light/dark 双主题变量，Tailwind 直接引用
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
-- **SSE 流式通信**：通过 EventSource 直连 Backend，不经过 Vite 代理，避免缓冲问题
+- **SSE 流式通信**：通过 fetch + ReadableStream 直连 Backend，不经过 Vite 代理，避免缓冲问题
 - **虚拟滚动**：消息列表使用 @tanstack/react-virtual 优化长列表渲染性能

@@ -27,7 +27,7 @@ MySQL 8.0，通过 `pkg/db` 包以 sync.Once 单例模式初始化连接。
 
 | 库 | 版本 | 用途 |
 |----|------|------|
-| redis/go-redis | — | Redis 客户端，用于 Stream 实时消息中转 |
+| redis/go-redis | v9.18.0 | Redis 客户端，用于 Stream 实时消息中转 |
 
 Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 

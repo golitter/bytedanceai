@@ -75,14 +75,15 @@ LangGraph = 规划引擎 (plan / dispatch / aggregate / replan)
 
 ```
 bytedanceai/
-├── agentend/      ✅ 已实现 (Python FastAPI, ~60个文件)
-├── backend/       ❌ 空目录 (Go 后端未开始)
-├── frontend/      ❌ 不存在 (React 前端未开始)
+├── agentend/      ✅ 已实现 (Python FastAPI + LangGraph, 多 Agent 运行时)
+├── backend/       ✅ 已实现 (Go Gin + GORM + MySQL + Redis Stream)
+├── frontend/      ✅ 已实现 (React 19 + Vite + TypeScript + Tailwind + shadcn/ui)
+├── contracts/     ✅ 已实现 (YAML schemas + 三端代码生成)
 ├── docs/          📄 架构文档已有
-└── scripts/       空目录
+└── scripts/       🔧 工程脚本 (run.sh, generate_contracts.py, test-clean.sh)
 ```
 
-只有 AgentEnd Python 端是真实代码，Go 后端和 React 前端都是空白。
+三端均已实现基础功能：前端 IM 聊天界面 + SSE 流式、后端 Task/Session CRUD + Redis Stream 透传、Agent 端多 Agent 适配器 + Workspace 隔离。
 
 ---
 

@@ -38,10 +38,10 @@ agentend/
 │   ├── skills/         # 技能供给系统（taskctl 等）
 │   └── workspace/      # 工作区管理（Git Worktree 隔离）
 ├── docs/
-│   ├── common/         # 公共文档
-│   ├── impl/           # 实现文档（按功能编号）
-│   ├── playbooks/      # 手动测试流程
-│   └── todos/          # 待办事项
+│   ├── design/         # 设计文档（架构、schemas、adapters、session 等）
+│   ├── reference/      # 参考文档（API 端点、适配器差异）
+│   ├── testing/        # 测试手册（手动测试流程）
+│   └── backlog/        # 待办 / 设计笔记
 ├── tests/              # 测试
 ├── pyproject.toml      # 项目配置与依赖
 └── ruff.toml           # 代码风格
@@ -74,7 +74,6 @@ agentend/
 
 ## 文档索引
 
-- [架构总览](../impl/architecture.md)
+- [架构总览](../design/architecture.md)
 - [适配器差异对比](adapter-diff.md)
-- [Orchestrator 规划实现](../impl/11-orchestrator-planning.md)
-- [测试流程 Playbooks](../playbooks/)
+- [测试手册](../testing/)
