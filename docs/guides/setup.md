@@ -445,7 +445,7 @@ cd backend && air
 
 ```bash
 # 1. 启动基础设施（MySQL + Redis）
-make db          # Docker Compose，或手动 brew services start mysql/redis
+# Docker Compose 或手动 brew services start mysql/redis
 
 # 2. 安装依赖（首次）
 cd frontend && pnpm install

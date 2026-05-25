@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-三层状态架构：Zustand 管理聊天导航与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。
+三层状态架构：Zustand 管理聊天导航与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview）。
 
 ## 怎么实现的
 
@@ -11,6 +11,17 @@
 单一 store 管理导航状态 + 各会话独立聊天状态。导航状态存储 `currentSessionId`，会话状态以 `sessions[sessionId]` 的 Map 形式隔离：
 
 ```typescript
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'agent' | 'system'
+  content: string
+  blocks?: MessageBlock[]
+  agentType?: AgentType
+  timestamp: number
+  messageId?: string
+  status?: string
+}
+
 export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
 
 interface SessionChatState {
@@ -41,6 +52,26 @@ interface ChatStoreState {
   streamError: (sessionId: string, error: Error) => void
   resetSession: (sessionId: string) => void
 }
+```
+
+`loadHistory` 对历史 agent 消息同样执行 `reduceEventToBlocks` 解析：
+
+```typescript
+loadHistory: (sessionId, messages) =>
+  set((s) => ({
+    sessions: {
+      ...s.sessions,
+      [sessionId]: {
+        ...ensureSession(s, sessionId),
+        status: 'done',
+        messages: messages.map((msg) =>
+          msg.role === 'agent' && msg.content
+            ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+            : msg,
+        ),
+      },
+    },
+  })),
 ```
 
 `ensureSession` 工具函数确保访问不存在的 sessionId 时返回初始状态，而非 undefined：
@@ -116,16 +147,18 @@ streamText: (sessionId, text) =>
   }),
 ```
 
-`streamDone` 将 `streamingContent` 转为 agent 消息追加到 `messages`，清空流式状态：
+`streamDone` 将 `streamingContent` 通过 `reduceEventToBlocks` 解析为 `MessageBlock[]`，转为 agent 消息追加到 `messages`，清空流式状态：
 
 ```typescript
 streamDone: (sessionId) =>
   set((s) => {
     const session = ensureSession(s, sessionId)
+    const blocks = reduceEventToBlocks(session.streamingContent)
     const agentMessage: ChatMessage = {
       id: `agent-${Date.now()}`,
       role: 'agent',
       content: session.streamingContent,
+      blocks,
       agentType: session.streamingAgentType,
       timestamp: Date.now(),
     }

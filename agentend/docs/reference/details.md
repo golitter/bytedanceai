@@ -27,16 +27,17 @@
 ```
 agentend/
 ├── src/
-│   ├── adapters/       # Adapter 适配器层
+│   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API
+│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── orchestrator/   # Orchestrator 规划模块（LangGraph + LLM 任务拆解）
+│   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
 │   ├── schemas/        # 数据模型
 │   ├── session/        # Session 会话管理
-│   ├── skills/         # 技能供给系统（taskctl 等）
-│   └── workspace/      # 工作区管理（Git Worktree 隔离）
+│   ├── skills/         # 技能供给系统（SkillProvisioner + manifest）
+│   └── workspace/      # 工作区管理（Git Worktree 隔离 + 持久化 + 恢复）
 ├── docs/
 │   ├── design/         # 设计文档（架构、schemas、adapters、session 等）
 │   ├── reference/      # 参考文档（API 端点、适配器差异）
@@ -51,7 +52,7 @@ agentend/
 
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
 - **会话状态机**：`IDLE → RUNNING → COMPLETED / INTERRUPTED / ERROR`，另含 `INACTIVE` 状态用于标记不活跃会话
-- **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI 与 Orchestrator 适配器
+- **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
 - **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Scope（校验工作区路径）等规则，可修改 system prompt 和工具白名单
 - **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
@@ -79,7 +80,7 @@ agentend/
 ### design/（开发实施文档）
 
 - [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
-- [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Orchestrator）
+- [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
 - [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
 - [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Scope / Taskctl）
 - [05-api.md](../design/05-api.md) — API 端点（SSE 流式 / 同步执行 / Session CRUD）
@@ -87,6 +88,8 @@ agentend/
 - [07-session-mapping.md](../design/07-session-mapping.md) — CLI Session ID 映射
 - [08-workspace.md](../design/08-workspace.md) — 工作区管理（Git Worktree 隔离）
 - [11-orchestrator-planning.md](../design/11-orchestrator-planning.md) — Orchestrator 规划（LangGraph）
+- [13-preview-server.md](../design/13-preview-server.md) — 工作区预览服务（aiohttp 静态文件服务器）
+- [14-pin-memory.md](../design/14-pin-memory.md) — 约束钉住与上下文注入（PinMemory）
 - [architecture.md](../design/architecture.md) — 架构总览
 
 ### reference/

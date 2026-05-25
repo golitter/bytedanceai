@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-统一 Agent 适配器抽象，当前实现 `ClaudeCodeAdapter`、`OpenCodeAdapter` 和 `OrchestratorAdapter`，通过 CLI subprocess 驱动或 LLM 调用执行。
+统一 Agent 适配器抽象，当前实现 `ClaudeCodeAdapter`、`OpenCodeAdapter`、`CodexAdapter` 和 `OrchestratorAdapter`，通过 CLI subprocess 驱动或 LLM 调用执行。
 
 ## 怎么实现的
 
@@ -27,6 +27,7 @@ class BaseAgentAdapter(ABC):
 registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)
 registry.register(AgentType.OPENCODE, OpenCodeAdapter)
 registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
+registry.register(AgentType.CODEX, CodexAdapter)
 adapter_cls = registry.get(AgentType.CLAUDE_CODE)  # 返回类，由调用方实例化
 ```
 
@@ -106,3 +107,43 @@ SIGTERM → 等待超时 → SIGKILL
 5. 从 `_processes` 中移除
 
 超时时长来自 `config.yaml` 的 `execution.process_terminate_timeout`。
+
+### CodexAdapter (`src/adapters/codex.py`)
+
+Codex CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.create_subprocess_exec` 启动 Codex CLI 进程。
+
+#### 命令构建 (`_build_command`)
+
+```python
+# 新建会话
+codex exec --json --dangerously-bypass-approvals-and-sandbox -s workspace-write [-C <cwd>] [-m <model>] <message>
+
+# 恢复会话
+codex exec resume <cli_session_id> --json --dangerously-bypass-approvals-and-sandbox
+```
+
+参数来源：
+- `exec`：执行模式
+- `--json`：JSON 流式输出
+- `--dangerously-bypass-approvals-and-sandbox`：跳过审批和沙箱
+- `-s workspace-write`：允许写入工作区
+- `-C`：工作目录（用于 worktree 隔离）
+- `resume`：复用已有会话
+
+#### 流式输出解析 (`_parse_stream_line`)
+
+Codex CLI 输出 JSON Lines 格式，逐行解析：
+
+| 事件类型 | 映射 |
+|---------|------|
+| `thread.started` | INIT（提取 `thread_id` 作为 `cli_session_id`） |
+| `item.started`（type=command_execution） | TOOL_CALL |
+| `item.completed`（type=reasoning） | TEXT（带 `[thinking]` 前缀） |
+| `item.completed`（type=agent_message） | TEXT |
+| `item.completed`（type=command_execution） | TOOL_RESULT |
+| `turn.completed` | DONE（含 usage） |
+| `turn.started` | 忽略 |
+
+#### 中断机制
+
+与 ClaudeCodeAdapter 相同：SIGTERM → 等待超时 → SIGKILL。

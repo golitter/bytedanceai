@@ -61,6 +61,34 @@ GET /health → {"status": "ok", "version": "<config.yaml app.version>"}
 6. 超时 → 中断进程，返回 HTTP 408
 7. 成功 → 返回 AgentResponse
 
+### Workspace 管理 (`src/api/v1/workspace.py`)
+
+提供工作区 CRUD、文件操作、diff、commit、merge、preview 等端点：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/workspace/create` | POST | 创建 workspace（含 worktree + 技能分发） |
+| `/v1/workspace/{id}/files/{path}` | GET | 读取文件（防路径穿越） |
+| `/v1/workspace/{id}/files/{path}` | PUT | 写入文件（防路径穿越） |
+| `/v1/workspace/{id}/diff` | GET | 获取 `git diff HEAD` |
+| `/v1/workspace/{id}/commit` | POST | 提交变更（`git add -A && git commit`） |
+| `/v1/workspace/{id}/revert` | POST | 撤销变更（`git checkout HEAD -- .`） |
+| `/v1/workspace/{id}/merge` | POST | 合并分支 |
+| `/v1/workspace/{id}/preview/start` | POST | 启动预览服务器（aiohttp 静态文件） |
+| `/v1/workspace/{id}/preview/stop` | POST | 停止预览服务器 |
+| `/v1/workspace/task/{task_id}/merge-to-main` | POST | 合并 task branch 到 main |
+| `/v1/workspace/{id}` | DELETE | 清理 workspace（worktree + branch） |
+| `/v1/workspace` | GET | 列出所有 workspace |
+| `/v1/workspace/by-session/{session_id}` | GET | 按 session_id 查找活跃 workspace |
+
+### Pin 管理 (`src/api/v1/pin.py`)
+
+Pin Memory 上下文管理端点，允许用户将关键约束"钉住"供 Orchestrator 使用。
+
+### Validate Repo Path (`src/api/v1/validate.py`)
+
+校验仓库路径是否有效，供前端新建对话时使用。
+
 ### 完整请求生命周期
 
 ```

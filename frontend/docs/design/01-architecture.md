@@ -109,6 +109,20 @@ src/
 │   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯）
 │   │   └── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
 │   │
+│   ├── cards/                        # 技能输出卡片（Artifact 渲染）
+│   │   ├── DiffCard.tsx              # Diff 卡片：多文件 tab + accept/revert + 编辑
+│   │   ├── HtmlCard.tsx              # HTML 渲染卡片（sandbox iframe）
+│   │   ├── ImageCard.tsx             # 图片卡片（代理下载 + 错误降级）
+│   │   ├── AttachmentCard.tsx        # 附件卡片（文件图标 + 下载链接）
+│   │   ├── PreviewCard.tsx           # 预览卡片（外部链接 + iframe）
+│   │   └── index.ts                  # 统一导出
+│   │
+│   ├── diff/                         # Diff 查看器（可编辑多文件）
+│   │   ├── DiffFileTabs.tsx          # 多文件 tab 切换
+│   │   ├── DiffFileView.tsx          # react-diff-view 统一视图渲染
+│   │   ├── DiffFileEditor.tsx        # 懒加载编辑器外壳（Suspense）
+│   │   └── DiffFileEditorInner.tsx   # CodeMirror 编辑器（语法高亮 + 保存）
+│   │
 │   ├── markdown/                     # Markdown 渲染
 │   │   ├── MarkdownRenderer.tsx      # react-markdown + remark-gfm + 自定义组件
 │   │   └── CodeBlock.tsx             # 代码块（Shiki 高亮 + 行号）
@@ -125,7 +139,12 @@ src/
 │   ├── api.ts                        # REST API 封装
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
-│   └── utils.ts                      # cn() 工具函数
+│   ├── utils.ts                      # cn() 工具函数
+│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview）
+│   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
+│   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
+│   └── __tests__/                    # lib 单元测试
+│       └── block-reducer.test.ts
 │
 ├── stores/
 │   └── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态
@@ -150,5 +169,7 @@ src/
 | Markdown | react-markdown + remark-gfm | Markdown 渲染 |
 | 代码高亮 | Shiki | VS Code 级别语法高亮 |
 | 虚拟滚动 | @tanstack/react-virtual | 大量消息时的性能优化 |
+| Diff 渲染 | react-diff-view | Unified Diff 视图渲染 |
+| 代码编辑 | @uiw/react-codemirror + @codemirror/* | Diff 文件编辑器（语法高亮 + 懒加载） |
 | 图标 | Lucide React | 统一图标系统 |
 | 字体 | @fontsource-variable/geist | Geist Variable 字体 |

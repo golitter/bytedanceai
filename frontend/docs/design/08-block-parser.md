@@ -1,0 +1,79 @@
+# Block Parser — 消息结构化解析
+
+## 实现了什么
+
+将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview 六种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。
+
+## 怎么实现的
+
+### 块类型定义 (`src/lib/block-types.ts`)
+
+TypeScript discriminated union 定义六种块类型：
+
+```typescript
+export type MessageBlock =
+  | { type: 'text'; content: string }
+  | { type: 'html-render'; content: string }
+  | { type: 'image'; path: string }
+  | { type: 'attachment'; path: string }
+  | { type: 'diff'; snapshotId: string }
+  | { type: 'preview'; url: string }
+```
+
+### 解析器 (`src/lib/block-reducer.ts`)
+
+`reduceEventToBlocks(fullText)` 解析完整事件文本：
+
+1. 用正则 ` /``aka_yhy\n([\s\S]*?)```/g` 匹配所有标记块
+2. 标记块之前和之后的文本生成 `text` 块
+3. 标记块内部按 `type:` 行判断块类型，提取对应字段
+4. 未识别类型降级为 `text` 块
+5. 无标记块时返回单个 `text` 块
+
+```typescript
+export function reduceEventToBlocks(fullText: string): MessageBlock[] {
+  const blocks: MessageBlock[] = []
+  let lastIndex = 0
+
+  for (const match of fullText.matchAll(BLOCK_RE)) {
+    if (matchStart > lastIndex) {
+      const text = fullText.slice(lastIndex, matchStart)
+      if (text) blocks.push({ type: 'text', content: text })
+    }
+    const inner = match[1].trim()
+    const parsed = parseBlockContent(inner)
+    if (parsed) blocks.push(parsed)
+    else blocks.push({ type: 'text', content: match[0] })
+    lastIndex = matchStart + match[0].length
+  }
+  if (lastIndex < fullText.length) {
+    blocks.push({ type: 'text', content: fullText.slice(lastIndex) })
+  }
+  if (blocks.length === 0) return [{ type: 'text', content: fullText }]
+  return blocks
+}
+```
+
+### Diff 解析器 (`src/lib/diff-parser.ts`)
+
+`parseUnifiedDiff(diffText)` 基于 `react-diff-view` 的 `parseDiff` 封装，输出 `ParsedDiffResult`：
+
+```typescript
+export interface ParsedDiffFile {
+  oldPath: string
+  newPath: string
+  type: DiffType
+  hunks: HunkData[]
+  oldContent: string
+  newContent: string
+  additions: number
+  deletions: number
+}
+
+export interface ParsedDiffResult {
+  files: ParsedDiffFile[]
+  summary: { additions: number; deletions: number; filesChanged: number }
+}
+```
+
+`reconstructContent` 从 hunks 中分别重建 old/new 侧的完整文件内容，供 `DiffFileEditor` 编辑使用。

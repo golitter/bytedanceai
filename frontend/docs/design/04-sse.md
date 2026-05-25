@@ -153,6 +153,8 @@ export async function fetchConversations(): Promise<Conversation[]> {
         lastActiveAt: s.updated_at,
         taskTitle: detail.task.title,
         status: s.status,
+        avatarUrl: s.avatar_url || undefined,
+        repoPath: detail.task.repo_path || undefined,
       })
     }
   }

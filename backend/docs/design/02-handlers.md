@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 6 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、头像上传和 SSE 流式订阅，构成完整的 RESTful API 层。
+基于 Gin 框架实现了 8 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、头像上传、SSE 流式订阅、Diff 快照和工作区代理，构成完整的 RESTful API 层。
 
 ## 怎么实现的
 
@@ -277,3 +277,66 @@ func splitContent(text string, maxLen int) []string {
 	return chunks
 }
 ```
+
+### Diff 快照 (`internal/handler/diff_snapshot.go`)
+
+`DiffSnapshotHandler` 管理 Diff 快照的读取和 Upsert。
+
+```go
+type DiffSnapshotHandler struct{}
+```
+
+**GetDiffSnapshot** — 按 snapshot_id 查询快照，前端 DiffCard 加载时调用：
+
+```go
+func (h *DiffSnapshotHandler) GetDiffSnapshot(c *gin.Context) {
+	snapshotID := c.Param("snapshotId")
+	var snap model.DiffSnapshot
+	if err := db.GetDB().Where("snapshot_id = ?", snapshotID).First(&snap).Error; err != nil {
+		vo.NotFound(c, "snapshot not found")
+		return
+	}
+	vo.OK(c, snap)
+}
+```
+
+**SaveDiffSnapshot** — Upsert 保存快照。终态（committed/reverted/cancelled）的快照不可覆盖（返回 409）。同一 session 新建 pending 快照时自动取消同 session 的其他 pending 快照：
+
+```go
+if req.Status == "pending" {
+	d.Model(&model.DiffSnapshot{}).
+		Where("session_id = ? AND snapshot_id != ? AND status = ?", req.SessionID, snapshotID, "pending").
+		Update("status", "cancelled")
+}
+```
+
+### 工作区代理 (`internal/handler/workspace.go`)
+
+`WorkspaceHandler` 通过闭包注入 `agentend_client.Client`，将前端请求代理到 AgentEnd 的工作区 API。提供两类路由：
+
+**直接工作区路由**（`/api/workspace/:id/...`）— 直接使用 workspace ID：
+
+```go
+ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
+ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
+ws.GET("/:id/diff", workspaceHandler.GetDiff)
+ws.POST("/:id/commit", workspaceHandler.Commit)
+ws.POST("/:id/revert", workspaceHandler.Revert)
+ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
+ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
+```
+
+**Session 路由**（`/api/session/:sessionId/...`）— 先通过 `resolveWorkspaceID` 查询 AgentEnd 获取 workspace ID，再代理：
+
+```go
+func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) {
+	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", h.agentClient.BaseURL(), sessionID)
+	resp, err := http.DefaultClient.Get(url)
+	// ...
+	var ws struct { ID string `json:"id"` }
+	json.NewDecoder(resp.Body).Decode(&ws)
+	return ws.ID, nil
+}
+```
+
+`proxy` 方法为通用代理函数，转发请求到 AgentEnd 并流式回传响应（通过 `io.Copy`）。

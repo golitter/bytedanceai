@@ -46,7 +46,7 @@ docs/
 
 ### dev-plan/（独立保留）
 
-- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-4，串行叠代）
+- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7，串行叠代）
 
 ## 子项目 docs/
 

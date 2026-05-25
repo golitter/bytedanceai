@@ -75,6 +75,43 @@ type Message struct {
 - `LastSeq`：Redis Stream 的最后消费位置，用于断线重连时从 MySQL 历史恢复后跳过已消费事件
 - `Status`：`streaming`（流式中） / `completed` / `failed`
 
+### DiffSnapshot — Diff 快照 (`internal/model/diff_snapshot.go`)
+
+DiffSnapshot 记录工作区文件变更的快照，由前端 DiffCard 持久化。同一 session 的 pending 快照自动取消。
+
+```go
+type DiffSnapshot struct {
+    ID          uint      `gorm:"primarykey" json:"id"`
+    SnapshotID  string    `gorm:"uniqueIndex;size:36" json:"snapshot_id"`
+    SessionID   string    `gorm:"index;size:128" json:"session_id"`
+    DiffContent string    `gorm:"type:longtext" json:"diff_content"`
+    Status      string    `gorm:"size:16;default:pending" json:"status"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+```
+
+- `SnapshotID`：UUID，前端生成的唯一标识
+- `SessionID`：关联的会话
+- `DiffContent`：unified diff 文本（longtext）
+- `Status`：`pending` → `committed` / `reverted` / `cancelled`（终态不可变）
+
+### SessionAgent — 会话 Agent 关联 (`internal/model/session_agent.go`)
+
+SessionAgent 将 Agent 信息从 Session 中拆出独立存储，支持同一会话关联多个 Agent。
+
+```go
+type SessionAgent struct {
+    ID        uint      `gorm:"primarykey" json:"id"`
+    SessionID string    `gorm:"uniqueIndex;size:128" json:"session_id"`
+    AgentType string    `gorm:"size:64" json:"agent_type"`
+    AgentName string    `gorm:"size:128" json:"agent_name"`
+    AvatarURL string    `gorm:"size:512" json:"avatar_url,omitempty"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
 ### 实体关系
 
 ```
@@ -88,4 +125,7 @@ Task 1:N Session 1:N Message
   │                    │
   └────────────────────┘  通过 task_id / session_id 字段关联，
                           未使用 GORM 外键约束（软关联）
+
+Session 1:N SessionAgent (session_id 关联)
+Session 1:N DiffSnapshot (session_id 关联)
 ```

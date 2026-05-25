@@ -9,14 +9,14 @@ cmd/server/main.go            # 入口
 configs/config.yaml           # 配置文件
 internal/
 ├── conf/                     # 配置加载
-├── handler/                  # HTTP 处理器（task, session, message, agent, avatar, stream）
+├── handler/                  # HTTP 处理器（task, session, message, agent, avatar, stream, diff_snapshot, workspace）
 ├── stream/                   # SSE 流式写入（Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, cors, logger）
-├── model/                    # 数据模型（task, session, message）
+├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 ├── vo/                       # 统一响应封装
 ├── controller/impl/          # （预留）
-├── dao/                      # （预留）
+├── dao/                      # DAO 层（gorm/, mock/）
 └── service/impl/             # （预留）
 pkg/
 ├── db/                       # MySQL 单例连接

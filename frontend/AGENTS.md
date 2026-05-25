@@ -11,6 +11,8 @@ src/
 ├── components/
 │   ├── chat/               # 聊天模块
 │   ├── im/                 # 会话列表模块
+│   ├── cards/              # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
+│   ├── diff/               # Diff 查看器（多文件 tab + CodeMirror 编辑）
 │   ├── markdown/           # Markdown 渲染
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/
@@ -18,7 +20,7 @@ src/
 ├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations 等）
 ├── stores/
 │   └── chat.ts             # Zustand Store
-├── lib/                    # 工具库（api, sse, constants, utils）
+├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, diff-parser）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```
 

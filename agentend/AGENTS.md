@@ -7,10 +7,11 @@
 
 ```
 src/
-├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Orchestrator）
+├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
 ├── api/v1/                  # API 路由（agent, session, workspace, validate, health, pin）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
+├── preview/                 # 工作区预览服务（aiohttp 静态文件服务器）
 ├── rules/                   # 规则引擎（Safety / Scope / Taskctl）
 ├── schemas/                 # 数据模型（request, response, events）
 ├── session/                 # 会话管理（状态机 + 持久化）

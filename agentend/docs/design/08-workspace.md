@@ -490,10 +490,18 @@ Shutdown:
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/v1/workspace/create` | 创建 workspace |
+| GET | `/v1/workspace/{id}/files/{path}` | 读取文件 |
+| PUT | `/v1/workspace/{id}/files/{path}` | 写入文件 |
+| GET | `/v1/workspace/{id}/diff` | 获取 diff |
 | POST | `/v1/workspace/{id}/commit` | 提交变更 |
-| POST | `/v1/workspace/{id}/merge` | 合并分支 |
+| POST | `/v1/workspace/{id}/revert` | 撤销变更（`git checkout HEAD -- .`） |
+| POST | `/v1/workspace/{id}/merge` | 合并分支（默认合到 task branch） |
+| POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
+| POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
+| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并 task branch 到 main |
 | DELETE | `/v1/workspace/{id}` | 清理 workspace |
 | GET | `/v1/workspace` | 列出所有 workspace |
+| GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找 workspace |
 
 ---
 

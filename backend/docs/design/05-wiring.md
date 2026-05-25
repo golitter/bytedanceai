@@ -23,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -53,10 +53,13 @@ sessionHandler := handler.NewSessionHandler()
 messageHandler := handler.NewMessageHandler()
 avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 streamHandler := handler.NewStreamHandler()
+workspaceHandler := handler.NewWorkspaceHandler(agentClient)
+diffSnapshotHandler := handler.NewDiffSnapshotHandler()
 ```
 
 - `TaskHandler` 依赖 `agentend_client.Client`（转发 run 和 validate-repo-path）
 - `AvatarHandler` 依赖 `qiniu.Uploader`（头像上传）
+- `WorkspaceHandler` 依赖 `agentend_client.Client`（代理工作区操作到 AgentEnd）
 - 其余 Handler 无外部依赖
 
 ### 中间件
@@ -105,6 +108,32 @@ api := r.Group("/api")
 
 	api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 	api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+
+	// Diff snapshot routes
+	api.GET("/diff-snapshots/:snapshotId", diffSnapshotHandler.GetDiffSnapshot)
+	api.PUT("/diff-snapshots/:snapshotId", diffSnapshotHandler.SaveDiffSnapshot)
+
+	// Workspace proxy routes (by workspace ID)
+	ws := api.Group("/workspace")
+	{
+		ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
+		ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
+		ws.GET("/:id/diff", workspaceHandler.GetDiff)
+		ws.POST("/:id/commit", workspaceHandler.Commit)
+		ws.POST("/:id/revert", workspaceHandler.Revert)
+		ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
+		ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
+	}
+
+	// Session-level workspace proxy routes
+	ss := api.Group("/session")
+	{
+		ss.GET("/:sessionId/files/*filepath", workspaceHandler.SessionFileRead)
+		ss.PUT("/:sessionId/files/*filepath", workspaceHandler.SessionFileWrite)
+		ss.GET("/:sessionId/diff", workspaceHandler.SessionGetDiff)
+		ss.POST("/:sessionId/commit", workspaceHandler.SessionCommit)
+		ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
+	}
 }
 ```
 

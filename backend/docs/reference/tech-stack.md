@@ -36,6 +36,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 | 库 | 版本 | 用途 |
 |----|------|------|
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
+| joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
 配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云配置段。支持环境变量覆盖（如七牛云 access_key）。
 
@@ -80,10 +81,10 @@ backend/
 │   └── config.yaml          # 配置文件
 ├── internal/
 │   ├── conf/                # 配置加载
-│   ├── handler/             # HTTP 处理器（task, session, message, agent, avatar, stream）
+│   ├── handler/             # HTTP 处理器（task, session, message, agent, avatar, stream, diff_snapshot, workspace）
 │   ├── stream/              # SSE 流式写入（Redis Stream → MySQL 批量刷写）
 │   ├── middleware/           # 中间件（auth, cors, logger）
-│   ├── model/               # 数据模型（task, session, message）
+│   ├── model/               # 数据模型（task, session, message, diff_snapshot, session_agent）
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
 │   ├── vo/                  # 统一响应封装
 │   ├── controller/impl/     # （预留）
