@@ -16,7 +16,8 @@ bytedanceai/
 │   ├── design/    #   架构设计（三层架构设计）
 │   ├── reference/ #   参考文档（skills）
 │   ├── guides/    #   操作指南（Git 规范、Makefile 指南、契约层说明）
-│   └── testing/   #   测试手册
+│   ├── testing/   #   测试手册
+│   └── common/    #   开发路线图（dev-plan）
 ├── scripts/       # 工程脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）

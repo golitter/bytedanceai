@@ -1,6 +1,6 @@
 # AGENTS.md — backend
 
-基于 Go Gin + GORM + MySQL 的后端服务，采用分层架构（handler / model / stream / vo），YAML 配置加载，JWT 认证中间件，Redis Stream 实时消息中转，七牛云存储头像上传。Go >=1.22，热重载使用 Air。
+基于 Go Gin + GORM + MySQL 的后端服务，采用分层架构（handler / model / stream / vo），YAML 配置加载，JWT 认证中间件，Redis Stream 实时消息中转，七牛云存储头像上传。Go >=1.26，热重载使用 Air。
 
 ## 目录结构
 
@@ -41,4 +41,4 @@ make tidy                   # go mod tidy
 
 ## 详细文档
 
-- 技术栈详情：[docs/reference/tech-stack.md](docs/reference/tech-stack.md)
+详见 [docs/reference/details.md](docs/reference/details.md)。

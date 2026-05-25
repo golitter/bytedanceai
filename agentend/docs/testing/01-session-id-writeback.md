@@ -27,7 +27,7 @@ rm -rf /Users/yanghao/Lab/vscode/worktrees/
 不应传 `--session`，CLI 自建 session，INIT 事件回写 mapping。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/agent/execute \
+curl -s -X POST http://localhost:8001/v1/agent/execute \
   -H 'Content-Type: application/json' \
   -d '{
     "session_id": "test-001",
@@ -49,7 +49,7 @@ cat agentend/logs/session_mappings.json
 传 `--session <ses_xxx> --fork`，CLI 复用 session。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/agent/execute \
+curl -s -X POST http://localhost:8001/v1/agent/execute \
   -H 'Content-Type: application/json' \
   -d '{
     "session_id": "test-001",
@@ -65,13 +65,13 @@ curl -s -X POST http://localhost:8000/v1/agent/execute \
 不应传 `--session-id`，CLI 自建 session，INIT 事件回写 mapping。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/agent/execute \
+curl -s -X POST http://localhost:8001/v1/agent/execute \
   -H 'Content-Type: application/json' \
   -d '{
     "session_id": "test-002",
     "task_id": "task-002",
     "message": "say hello",
-    "agent_type": "claudecode",
+    "agent_type": "claude-code",
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
   }' | python3 -m json.tool
 ```
@@ -87,13 +87,13 @@ cat agentend/logs/session_mappings.json
 传 `--resume <id>`，CLI 复用 session。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/agent/execute \
+curl -s -X POST http://localhost:8001/v1/agent/execute \
   -H 'Content-Type: application/json' \
   -d '{
     "session_id": "test-002",
     "task_id": "task-002",
     "message": "what did I just say?",
-    "agent_type": "claudecode",
+    "agent_type": "claude-code",
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
   }' | python3 -m json.tool
 ```

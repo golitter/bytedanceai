@@ -41,7 +41,7 @@ rm -rf /Users/yanghao/Lab/vscode/worktrees/
 创建 workspace 后应自动生成 task 分支、agent 分支、worktree 目录，并写入 `allowed_tools` 配置。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/workspace/create \
+curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
@@ -99,7 +99,7 @@ cat agentend/logs/workspaces.json | python3 -m json.tool
 同一 task 下创建第二个 agent workspace，task 分支应复用。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/workspace/create \
+curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
@@ -144,7 +144,7 @@ cat /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb/.git/info/exclude
 # 记录上一步返回的 workspace_id（Claude Code 那个）
 WS_CLAUDE="<workspace_id>"
 
-curl -s -X POST "http://localhost:8000/v1/workspace/${WS_CLAUDE}/commit" \
+curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/commit" \
   -H 'Content-Type: application/json' \
   -d '{"message": "feat: test commit"}' | python3 -m json.tool
 ```
@@ -160,7 +160,7 @@ git log --oneline -1
 无变更时 commit 应返回 `false`：
 
 ```bash
-curl -s -X POST "http://localhost:8000/v1/workspace/${WS_CLAUDE}/commit" \
+curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/commit" \
   -H 'Content-Type: application/json' \
   -d '{"message": "should be skipped"}' | python3 -m json.tool
 # {"success": false}
@@ -171,7 +171,7 @@ curl -s -X POST "http://localhost:8000/v1/workspace/${WS_CLAUDE}/commit" \
 将 agent 分支合并到 task 分支，workspace 状态应保持 ACTIVE。
 
 ```bash
-curl -s -X POST "http://localhost:8000/v1/workspace/${WS_CLAUDE}/merge" \
+curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/merge" \
   -H 'Content-Type: application/json' \
   -d '{"target_branch": "task/task-001"}' | python3 -m json.tool
 # {"success": true}
@@ -208,13 +208,13 @@ cd /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb && git add -A && git co
 # 先 merge aaa 成功
 WS_OPENCODE="<opencode_workspace_id>"
 
-curl -s -X POST "http://localhost:8000/v1/workspace/${WS_CLAUDE}/merge" \
+curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/merge" \
   -H 'Content-Type: application/json' \
   -d '{"target_branch": "task/task-001"}' | python3 -m json.tool
 # {"success": true}
 
 # 再 merge bbb 应冲突失败
-curl -s -X POST "http://localhost:8000/v1/workspace/${WS_OPENCODE}/merge" \
+curl -s -X POST "http://localhost:8001/v1/workspace/${WS_OPENCODE}/merge" \
   -H 'Content-Type: application/json' \
   -d '{"target_branch": "task/task-001"}' | python3 -m json.tool
 # {"success": false, "error": "merge conflict"}
@@ -233,7 +233,7 @@ git show task/task-001:conflict.txt
 将 task 分支合并到 main。
 
 ```bash
-curl -s -X POST "http://localhost:8000/v1/workspace/task/task-001/merge-to-main" \
+curl -s -X POST "http://localhost:8001/v1/workspace/task/task-001/merge-to-main" \
   -H 'Content-Type: application/json' \
   -d '{"repo_path": "/Users/yanghao/Lab/vscode/gormlab"}' | python3 -m json.tool
 # {"success": true}
@@ -252,7 +252,7 @@ git log main --oneline -5
 删除 agent worktree 和分支，状态变为 CLEANED。
 
 ```bash
-curl -s -X DELETE "http://localhost:8000/v1/workspace/${WS_CLAUDE}" | python3 -m json.tool
+curl -s -X DELETE "http://localhost:8001/v1/workspace/${WS_CLAUDE}" | python3 -m json.tool
 # {"success": true}
 ```
 
@@ -283,7 +283,7 @@ cat agentend/logs/workspaces.json | python3 -m json.tool
 清理 task 下剩余 workspace 时，task 分支也应一并删除。
 
 ```bash
-curl -s -X DELETE "http://localhost:8000/v1/workspace/${WS_OPENCODE}" | python3 -m json.tool
+curl -s -X DELETE "http://localhost:8001/v1/workspace/${WS_OPENCODE}" | python3 -m json.tool
 ```
 
 验证 task 分支已删除：
@@ -297,7 +297,7 @@ git branch | grep task-001
 ### 9. 列出所有 Workspace
 
 ```bash
-curl -s http://localhost:8000/v1/workspace | python3 -m json.tool
+curl -s http://localhost:8001/v1/workspace | python3 -m json.tool
 # 应返回所有 workspace 列表，包含 id/task_id/session_id/status 等字段
 ```
 
@@ -311,7 +311,7 @@ curl -s http://localhost:8000/v1/workspace | python3 -m json.tool
 
 ```bash
 # 并发发起
-curl -s -X POST http://localhost:8000/v1/workspace/create \
+curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
@@ -321,7 +321,7 @@ curl -s -X POST http://localhost:8000/v1/workspace/create \
     "agent_type": "claude-code"
   }' &
 
-curl -s -X POST http://localhost:8000/v1/workspace/create \
+curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
@@ -351,40 +351,39 @@ git branch | grep task-concurrent
 
 ```bash
 # 先清理并发测试环境
-curl -s -X DELETE "http://localhost:8000/v1/workspace/<sess-c1-id>"
-curl -s -X DELETE "http://localhost:8000/v1/workspace/<sess-c2-id>"
+curl -s -X DELETE "http://localhost:8001/v1/workspace/<sess-c1-id>"
+curl -s -X DELETE "http://localhost:8001/v1/workspace/<sess-c2-id>"
 ```
 
 ---
 
 ## TTL 测试
 
-### 12. TTL 过期自动清理
+### 12. Inactive session 自动清理
 
-设置较短 TTL 启动服务，等待 workspace 过期后被自动清理。
+workspace 清理由 DB inactive session 查询驱动。当 sessions 表中 session 状态变为 `inactive` 时，下一个清理周期会自动清理对应的 workspace。
 
-```bash
-# 启动服务时设置环境变量
-WORKSPACE_TTL_SECONDS=5 WORKSPACE_TTL_CHECK_INTERVAL=3 python -m src.app.main
-```
-
-创建 workspace 后等待 > 5 秒：
+前置条件：MySQL 中 `sessions` 表包含该 session 且 `status = 'inactive'`。
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/workspace/create \
+# 1. 创建 workspace
+curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
     "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
-    "task_id": "task-ttl",
+    "task_id": "task-inactive",
     "agent_name": "test",
-    "session_id": "sess-ttl",
+    "session_id": "sess-inactive",
     "agent_type": "claude-code"
   }' | python3 -m json.tool
 
-# 等待 10 秒
-sleep 10
+# 2. 在 DB 中将该 session 标记为 inactive
+# UPDATE sessions SET status = 'inactive' WHERE session_id = 'sess-inactive';
 
-# 验证已清理
+# 3. 等待清理周期（cleanup_interval 秒，来自 config.yaml）
+# 服务日志应输出: Inactive cleanup: scanned 1 sessions, cleaned 1 sessions, cleaned 0 tasks
+
+# 4. 验证已清理
 cat agentend/logs/workspaces.json | python3 -m json.tool
-# status 应为 "cleaned"
+# 对应 workspace status 应为 "cleaned"
 ```

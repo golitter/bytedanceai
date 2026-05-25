@@ -43,27 +43,25 @@ contracts/
 
 ## Pre-commit Hook
 
-`.husky/pre-commit` 包含三个阶段：
+`.husky/pre-commit` 包含两个阶段：
 
 1. **lint-staged** — 代码格式检查
 2. **契约变更检测** — 检测 staged 文件是否涉及契约相关目录，触发时自动运行 `make generate` 并暂存
-3. **Secret 验证** — 从 `/dev/tty` 读取用户输入，与 `.husky/.commit-secret` 对比
 
 ### 契约相关目录
 
-以下目录的文件变更会触发契约检测：
+监视路径配置在 `contracts/.watch-paths` 文件中（每行一个模式），pre-commit hook 从该文件读取。当前监视的目录：
 
 - `agentend/src/schemas/`
 - `agentend/src/api/`
 - `agentend/src/adapters/`
-- `backend/internal/model/`、`handler/`、`types/`
-- `frontend/src/types/`、`src/api/`
+- `backend/internal/model/`
+- `backend/internal/handler/`
+- `backend/internal/types/`
+- `frontend/src/types/`
+- `frontend/src/api/`
 - `contracts/`
 
 ### Secret 配置
 
-```bash
-echo 'your-secret' > .husky/.commit-secret
-```
-
-该文件已在 `.gitignore` 中，不会被提交。
+> 已移除。当前 pre-commit hook 不包含 Secret 验证阶段。

@@ -5,7 +5,7 @@
 | 子项目 | 包管理器 | 说明 |
 |--------|---------|------|
 | 根目录 | pnpm | Husky / commitlint / lint-staged |
-| frontend | pnpm | Next.js 生态 |
+| frontend | pnpm | React + Vite 生态 |
 | backend | go mod | Go 模块管理 |
 | agentend | uv | Python 依赖管理 |
 
@@ -84,7 +84,7 @@ pnpm install
 ```bash
 cd frontend
 
-# Tailwind
+# Tailwind CSS
 pnpm add -D tailwindcss @tailwindcss/vite
 
 # React Router
@@ -99,6 +99,12 @@ pnpm add @tanstack/react-query
 # shadcn/ui（按提示选择 TypeScript + Tailwind）
 npx shadcn@latest init
 npx shadcn@latest add button card input dialog
+
+# 代码高亮
+pnpm add shiki
+
+# Markdown 渲染
+pnpm add react-markdown remark-gfm
 ```
 
 ### 启动
@@ -126,13 +132,14 @@ pnpm dev
 |------|------|
 | gin-gonic/gin | HTTP 框架 |
 | gorm.io/gorm + gorm.io/driver/mysql | ORM + MySQL 驱动 |
-| spf13/viper | 配置管理 |
-| go.uber.org/zap | 结构化日志 |
+| gopkg.in/yaml.v3 | 配置解析（YAML → struct） |
 | golang-jwt/jwt/v5 | JWT 认证 |
 | go-playground/validator/v10 | 参数校验 |
 | google/uuid | UUID 生成 |
 | joho/godotenv | 环境变量加载 |
 | gin-contrib/cors | CORS 中间件 |
+| qiniu/go-sdk/v7 | 七牛云文件上传 |
+| redis/go-redis/v9 | Redis 客户端 |
 
 ### 初始化
 
@@ -142,19 +149,20 @@ go mod init agenthub/backend
 go get github.com/gin-gonic/gin \
        gorm.io/gorm \
        gorm.io/driver/mysql \
-       go.uber.org/zap \
-       github.com/spf13/viper \
-       github.com/google/uuid \
-       github.com/go-playground/validator/v10 \
+       gopkg.in/yaml.v3 \
        github.com/golang-jwt/jwt/v5 \
+       github.com/google/uuid \
        github.com/joho/godotenv \
-       github.com/gin-contrib/cors
+       github.com/gin-contrib/cors \
+       github.com/qiniu/go-sdk/v7 \
+       github.com/redis/go-redis/v9
 ```
 
 ### 启动
 
 ```bash
 cd backend
-go run cmd/server/main.go
+air  # 热重载模式（需安装 air）
+# 或 go run cmd/server/main.go
 ```
 

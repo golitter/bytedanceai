@@ -1,0 +1,127 @@
+# Wiring — 应用组装
+
+## 实现了什么
+
+`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移、Handler 依赖注入、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。
+
+## 怎么实现的
+
+### 初始化链 (`cmd/server/main.go`)
+
+按依赖顺序依次初始化：配置 -> MySQL -> AutoMigrate -> Redis -> 清理残留消息。
+
+```go
+func main() {
+	cfg, err := conf.Load("configs/config.yaml")
+	if err != nil {
+		slog.Error("load config", "error", err)
+		os.Exit(1)
+	}
+
+	if err := db.Init(&cfg.MySQL); err != nil {
+		slog.Error("init db", "error", err)
+		os.Exit(1)
+	}
+
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}); err != nil {
+		slog.Error("auto migrate", "error", err)
+		os.Exit(1)
+	}
+
+	if err := redis.Init(&cfg.Redis); err != nil {
+		slog.Error("init redis", "error", err)
+		os.Exit(1)
+	}
+	defer redis.Close()
+
+	stream.CleanupStaleMessages()
+	// ...
+}
+```
+
+### 依赖注入
+
+通过构造函数闭包注入外部依赖（AgentEnd Client、七牛云 Uploader）到各 Handler：
+
+```go
+agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
+qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
+
+taskHandler := handler.NewTaskHandler(agentClient)
+agentHandler := handler.NewAgentHandler()
+sessionHandler := handler.NewSessionHandler()
+messageHandler := handler.NewMessageHandler()
+avatarHandler := handler.NewAvatarHandler(qiniuUploader)
+streamHandler := handler.NewStreamHandler()
+```
+
+- `TaskHandler` 依赖 `agentend_client.Client`（转发 run 和 validate-repo-path）
+- `AvatarHandler` 依赖 `qiniu.Uploader`（头像上传）
+- 其余 Handler 无外部依赖
+
+### 中间件
+
+```go
+r := gin.New()
+r.Use(middleware.Logger())
+r.Use(middleware.CORS())
+r.Use(gin.Recovery())
+```
+
+CORS 配置允许 `http://localhost:5173`（前端开发服务器）跨域访问：
+
+```go
+func CORS() gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	})
+}
+```
+
+### 路由注册
+
+所有业务路由挂载在 `/api` Group 下：
+
+```go
+api := r.Group("/api")
+{
+	api.POST("/tasks", taskHandler.CreateTask)
+	api.GET("/tasks", taskHandler.ListTasks)
+	api.GET("/tasks/:taskId", taskHandler.GetTask)
+	api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
+
+	api.POST("/tasks/:taskId/run", taskHandler.RunTask)
+	api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
+	api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
+
+	api.GET("/agent-types", agentHandler.ListAgentTypes)
+
+	api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
+	api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
+
+	api.POST("/agents/avatar", avatarHandler.UploadAvatar)
+	api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+}
+```
+
+健康检查端点：
+
+```go
+r.GET("/ping", func(c *gin.Context) {
+	vo.OK(c, gin.H{"message": "pong"})
+})
+```
+
+服务监听：
+
+```go
+slog.Info("server starting", "port", 8080)
+if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {
+	slog.Error("server failed", "error", err)
+	os.Exit(1)
+}
+```

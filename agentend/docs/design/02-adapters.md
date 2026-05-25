@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-统一 Agent 适配器抽象，当前 MVP 实现 `ClaudeCodeAdapter`，通过 CLI subprocess 驱动 Claude Code。
+统一 Agent 适配器抽象，当前实现 `ClaudeCodeAdapter`、`OpenCodeAdapter` 和 `OrchestratorAdapter`，通过 CLI subprocess 驱动或 LLM 调用执行。
 
 ## 怎么实现的
 
@@ -21,11 +21,13 @@ class BaseAgentAdapter(ABC):
 
 ### AdapterRegistry (`src/adapters/registry.py`)
 
-通过 agent 类型名称注册和查找 Adapter 类：
+通过 AgentType 枚举注册和查找 Adapter 类：
 
 ```python
-registry.register("claude-code", ClaudeCodeAdapter)
-adapter_cls = registry.get("claude-code")  # 返回类，由调用方实例化
+registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)
+registry.register(AgentType.OPENCODE, OpenCodeAdapter)
+registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
+adapter_cls = registry.get(AgentType.CLAUDE_CODE)  # 返回类，由调用方实例化
 ```
 
 查找不存在的类型时抛出 `ValueError`。
@@ -39,8 +41,8 @@ adapter_cls = registry.get("claude-code")  # 返回类，由调用方实例化
 将请求参数组装为 CLI 命令：
 
 ```python
-claude -p "<message>" --output-format stream-json \
-    [--session <id>] \
+claude -p "<message>" --output-format stream-json --verbose --include-partial-messages \
+    [--resume <cli_session_id> | --session-id <cli_session_id>] \
     [--append-system-prompt "<text>"] \
     [--allowedTools Read,Write] \
     [--max-turns 20]
@@ -48,7 +50,9 @@ claude -p "<message>" --output-format stream-json \
 
 参数来源：
 - `-p`：用户消息
-- `--session`：复用会话（对应 request.session_id）
+- `--verbose`：输出 system init 事件（含 CLI session_id）
+- `--include-partial-messages`：token 级流式输出（stream_event 类型）
+- `--resume` / `--session-id`：复用或新建会话（对应 SessionMappingStore 映射）
 - `--append-system-prompt`：Rule Engine 注入的约束文本
 - `--allowedTools`：Rule Engine 限制的工具集
 - `--max-turns`：执行轮数限制
@@ -57,26 +61,33 @@ claude -p "<message>" --output-format stream-json \
 
 逐行读取 CLI 的 stdout，解析 JSON 并转换为 StreamEvent：
 
-1. 空行 → 忽略
-2. 合法 JSON → 按 `type` 字段映射为对应 StreamEvent
-3. 非法 JSON → 包装为 `text` 类型事件，不抛异常
+1. 空行 → 忽略（返回 None）
+2. `stream_event` 类型 → 提取 `content_block_delta` 中的 text → TEXT 事件（token 级流式）
+3. 合法 JSON → 按 `_TYPE_MAP` 映射为对应 StreamEvent（system→INIT, tool_use→TOOL_CALL 等）
+4. 未映射的 JSON 类型 → 忽略（返回 None）
+5. 非法 JSON → 包装为 TEXT 类型事件，不抛异常
 
 #### 流式调用 (`stream_chat`)
 
 ```python
 async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[StreamEvent]:
     cmd = self._build_command(message, ...)
-    process = await asyncio.create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    process = await asyncio.create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE, cwd=kwargs.get("cwd"))
     self._processes[session_id] = process  # 记录进程句柄
 
     async for line in process.stdout:
-        yield self._parse_stream_line(line.decode())
+        event = self._parse_stream_line(line.decode())
+        if event:
+            yield event
 
     # 进程退出后清理
+    await process.wait()
+    if process.returncode != 0:
+        yield StreamEvent.create(EventType.ERROR, error=stderr)
     self._processes.pop(session_id, None)
 ```
 
-进程通过 `dict[str, Process]` 管理，key 为 session_id。
+进程通过 `dict[str, Process]` 管理，key 为 session_id。支持 `cwd` kwarg 指定工作目录（用于 worktree 隔离）。
 
 #### 同步调用 (`chat`)
 
@@ -85,11 +96,13 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
 #### 中断机制 (`interrupt`)
 
 ```
-SIGTERM → 等待 5 秒 → SIGKILL
+SIGTERM → 等待超时 → SIGKILL
 ```
 
 1. 查找 session 对应的进程
 2. 发送 SIGTERM
-3. `asyncio.wait_for(process.wait(), timeout=5)`
+3. `asyncio.wait_for(process.wait(), timeout=config.execution.process_terminate_timeout)`
 4. 超时则发送 SIGKILL
 5. 从 `_processes` 中移除
+
+超时时长来自 `config.yaml` 的 `execution.process_terminate_timeout`。

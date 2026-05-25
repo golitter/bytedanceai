@@ -131,9 +131,9 @@ curl -s -X POST http://localhost:8080/api/tasks \
 
 ### 3.0 页面导航
 
-1. 访问 `http://localhost:5173/tasks` → 任务列表页
-2. 点击某个 task 卡片 → 进入 `/tasks/:taskId` 详情页
-3. 详情页展示该 task 下的所有 session
+1. 访问 `http://localhost:5173` → 主页面（左侧会话列表 + 右侧聊天区）
+2. 左侧 ConversationList 展示所有会话，每个会话对应一个 task
+3. 点击某个会话 → 右侧聊天区展示该会话的消息
 
 ### 3.1 停用按钮可见
 

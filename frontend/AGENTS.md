@@ -37,4 +37,4 @@ make status                # 查看状态
 
 ## 详细文档
 
-- 技术栈详情：[docs/reference/tech-stack.md](docs/reference/tech-stack.md)
+详见 [docs/reference/details.md](docs/reference/details.md)。

@@ -32,15 +32,12 @@
 | 库 | 版本 | 用途 |
 |----|------|------|
 | shadcn/ui (radix-nova 风格) | ^4.8.0 | 组件生成器（非运行时依赖） |
-| radix-ui | ^1.4.3 | 无障碍原语组件 |
-| @radix-ui/react-dialog | ^1.1.15 | Dialog 组件底层 |
-| @radix-ui/react-slot | ^1.2.4 | Slot 模式支持 |
-| class-variance-authority (cva) | ^0.7.1 | 组件变体管理 |
+| @radix-ui/react-dialog | ^1.1.15 | Dialog 组件底层（无障碍原语） |
 | clsx | ^2.1.1 | 条件 className 合并 |
 | tailwind-merge | ^3.6.0 | Tailwind class 冲突合并 |
 | lucide-react | ^1.16.0 | 图标库 |
 
-已安装的 shadcn/ui 组件：Button、Card、Input、Dialog。
+已安装的 shadcn/ui 组件：Dialog。
 
 ## 状态管理
 
@@ -50,7 +47,7 @@
 | @tanstack/react-query | ^5.100.11 | 服务端状态管理 + 数据缓存 |
 | @tanstack/react-virtual | ^3.13.25 | 虚拟滚动（消息列表性能优化） |
 
-Store 位于 `src/stores/chat.ts`，管理聊天导航、会话消息、流式状态。QueryClient 在 `main.tsx` 中注入。
+Store 位于 `src/stores/chat.ts`，管理聊天导航（currentSessionId）及各会话独立的消息/流式状态。QueryClient 在 `main.tsx` 中注入。
 
 ## Markdown 与代码高亮
 

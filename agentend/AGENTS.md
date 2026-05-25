@@ -40,4 +40,4 @@ make status                # 查看状态
 
 ## 详细文档
 
-- API 端点、核心架构、配置：[docs/reference/details.md](docs/reference/details.md)
+详见 [docs/reference/details.md](docs/reference/details.md)。
