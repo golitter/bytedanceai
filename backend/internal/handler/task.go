@@ -57,15 +57,25 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	for _, agent := range req.Agents {
+		sid := uuid.New().String()
 		s := model.Session{
-			SessionID: uuid.New().String(),
+			SessionID: sid,
 			TaskID:    t.TaskID,
 			AgentType: agent.Type,
 			AgentName: agent.Name,
 			Status:    "active",
 		}
+		sa := model.SessionAgent{
+			SessionID: sid,
+			AgentType: agent.Type,
+			AgentName: agent.Name,
+		}
 		if err := db.GetDB().Create(&s).Error; err != nil {
 			vo.InternalError(c, "failed to create session")
+			return
+		}
+		if err := db.GetDB().Create(&sa).Error; err != nil {
+			vo.InternalError(c, "failed to create session agent")
 			return
 		}
 	}
@@ -91,9 +101,42 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 	}
 	var sessions []model.Session
 	db.GetDB().Where("task_id = ?", taskID).Find(&sessions)
+
+	// Fetch session_agents for all sessions
+	sessionIDs := make([]string, 0, len(sessions))
+	for _, s := range sessions {
+		sessionIDs = append(sessionIDs, s.SessionID)
+	}
+
+	var agents []model.SessionAgent
+	if len(sessionIDs) > 0 {
+		db.GetDB().Where("session_id IN ?", sessionIDs).Find(&agents)
+	}
+	agentMap := make(map[string]model.SessionAgent)
+	for _, a := range agents {
+		agentMap[a.SessionID] = a
+	}
+
+	type SessionWithAgent struct {
+		model.Session
+		AgentType string `json:"agent_type"`
+		AgentName string `json:"agent_name"`
+		AvatarURL string `json:"avatar_url,omitempty"`
+	}
+	var result []SessionWithAgent
+	for _, s := range sessions {
+		swa := SessionWithAgent{Session: s}
+		if a, ok := agentMap[s.SessionID]; ok {
+			swa.AgentType = a.AgentType
+			swa.AgentName = a.AgentName
+			swa.AvatarURL = a.AvatarURL
+		}
+		result = append(result, swa)
+	}
+
 	vo.OK(c, gin.H{
 		"task":     t,
-		"sessions": sessions,
+		"sessions": result,
 	})
 }
 
@@ -154,8 +197,16 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			AgentType: agentType,
 			Status:    "running",
 		}
+		sa := model.SessionAgent{
+			SessionID: req.SessionID,
+			AgentType: agentType,
+		}
 		if err := db.GetDB().Create(&session).Error; err != nil {
 			vo.InternalError(c, err.Error())
+			return
+		}
+		if err := db.GetDB().Create(&sa).Error; err != nil {
+			vo.InternalError(c, "failed to create session agent")
 			return
 		}
 	} else if err != nil {
