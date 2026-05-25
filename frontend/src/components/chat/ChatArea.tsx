@@ -108,6 +108,7 @@ export function ChatArea({
           isStreaming={isStreaming}
           avatarUrl={avatarUrl}
           agentName={agentName}
+          sessionId={sessionId}
         />
       )}
 

@@ -5,20 +5,21 @@ import DiffViewer from 'react-diff-viewer-continued'
 const API_BASE = '/api'
 
 interface DiffCardProps {
-  workspaceId: string
+  sessionId?: string
   initialDiff?: string
 }
 
-export function DiffCard({ workspaceId, initialDiff }: DiffCardProps) {
+export function DiffCard({ sessionId, initialDiff }: DiffCardProps) {
   const [diff, setDiff] = useState<string | null>(initialDiff ?? null)
-  const [loading, setLoading] = useState(!initialDiff)
+  const [loading, setLoading] = useState(!initialDiff && !!sessionId)
   const [error, setError] = useState<string | null>(null)
 
   async function refresh() {
+    if (!sessionId) return
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/workspace/${workspaceId}/diff`)
+      const res = await fetch(`${API_BASE}/session/${sessionId}/diff`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setDiff(await res.text())
     } catch (e) {
@@ -29,8 +30,9 @@ export function DiffCard({ workspaceId, initialDiff }: DiffCardProps) {
   }
 
   const handleAccept = async () => {
+    if (!sessionId) return
     try {
-      await fetch(`${API_BASE}/workspace/${workspaceId}/commit`, {
+      await fetch(`${API_BASE}/session/${sessionId}/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: 'auto commit' }),
@@ -42,8 +44,9 @@ export function DiffCard({ workspaceId, initialDiff }: DiffCardProps) {
   }
 
   const handleReject = async () => {
+    if (!sessionId) return
     try {
-      await fetch(`${API_BASE}/workspace/${workspaceId}/revert`, {
+      await fetch(`${API_BASE}/session/${sessionId}/revert`, {
         method: 'POST',
       })
       await refresh()

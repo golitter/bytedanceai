@@ -7,18 +7,18 @@ import type { MessageBlock } from '@/lib/block-types'
 
 import { AgentAvatar } from './AgentAvatar'
 
-function BlockRenderer({ block, workspaceId }: { block: MessageBlock; workspaceId?: string }) {
+function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: string }) {
   switch (block.type) {
     case 'text':
       return <MarkdownRenderer content={block.content} />
     case 'html-render':
       return <HtmlCard content={block.content} />
     case 'image':
-      return <ImageCard path={block.path} />
+      return <ImageCard path={block.path} sessionId={sessionId} />
     case 'attachment':
-      return <AttachmentCard path={block.path} />
+      return <AttachmentCard path={block.path} sessionId={sessionId} />
     case 'diff':
-      return workspaceId ? <DiffCard workspaceId={workspaceId} /> : null
+      return sessionId ? <DiffCard sessionId={sessionId} /> : null
     case 'preview':
       return <PreviewCard url={block.url} />
   }
@@ -27,7 +27,7 @@ function BlockRenderer({ block, workspaceId }: { block: MessageBlock; workspaceI
 interface BaseProps {
   children?: ReactNode
   blocks?: MessageBlock[]
-  workspaceId?: string
+  sessionId?: string
 }
 
 interface UserBubbleProps extends BaseProps {
@@ -83,7 +83,7 @@ export function MessageBubble(props: MessageBubbleProps) {
           <div>
             {hasBlocks
               ? props.blocks!.map((block, i) => (
-                  <BlockRenderer key={i} block={block} workspaceId={props.workspaceId} />
+                  <BlockRenderer key={i} block={block} sessionId={props.sessionId} />
                 ))
               : props.children}
             {props.isStreaming && (

@@ -216,3 +216,14 @@ async def list_workspaces(
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
     return [asdict(ws) for ws in mgr.list()]
+
+
+@router.get("/by-session/{session_id}")
+async def get_workspace_by_session(
+    session_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    for ws in mgr.list():
+        if ws.session_id == session_id and ws.status.value == "active":
+            return asdict(ws)
+    raise HTTPException(status_code=404, detail="No active workspace for this session")

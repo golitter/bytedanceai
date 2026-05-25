@@ -4,12 +4,15 @@ const API_BASE = '/api'
 
 interface ImageCardProps {
   path: string
+  sessionId?: string
 }
 
-export function ImageCard({ path }: ImageCardProps) {
+export function ImageCard({ path, sessionId }: ImageCardProps) {
   const [error, setError] = useState(false)
 
-  if (error) {
+  const fileUrl = sessionId ? `${API_BASE}/session/${sessionId}/files/${path}` : ''
+
+  if (error || !fileUrl) {
     return (
       <div className="my-2 flex items-center justify-center rounded-lg border border-border bg-muted px-4 py-8 text-sm text-muted-foreground">
         图片加载失败
@@ -19,12 +22,7 @@ export function ImageCard({ path }: ImageCardProps) {
 
   return (
     <div className="my-2 overflow-hidden rounded-lg border border-border">
-      <img
-        src={`${API_BASE}/workspace/_placeholder/files/${path}`}
-        alt={path}
-        className="max-w-full"
-        onError={() => setError(true)}
-      />
+      <img src={fileUrl} alt={path} className="max-w-full" onError={() => setError(true)} />
     </div>
   )
 }

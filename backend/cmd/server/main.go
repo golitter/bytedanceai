@@ -93,6 +93,13 @@ func main() {
 			ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
 			ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
 		}
+
+		ss := api.Group("/session")
+		{
+			ss.GET("/:sessionId/files/*filepath", workspaceHandler.SessionFileRead)
+			ss.PUT("/:sessionId/files/*filepath", workspaceHandler.SessionFileWrite)
+			ss.GET("/:sessionId/diff", workspaceHandler.SessionGetDiff)
+		}
 	}
 
 	slog.Info("server starting", "port", 8080)

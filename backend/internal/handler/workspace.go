@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,63 @@ type WorkspaceHandler struct {
 
 func NewWorkspaceHandler(agentClient *agentend_client.Client) *WorkspaceHandler {
 	return &WorkspaceHandler{agentClient: agentClient}
+}
+
+// resolveWorkspaceID 通过 session_id 查询 AgentEnd 获取 workspace ID
+func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) {
+	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", h.agentClient.BaseURL(), sessionID)
+	resp, err := http.DefaultClient.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("agentend unavailable")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("workspace not found for session %s", sessionID)
+	}
+
+	var ws struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&ws); err != nil {
+		return "", fmt.Errorf("invalid workspace response")
+	}
+	return ws.ID, nil
+}
+
+// SessionFileRead 通过 session_id 查找 workspace 后 proxy 文件读取
+func (h *WorkspaceHandler) SessionFileRead(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	filePath := c.Param("filepath")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files/%s", wsID, filePath), nil)
+}
+
+// SessionFileWrite 通过 session_id 查找 workspace 后 proxy 文件写入
+func (h *WorkspaceHandler) SessionFileWrite(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	filePath := c.Param("filepath")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files/%s", wsID, filePath), c.Request.Body)
+}
+
+// SessionGetDiff 通过 session_id 查找 workspace 后 proxy diff
+func (h *WorkspaceHandler) SessionGetDiff(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", wsID), nil)
 }
 
 func (h *WorkspaceHandler) ReadFile(c *gin.Context) {

@@ -15,6 +15,7 @@ interface MessageListProps {
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
+  sessionId?: string
 }
 
 const VIRTUALIZE_THRESHOLD = 50
@@ -26,6 +27,7 @@ export function MessageList({
   isStreaming,
   avatarUrl,
   agentName,
+  sessionId,
 }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -110,6 +112,7 @@ export function MessageList({
                       isStreaming={isStreaming && msg.id === 'streaming'}
                       avatarUrl={avatarUrl}
                       agentName={agentName}
+                      sessionId={sessionId}
                     />
                   </div>
                 </div>
@@ -152,11 +155,13 @@ function MessageRenderer({
   isStreaming,
   avatarUrl,
   agentName,
+  sessionId,
 }: {
   msg: ChatMessage
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
+  sessionId?: string
 }) {
   if (msg.role === 'user') {
     return <MessageBubble variant="user">{msg.content}</MessageBubble>
@@ -172,6 +177,7 @@ function MessageRenderer({
         status={isStreaming ? 'running' : 'ready'}
         isStreaming={isStreaming}
         blocks={msg.blocks}
+        sessionId={sessionId}
       >
         <MarkdownRenderer content={msg.content} />
       </MessageBubble>
