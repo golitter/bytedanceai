@@ -101,6 +101,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 					// normal end
 				case generated.EventTypeError:
 					sawError = true
+					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
+						sw.appendText("[Error] " + errMsg)
+					}
 				}
 			}
 		}

@@ -44,7 +44,11 @@ export function useChatStream(taskId: string, sessionId: string) {
             case EventTypeValues.Error:
               store.streamError(
                 sessionId,
-                new Error((event.content?.message as string) ?? 'Unknown error'),
+                new Error(
+                  (event.content?.error as string) ||
+                    (event.content?.message as string) ||
+                    'Unknown error',
+                ),
               )
               break
           }
