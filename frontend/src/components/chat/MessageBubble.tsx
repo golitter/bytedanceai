@@ -7,6 +7,13 @@ import type { MessageBlock } from '@/lib/block-types'
 
 import { AgentAvatar } from './AgentAvatar'
 
+const AGENT_STRIP_COLORS: Record<string, string> = {
+  'claude-code': 'var(--agent-claude)',
+  opencode: 'var(--agent-opencode)',
+  orchestrator: 'var(--agent-orchestrator)',
+  codex: 'var(--agent-codex)',
+}
+
 function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: string }) {
   switch (block.type) {
     case 'text':
@@ -77,13 +84,13 @@ export function MessageBubble(props: MessageBubbleProps) {
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
-              backgroundColor: `var(--agent-${props.agentType === 'claude-code' ? 'claude' : props.agentType === 'opencode' ? 'opencode' : 'orchestrator'})`,
+              backgroundColor: AGENT_STRIP_COLORS[props.agentType] ?? 'var(--primary)',
             }}
           />
           <div>
             {hasBlocks
-              ? props.blocks!.map((block, i) => (
-                  <BlockRenderer key={i} block={block} sessionId={props.sessionId} />
+              ? props.blocks!.map((block) => (
+                  <BlockRenderer key={block.id} block={block} sessionId={props.sessionId} />
                 ))
               : props.children}
             {props.isStreaming && (

@@ -1,7 +1,7 @@
 export type MessageBlock =
-  | { type: 'text'; content: string }
-  | { type: 'html-render'; content: string }
-  | { type: 'image'; path: string }
-  | { type: 'attachment'; path: string }
-  | { type: 'diff'; snapshotId: string }
-  | { type: 'preview'; url: string }
+  | { type: 'text'; id: string; content: string }
+  | { type: 'html-render'; id: string; content: string }
+  | { type: 'image'; id: string; path: string }
+  | { type: 'attachment'; id: string; path: string }
+  | { type: 'diff'; id: string; snapshotId: string }
+  | { type: 'preview'; id: string; url: string }

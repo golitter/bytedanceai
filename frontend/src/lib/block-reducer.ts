@@ -4,16 +4,20 @@ const BLOCK_MARKER = 'aka_yhy'
 
 const BLOCK_RE = new RegExp('```' + BLOCK_MARKER + '\\n([\\s\\S]*?)```', 'g')
 
+let _blockIdCounter = 0
+function nextBlockId(): string {
+  return `blk-${++_blockIdCounter}`
+}
+
 export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   const blocks: MessageBlock[] = []
   let lastIndex = 0
 
   for (const match of fullText.matchAll(BLOCK_RE)) {
     const matchStart = match.index!
-    // Text before this block
     if (matchStart > lastIndex) {
       const text = fullText.slice(lastIndex, matchStart)
-      if (text) blocks.push({ type: 'text', content: text })
+      if (text) blocks.push({ type: 'text', id: nextBlockId(), content: text })
     }
 
     const inner = match[1].trim()
@@ -21,21 +25,18 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
     if (parsed) {
       blocks.push(parsed)
     } else {
-      // Unknown type → degrade to plain code block
-      blocks.push({ type: 'text', content: match[0] })
+      blocks.push({ type: 'text', id: nextBlockId(), content: match[0] })
     }
 
     lastIndex = matchStart + match[0].length
   }
 
-  // Remaining text after last block
   if (lastIndex < fullText.length) {
-    blocks.push({ type: 'text', content: fullText.slice(lastIndex) })
+    blocks.push({ type: 'text', id: nextBlockId(), content: fullText.slice(lastIndex) })
   }
 
-  // No blocks found → single text block
   if (blocks.length === 0) {
-    return [{ type: 'text', content: fullText }]
+    return [{ type: 'text', id: nextBlockId(), content: fullText }]
   }
 
   return blocks
@@ -50,25 +51,24 @@ function parseBlockContent(inner: string): MessageBlock | null {
 
   switch (blockType) {
     case 'html-render': {
-      // Everything after the type line is the HTML content
       const content = lines.slice(1).join('\n').trim()
-      return { type: 'html-render', content }
+      return { type: 'html-render', id: nextBlockId(), content }
     }
     case 'image': {
       const path = extractField(lines, 'path')
-      return path ? { type: 'image', path } : null
+      return path ? { type: 'image', id: nextBlockId(), path } : null
     }
     case 'attachment': {
       const path = extractField(lines, 'path')
-      return path ? { type: 'attachment', path } : null
+      return path ? { type: 'attachment', id: nextBlockId(), path } : null
     }
     case 'diff': {
       const snapshotId = extractField(lines, 'snapshotId')
-      return snapshotId ? { type: 'diff', snapshotId } : null
+      return snapshotId ? { type: 'diff', id: nextBlockId(), snapshotId } : null
     }
     case 'preview': {
       const url = extractField(lines, 'url')
-      return url ? { type: 'preview', url } : null
+      return url ? { type: 'preview', id: nextBlockId(), url } : null
     }
     default:
       return null

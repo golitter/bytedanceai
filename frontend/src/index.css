@@ -46,9 +46,20 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    --color-bg-canvas: var(--bg-canvas);
+    --color-bg-sidebar: var(--bg-sidebar);
+    --color-bg-card: var(--bg-card);
+    --color-bg-hover: var(--bg-hover);
+    --color-bg-active: var(--bg-active);
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
     --color-tertiary: var(--text-tertiary);
     --color-code-bg: var(--code-bg);
     --color-danger-bg: var(--color-danger-bg);
+    --color-brand: var(--color-brand);
+    --color-success: var(--color-success);
+    --color-warning: var(--color-warning);
+    --color-error: var(--color-error);
     --color-agent-claude: var(--agent-claude);
     --color-agent-opencode: var(--agent-opencode);
     --color-agent-orchestrator: var(--agent-orchestrator);
@@ -124,7 +135,16 @@
     --sidebar-border: rgba(255,255,255,0.06);
     --sidebar-ring: #6366F1;
 
+    --bg-canvas: #0A0B0E;
+    --bg-sidebar: #111318;
+    --bg-card: #1A1D24;
+    --bg-hover: #22262F;
+    --bg-active: #2C313B;
+    --text-primary: #E8EBF0;
+    --text-secondary: #8B91A0;
     --text-tertiary: #5A6070;
+    --color-brand: #6366F1;
+    --color-error: #EF4444;
     --agent-claude: #DA7756;
     --agent-opencode: #10B981;
     --agent-orchestrator: #EAB308;

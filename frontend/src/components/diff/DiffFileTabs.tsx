@@ -16,7 +16,7 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
     <div className="flex overflow-x-auto border-b border-border bg-muted/30">
       {files.map((file, i) => (
         <button
-          key={i}
+          key={file.newPath}
           onClick={() => onSelect(i)}
           title={file.newPath}
           className={clsx(
@@ -27,7 +27,7 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
           )}
         >
           <span className="truncate max-w-32">{getFileName(file.newPath)}</span>
-          <span className="shrink-0 text-[10px]">
+          <span className="shrink-0 text-[11px]">
             {file.additions > 0 && <span className="text-green-500">+{file.additions}</span>}
             {file.additions > 0 && file.deletions > 0 && ' '}
             {file.deletions > 0 && <span className="text-red-500">-{file.deletions}</span>}

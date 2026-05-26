@@ -138,7 +138,7 @@ export function MessageList({
 
       {!autoScroll && (
         <button
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-xl bg-accent transition-colors"
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg bg-accent transition-colors"
           onClick={() => {
             scrollToBottom()
             setAutoScroll(true)
