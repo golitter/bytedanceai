@@ -100,10 +100,11 @@ class Workspace:
     id: str                    # UUID，自动生成
     task_id: str               # 任务 ID
     agent_name: str            # Agent 名称（如 frontend、backend）
+    agent_type: AgentType | None  # Agent 类型（如 claude-code、opencode）
     repo_path: str             # 主仓库路径
     worktree_path: str         # worktree 目录路径（自动生成）
     branch_name: str           # agent 分支名（自动生成）
-    session_id: str | None     # 关联的会话 ID
+    session_id: str            # 关联的会话 ID
     container_id: str | None   # 容器 ID（预留，为后续 Docker 隔离用）
     status: WorkspaceStatus    # 当前状态
     created_at: datetime       # 创建时间
@@ -172,6 +173,7 @@ raw["created_at"] = datetime.fromisoformat(raw["created_at"])  # ISO → datetim
     "id": "uuid-abc",
     "task_id": "task-123",
     "agent_name": "frontend",
+    "agent_type": "claude-code",
     "session_id": "sess-aaa",
     "repo_path": "/repos/project",
     "worktree_path": "/repos/worktrees/task-123/sess-aaa",

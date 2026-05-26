@@ -100,14 +100,19 @@
     --agent-claude: #DA7756;
     --agent-opencode: #10B981;
     --agent-orchestrator: #EAB308;
+    --agent-codex: #6366F1;
     --primary-soft: rgba(99, 102, 241, 0.08);
     --primary-border: rgba(99, 102, 241, 0.15);
     --code-bg: #0D0F14;
     --color-danger-bg: rgba(239, 68, 68, 0.1);
+    --diff-insert-bg: rgba(34, 197, 94, 0.08);
+    --diff-delete-bg: rgba(239, 68, 68, 0.08);
+    --diff-insert-bg-strong: rgba(34, 197, 94, 0.1);
+    --diff-delete-bg-strong: rgba(239, 68, 68, 0.1);
 }
 ```
 
-这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。`--primary-soft` 用于用户消息气泡背景，`--primary-border` 用于用户消息气泡边框。
+这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。`--agent-codex` 使用与品牌色相同的 Indigo 值。`--primary-soft` 用于用户消息气泡背景，`--primary-border` 用于用户消息气泡边框。
 
 ### 字体
 
@@ -165,6 +170,31 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 ```
 
 `ready` 状态使用脉冲动画（2s 周期），`running` 状态使用旋转动画（1.5s 周期）。流式输出的闪烁光标使用 Tailwind 内置 `animate-pulse` + `▌` 字符。
+
+输入校验失败的抖动动画：
+
+```css
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+```
+
+### react-diff-view 主题覆盖
+
+通过 `.diff-card` 选择器覆盖 `react-diff-view` 默认样式，使 Diff 视图融入暗色主题：
+
+```css
+.diff-card .diff-gutter { color: var(--muted-foreground); background: transparent; font-size: 11px; }
+.diff-card .diff-gutter-insert { color: var(--diff-insert-color); background: var(--diff-insert-bg); }
+.diff-card .diff-gutter-delete { color: var(--diff-delete-color); background: var(--diff-delete-bg); }
+.diff-card .diff-code-insert { background: var(--diff-insert-bg-strong); }
+.diff-card .diff-code-delete { background: var(--diff-delete-bg-strong); }
+.diff-card .diff-line { height: 20px; }
+```
 
 ### Hover 交互 (`src/hooks/use-hover-style.ts`)
 

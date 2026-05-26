@@ -68,12 +68,12 @@ agentend/src/skills/builtin/taskctl/
 
 `taskctl` 由 `SkillProvisioner` 自动分发到 agent worktree，流程：
 
-1. `SkillProvisioner.provision()` 读取 `builtin/manifest.yaml`
+1. `SkillProvisioner.provision()` 读取 `config.yaml` 的 `skills.manifest`
 2. 按 manifest 中声明的 `file` / `dir` 列表复制到 `<worktree>/<configDir>/skills/taskctl/`
 3. 已存在的 skill 不会被覆盖
 4. 分发路径自动写入 `.git/info/exclude` 防止提交
 
-manifest 声明（`builtin/manifest.yaml`）：
+manifest 声明（`config.yaml` 的 `skills.manifest`）：
 
 ```yaml
 taskctl:
@@ -117,7 +117,7 @@ GOOS=linux GOARCH=amd64 go build -o taskctl .
 ### 添加新 builtin skill
 
 1. 在 `builtin/` 下创建新目录，放入 `SKILL.md` 和所需文件
-2. 在 `builtin/manifest.yaml` 中添加声明：
+2. 在 `config.yaml` 的 `skills.manifest` 中添加声明：
 
 ```yaml
 new-skill:

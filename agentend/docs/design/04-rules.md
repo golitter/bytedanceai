@@ -70,6 +70,11 @@ evaluate(context) → (bool, dict)
   - 根据 agent_type 选择 `.claude` 或 `.opencode` 配置目录
   - 注入提示："合并分支时必须使用 `{taskctl_path} merge`..."
 
+#### SkillRule（priority=1）
+
+- `check`：始终通过
+- `enforce`：注入输出技能提示，告知 Agent workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）
+
 ### 约束注入流程
 
 ```
@@ -83,6 +88,8 @@ SafetyRule.enforce → system_prompt_append: "You are operating in a managed env
 ScopeRule.enforce  → system_prompt_append: "Only modify files under: /workspace"
   ↓
 TaskctlRule.enforce → system_prompt_append: "合并分支时必须使用 taskctl merge..."
+  ↓
+SkillRule.enforce → system_prompt_append: "workspace 中有 render 工具..."
   ↓
 合并结果 → 传入 Adapter._build_command()
   ↓

@@ -88,7 +88,7 @@ backend/
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
 │   ├── vo/                  # 统一响应封装
 │   ├── controller/impl/     # （预留）
-│   ├── dao/                 # （预留）
+│   ├── dao/                 # DAO 层（gorm/, mock/）
 │   └── service/impl/        # （预留）
 ├── pkg/
 │   ├── db/                  # MySQL 单例连接（sync.Once）

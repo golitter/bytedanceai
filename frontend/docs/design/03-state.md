@@ -13,6 +13,7 @@
 ```typescript
 export interface ChatMessage {
   id: string
+  dbId?: number
   role: 'user' | 'agent' | 'system'
   content: string
   blocks?: MessageBlock[]
@@ -32,6 +33,8 @@ interface SessionChatState {
   error: Error | null
   toolName?: string
   activeStream: ActiveStream | null
+  hasMore: boolean
+  isLoadingMore: boolean
 }
 
 interface ChatStoreState {
@@ -42,7 +45,7 @@ interface ChatStoreState {
   clearNavigation: () => void
   // Session actions
   getSession: (sessionId: string) => SessionChatState
-  loadHistory: (sessionId: string, messages: ChatMessage[]) => void
+  loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
   streamText: (sessionId: string, text: string) => void
@@ -51,13 +54,16 @@ interface ChatStoreState {
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   resetSession: (sessionId: string) => void
+  // Pagination actions
+  prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
+  setLoadingMore: (sessionId: string, loading: boolean) => void
 }
 ```
 
 `loadHistory` 对历史 agent 消息同样执行 `reduceEventToBlocks` 解析：
 
 ```typescript
-loadHistory: (sessionId, messages) =>
+loadHistory: (sessionId, messages, hasMore) =>
   set((s) => ({
     sessions: {
       ...s.sessions,
@@ -69,9 +75,35 @@ loadHistory: (sessionId, messages) =>
             ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
             : msg,
         ),
+        hasMore: hasMore ?? false,
       },
     },
   })),
+```
+
+`prependMessages` 用于向上翻页加载更多历史消息，将新消息插入到列表头部：
+
+```typescript
+prependMessages: (sessionId, messages, hasMore) =>
+  set((s) => {
+    const session = ensureSession(s, sessionId)
+    const mapped = messages.map((msg) =>
+      msg.role === 'agent' && msg.content
+        ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+        : msg,
+    )
+    return {
+      sessions: {
+        ...s.sessions,
+        [sessionId]: {
+          ...session,
+          messages: [...mapped, ...session.messages],
+          hasMore,
+          isLoadingMore: false,
+        },
+      },
+    }
+  }),
 ```
 
 `ensureSession` 工具函数确保访问不存在的 sessionId 时返回初始状态，而非 undefined：
@@ -217,7 +249,7 @@ export function useCreateConversation() {
 
 ### useChatStream Hook (`src/hooks/use-chat-stream.ts`)
 
-核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载历史消息，若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE：
+核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE：
 
 ```typescript
 export function useChatStream(taskId: string, sessionId: string) {
@@ -270,20 +302,26 @@ const sendMessage = useCallback(async (message: string, agentType: AgentType = '
 }, [taskId, sessionId, connectToStream])
 ```
 
-历史消息加载和自动重连逻辑：
+历史消息加载（含 cursor 分页）和自动重连逻辑：
 
 ```typescript
 useEffect(() => {
-  getTaskMessages(taskId).then((msgs) => {
-    if (msgs.length === 0) return
-    const chatMessages = msgs.map((m) => ({ ... }))
-    store.loadHistory(sessionId, chatMessages)
+  let cancelled = false
 
-    // 自动重连：如果发现 streaming 中的消息
-    const streaming = msgs.find((m) => m.role === 'agent' && m.status === 'streaming')
-    if (streaming && streaming.message_id) {
-      connectToStream(streaming.message_id)
-    }
-  })
+  getTaskMessages(taskId, { limit: 20 })
+    .then((res) => {
+      if (cancelled || res.data.length === 0) return
+      const chatMessages = res.data.map((m) => ({ ... }))
+      store.loadHistory(sessionId, chatMessages, res.has_more)
+
+      // 自动重连：如果发现 streaming 中的消息
+      const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
+      if (streaming && streaming.message_id) {
+        connectToStream(streaming.message_id)
+      }
+    })
+    .catch(() => { /* silently ignore */ })
+
+  return () => { cancelled = true }
 }, [taskId, sessionId, connectToStream])
 ```

@@ -12,12 +12,12 @@ TypeScript discriminated union 定义六种块类型：
 
 ```typescript
 export type MessageBlock =
-  | { type: 'text'; content: string }
-  | { type: 'html-render'; content: string }
-  | { type: 'image'; path: string }
-  | { type: 'attachment'; path: string }
-  | { type: 'diff'; snapshotId: string }
-  | { type: 'preview'; url: string }
+  | { type: 'text'; id: string; content: string }
+  | { type: 'html-render'; id: string; content: string }
+  | { type: 'image'; id: string; path: string }
+  | { type: 'attachment'; id: string; path: string }
+  | { type: 'diff'; id: string; snapshotId: string }
+  | { type: 'preview'; id: string; url: string }
 ```
 
 ### 解析器 (`src/lib/block-reducer.ts`)
@@ -38,18 +38,18 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   for (const match of fullText.matchAll(BLOCK_RE)) {
     if (matchStart > lastIndex) {
       const text = fullText.slice(lastIndex, matchStart)
-      if (text) blocks.push({ type: 'text', content: text })
+      if (text) blocks.push({ type: 'text', id: nextBlockId(), content: text })
     }
     const inner = match[1].trim()
     const parsed = parseBlockContent(inner)
     if (parsed) blocks.push(parsed)
-    else blocks.push({ type: 'text', content: match[0] })
+    else blocks.push({ type: 'text', id: nextBlockId(), content: match[0] })
     lastIndex = matchStart + match[0].length
   }
   if (lastIndex < fullText.length) {
-    blocks.push({ type: 'text', content: fullText.slice(lastIndex) })
+    blocks.push({ type: 'text', id: nextBlockId(), content: fullText.slice(lastIndex) })
   }
-  if (blocks.length === 0) return [{ type: 'text', content: fullText }]
+  if (blocks.length === 0) return [{ type: 'text', id: nextBlockId(), content: fullText }]
   return blocks
 }
 ```

@@ -33,7 +33,7 @@
 |---------|----------|
 | Claude | `claude -p <MSG> --output-format stream-json --verbose --include-partial-messages` |
 | OpenCode | `opencode run <MSG> --format json` |
-| Codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -s workspace-write <MSG>` |
+| Codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins -s danger-full-access <MSG>` |
 
 ### 参数适配
 
@@ -44,7 +44,7 @@
 | 系统提示词追加 | `--append-system-prompt` | 拼入 prompt 前 `[系统约束: ...]` | 不支持 |
 | 工具限制 | `--allowedTools` | 不支持 | 不支持 |
 | 轮次限制 | `--max-turns` | 不支持 | 不支持 |
-| 沙箱 | 无内置 | 无内置 | `-s workspace-write` |
+| 沙箱 | 无内置 | 无内置 | `-s danger-full-access` |
 | 审批跳过 | 无内置 | 无内置 | `--dangerously-bypass-approvals-and-sandbox` |
 
 ### 会话恢复
@@ -58,7 +58,7 @@
 Codex 恢复命令的特殊性：
 - `resume` 是 `exec` 的子命令，不是 flag
 - resume **不支持** `-C` 和 `-s` 参数
-- 命令格式：`codex exec resume <SESSION_ID> --json --dangerously-bypass-approvals-and-sandbox <PROMPT>`
+- 命令格式：`codex exec resume <SESSION_ID> --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins <PROMPT>`
 
 ## 输出解析对比
 
@@ -186,7 +186,7 @@ process.kill()  # SIGKILL
 
 | 配置项 | Claude | OpenCode | Codex |
 |--------|--------|----------|-------|
-| CLI 路径 | `cli.claude_path` | `cli.opencode_path` | `cli.codex_path` |
+| CLI 路径 | `agents.json` → `claude-code.cli_path` | `agents.json` → `opencode.cli_path` | `agents.json` → `codex.cli_path` |
 | 配置目录 | `~/.claude/` | `~/.opencode/` | `~/.codex/` |
 
 配置目录用于 workspace 隔离时排除（写入 `.git/info/exclude`），防止 agent 的本地配置被提交到仓库。

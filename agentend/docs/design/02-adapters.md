@@ -116,17 +116,18 @@ Codex CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.creat
 
 ```python
 # 新建会话
-codex exec --json --dangerously-bypass-approvals-and-sandbox -s workspace-write [-C <cwd>] [-m <model>] <message>
+codex exec --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins -s danger-full-access [-C <cwd>] [-m <model>] <message>
 
 # 恢复会话
-codex exec resume <cli_session_id> --json --dangerously-bypass-approvals-and-sandbox
+codex exec resume <cli_session_id> --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins <message>
 ```
 
 参数来源：
 - `exec`：执行模式
 - `--json`：JSON 流式输出
 - `--dangerously-bypass-approvals-and-sandbox`：跳过审批和沙箱
-- `-s workspace-write`：允许写入工作区
+- `--disable apps --disable plugins`：禁用 apps 和 plugins
+- `-s danger-full-access`：允许完全访问工作区
 - `-C`：工作目录（用于 worktree 隔离）
 - `resume`：复用已有会话
 

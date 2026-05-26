@@ -15,6 +15,7 @@ class AgentType(str, Enum):
     CLAUDE_CODE = "claude-code"
     OPENCODE = "opencode"
     ORCHESTRATOR = "orchestrator"
+    CODEX = "codex"
 
 class AgentRequest(BaseModel):         # generated 基类
     task_id: str                           # 任务 ID
@@ -56,8 +57,8 @@ class EventType(str, Enum):
     DONE = "done"              # 执行完成
     ERROR = "error"            # 错误
 
-class StreamEvent(BaseModel):         # generated 基类
-    type: str                  # EventType 枚举值
+class StreamEvent(_StreamEvent):   # generated 基类中 type: EventType，schemas 层覆盖为 str
+    type: str                  # EventType 枚举值（字符串形式）
     content: dict = {}         # 事件内容
     timestamp: float           # 时间戳
 

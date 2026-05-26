@@ -102,12 +102,14 @@ backend/
 │   ├── handler/                  # Gin HTTP Handlers
 │   │   ├── agent.go              # SSE 订阅 + 透传到 AgentEnd
 │   │   ├── avatar.go             # 头像上传
+│   │   ├── diff_snapshot.go      # Diff 快照
 │   │   ├── message.go            # 消息 CRUD
 │   │   ├── session.go            # Session CRUD
 │   │   ├── stream.go             # SSE 流处理
-│   │   └── task.go               # Task CRUD + 运行
+│   │   ├── task.go               # Task CRUD + 运行
+│   │   └── workspace.go          # Workspace 代理
 │   ├── middleware/                # Gin 中间件（auth, cors, logger）
-│   ├── model/                    # GORM 模型（session, task, message）
+│   ├── model/                    # GORM 模型（session, task, message, diff_snapshot, session_agent）
 │   ├── stream/                   # Redis Stream 写入
 │   │   └── writer.go
 │   └── vo/                       # View Object（API 响应结构）
@@ -301,12 +303,15 @@ frontend/src/
 ├── components/         # 通用组件
 │   ├── chat/           # 聊天相关组件
 │   ├── im/             # IM 会话管理组件
+│   ├── cards/          # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
+│   ├── diff/           # Diff 查看器（多文件 tab + CodeMirror 编辑）
 │   ├── markdown/       # Markdown 渲染组件
 │   └── ui/             # shadcn/ui 组件（自动生成）
 ├── pages/              # 页面组件
 ├── hooks/              # 自定义 hooks
 ├── stores/             # Zustand stores
 ├── lib/                # API 调用 + SSE + 工具函数
+├── utils/              # 工具函数（时间格式化等）
 ├── generated/          # 契约生成的类型文件
 └── main.tsx            # 入口
 ```

@@ -16,6 +16,7 @@ def get_adapter_registry(request) -> AdapterRegistry
 def get_rule_engine(request) -> RuleEngine
 def get_session_store(request) -> SessionMappingStore
 def get_workspace_manager(request) -> WorkspaceManager
+def get_preview_manager(request) -> PreviewManager
 ```
 
 ### Health Check (`src/api/v1/health.py`)

@@ -123,11 +123,24 @@ export async function submitMessage(
 }
 ```
 
-**历史消息获取** — GET `/api/tasks/:id/messages`：
+**历史消息获取** — GET `/api/tasks/:id/messages`（支持 cursor 分页）：
 
 ```typescript
-export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/messages`)
+export interface TaskMessagesResponse {
+  data: TaskMessage[]
+  has_more: boolean
+}
+
+export async function getTaskMessages(
+  taskId: string,
+  params?: { limit?: number; before?: number },
+): Promise<TaskMessagesResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.limit) searchParams.set('limit', String(params.limit))
+  if (params?.before) searchParams.set('before', String(params.before))
+  const qs = searchParams.toString()
+  const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
+  const res = await fetch(url)
   const json = await res.json()
   return json.data
 }
@@ -173,7 +186,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchTask` | GET | `/api/tasks/:id` | 获取任务详情（含 sessions） |
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 message_id |
-| `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表 |
+| `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 `limit` + `before` cursor 分页） |
 | `updateSession` | PUT | `/api/sessions/:id` | 更新 session（agent_name / avatar_url） |
 | `fetchAgentTypes` | GET | `/api/agent-types` | 获取可用 Agent 类型列表 |
 | `uploadAvatar` | POST | `/api/agents/avatar` | 上传头像 |

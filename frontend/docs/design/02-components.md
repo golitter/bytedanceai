@@ -100,27 +100,38 @@ export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentNa
 
 ### MessageList (`src/components/chat/MessageList.tsx`)
 
-消息列表组件，支持两种渲染模式，阈值为 50 条消息：
+消息列表组件，支持两种渲染模式，阈值为 50 条 DisplayItem。内部通过 `DisplayItem` 联合类型将消息和时间分隔线统一管理：
 
 ```tsx
+type DisplayItem =
+  | { type: 'message'; msg: ChatMessage; isStreamingMsg: boolean }
+  | { type: 'time-divider'; timestamp: number }
+
 const VIRTUALIZE_THRESHOLD = 50
 
-const allMessages =
-  isStreaming && streamingContent
-    ? [
-        ...messages,
-        {
-          id: 'streaming',
-          role: 'agent' as const,
-          content: streamingContent,
-          agentType: streamingAgentType as AgentType | undefined,
-          timestamp: Date.now(),
-        },
-      ]
-    : messages
+const displayItems = useMemo<DisplayItem[]>(() => {
+  const allMsgs =
+    isStreaming && streamingContent
+      ? [...messages, { id: 'streaming', role: 'agent' as const, ... }]
+      : messages
+  const items: DisplayItem[] = []
+  for (let i = 0; i < allMsgs.length; i++) {
+    const msg = allMsgs[i]
+    const prevMsg = i > 0 ? allMsgs[i - 1] : undefined
+    if (shouldShowTimeSeparator(prevMsg?.timestamp, msg.timestamp)) {
+      items.push({ type: 'time-divider', timestamp: msg.timestamp })
+    }
+    items.push({ type: 'message', msg, isStreamingMsg: ... })
+  }
+  return items
+}, [messages, isStreaming, streamingContent, streamingAgentType])
 
-const useVirtual = allMessages.length > VIRTUALIZE_THRESHOLD
+const useVirtual = displayItems.length > VIRTUALIZE_THRESHOLD
 ```
+
+**时间分隔线**：通过 `shouldShowTimeSeparator()`（来自 `utils/time.ts`）判断是否在两条消息之间插入 `TimeDivider` 组件。触发条件：首条消息、间隔 >5 分钟、或跨日历日。
+
+**向上翻页加载**（cursor 分页）：监听 `scrollTop === 0` 时触发 `onLoadMore` 回调加载更早的历史消息，加载完成后恢复滚动位置（`scrollHeight - oldScrollHeight` 偏移）。
 
 流式消息以 `id: 'streaming'` 临时追加到列表末尾。虚拟滚动使用 `@tanstack/react-virtual`，通过 `estimateSize` 根据内容长度估算行高。内置自动滚动逻辑：监听 `scrollHeight - scrollTop - clientHeight < 60` 判断是否在底部，手动上滑时隐藏自动滚动并显示 "回到底部" 按钮。
 
@@ -174,6 +185,7 @@ const AGENT_COLORS: Record<AgentType, string> = {
   'claude-code': 'var(--agent-claude)',
   opencode: 'var(--agent-opencode)',
   orchestrator: 'var(--agent-orchestrator)',
+  codex: 'var(--agent-codex)',
 }
 ```
 
@@ -194,6 +206,26 @@ const handleSave = async () => {
   }
 }
 ```
+
+### TimeDivider (`src/components/chat/TimeDivider.tsx`)
+
+时间分隔线组件，在消息列表中显示相对时间标签（如 "14:30"、"昨天 09:15"、"3天前"）：
+
+```tsx
+export function TimeDivider({ timestamp }: { timestamp: number }) {
+  return (
+    <div className="flex items-center gap-2 px-6 py-2">
+      <div className="h-px flex-1 bg-border" />
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {formatRelativeTime(timestamp)}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+```
+
+时间格式化通过 `formatRelativeTime()`（来自 `utils/time.ts`）实现，规则为：今天 "HH:mm"、昨天 "昨天 HH:mm"、2-7 天 "N天前"、今年 "M月D日 HH:mm"、跨年 "YYYY年M月D日"。
 
 ---
 

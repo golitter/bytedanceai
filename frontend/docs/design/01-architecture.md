@@ -103,11 +103,12 @@ src/
 │   │
 │   ├── chat/                         # 聊天区
 │   │   ├── ChatArea.tsx              # 聊天容器：Header + 消息列表 + 输入框
-│   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动）
+│   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动 + 向上翻页加载）
 │   │   ├── MessageBubble.tsx         # 消息气泡（user / agent / system 三种变体）
 │   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送）
 │   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯）
-│   │   └── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
+│   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
+│   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）
 │   │   ├── DiffCard.tsx              # Diff 卡片：多文件 tab + accept/revert + 编辑
@@ -118,6 +119,8 @@ src/
 │   │   └── index.ts                  # 统一导出
 │   │
 │   ├── diff/                         # Diff 查看器（可编辑多文件）
+│   │   ├── DiffHeader.tsx            # Diff 卡片头部（文件信息 + 操作按钮）
+│   │   ├── DiffFileInfo.tsx          # 文件变更统计信息
 │   │   ├── DiffFileTabs.tsx          # 多文件 tab 切换
 │   │   ├── DiffFileView.tsx          # react-diff-view 统一视图渲染
 │   │   ├── DiffFileEditor.tsx        # 懒加载编辑器外壳（Suspense）
@@ -136,7 +139,7 @@ src/
 │   └── use-hover-style.ts            # 悬停样式工具 hook
 │
 ├── lib/
-│   ├── api.ts                        # REST API 封装
+│   ├── api.ts                        # REST API 封装（含 cursor 分页 getTaskMessages）
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
@@ -147,7 +150,10 @@ src/
 │       └── block-reducer.test.ts
 │
 ├── stores/
-│   └── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态
+│   └── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态（含分页）
+│
+├── utils/
+│   └── time.ts                       # 时间工具（formatRelativeTime + shouldShowTimeSeparator）
 │
 └── generated/                        # 契约生成的类型文件（勿手改）
     ├── events.ts                     # StreamEvent 类型

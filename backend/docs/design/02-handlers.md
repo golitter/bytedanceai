@@ -28,7 +28,7 @@ type CreateTaskReq struct {
 }
 ```
 
-**CreateTask** — 创建 Task 并可选地同时创建 Session：
+**CreateTask** — 创建 Task 并可选地同时创建 Session 和 SessionAgent：
 
 ```go
 func (h *TaskHandler) CreateTask(c *gin.Context) {
@@ -48,14 +48,21 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 	for _, agent := range req.Agents {
+		sid := uuid.New().String()
 		s := model.Session{
-			SessionID: uuid.New().String(),
+			SessionID: sid,
 			TaskID:    t.TaskID,
 			AgentType: agent.Type,
 			AgentName: agent.Name,
 			Status:    "active",
 		}
+		sa := model.SessionAgent{
+			SessionID: sid,
+			AgentType: agent.Type,
+			AgentName: agent.Name,
+		}
 		db.GetDB().Create(&s)
+		db.GetDB().Create(&sa)
 	}
 	vo.Created(c, t)
 }
@@ -133,10 +140,15 @@ func (h *SessionHandler) PatchSession(c *gin.Context) {
 
 ### 消息查询 (`internal/handler/message.go`)
 
-`MessageHandler` 按 Task 查询所有历史消息，按创建时间升序排列。
+`MessageHandler` 按 Task 查询历史消息，支持 cursor 分页加载，按创建时间升序排列。
 
 ```go
 type MessageHandler struct{}
+
+type ListMessagesResponse struct {
+	Data    []model.Message `json:"data"`
+	HasMore bool            `json:"has_more"`
+}
 
 func (h *MessageHandler) ListMessages(c *gin.Context) {
 	taskID := c.Param("taskId")
@@ -145,20 +157,56 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 		vo.NotFound(c, "task not found")
 		return
 	}
+
+	limitStr := c.Query("limit")
+	beforeStr := c.Query("before")
+
+	// No pagination params: return all messages, has_more=false
+	if limitStr == "" && beforeStr == "" {
+		var messages []model.Message
+		db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
+		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
+		return
+	}
+
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	query := db.GetDB().Where("task_id = ?", taskID)
+	if beforeStr != "" {
+		if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
+			query = query.Where("id < ?", beforeID)
+		}
+	}
+
 	var messages []model.Message
-	db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
-	vo.OK(c, messages)
+	query.Order("created_at ASC").Limit(limit + 1).Find(&messages)
+
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
 }
 ```
 
+- 无分页参数（`limit` / `before`）时返回全部消息，`has_more=false`
+- `limit` 参数控制每页数量，默认 20；`before` 参数为 cursor（自增 ID），用于向前翻页
+- 响应格式为 `{data: [...], has_more: bool}`
+
 ### Agent 类型枚举 (`internal/handler/agent.go`)
 
-返回硬编码的三种 Agent 类型列表。
+返回硬编码的四种 Agent 类型列表。
 
 ```go
 type AgentHandler struct{}
 
-var agentTypes = []string{"claude-code", "opencode", "orchestrator"}
+var agentTypes = []string{"claude-code", "opencode", "orchestrator", "codex"}
 
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	vo.OK(c, agentTypes)
@@ -194,7 +242,7 @@ func (h *AvatarHandler) UploadAvatar(c *gin.Context) {
 }
 ```
 
-**UpdateSession** — 更新 Session 的 `agent_name` 和 `avatar_url`：
+**UpdateSession** — 更新 SessionAgent 的 `agent_name` 和 `avatar_url`（Upsert 到 session_agents 表）：
 
 ```go
 type UpdateSessionReq struct {
@@ -207,7 +255,20 @@ func (h *AvatarHandler) UpdateSession(c *gin.Context) {
 	updates := map[string]interface{}{}
 	if req.AgentName != "" { updates["agent_name"] = req.AgentName }
 	if req.AvatarURL != "" { updates["avatar_url"] = req.AvatarURL }
-	db.GetDB().Model(&model.Session{}).Where("session_id = ?", sessionID).Updates(updates)
+
+	var sa model.SessionAgent
+	result := db.GetDB().Where("session_id = ?", sessionID).First(&sa)
+	if result.Error != nil {
+		// No existing record — create one
+		sa = model.SessionAgent{
+			SessionID: sessionID,
+			AgentName: req.AgentName,
+			AvatarURL: req.AvatarURL,
+		}
+		db.GetDB().Create(&sa)
+	} else {
+		db.GetDB().Model(&sa).Updates(updates)
+	}
 }
 ```
 

@@ -100,6 +100,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 					// normal end
 				case generated.EventTypeError:
 					sawError = true
+					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
+						sw.appendText("[Error] " + errMsg)
+					}
 				}
 			}
 		}
@@ -121,6 +124,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 ```go
 func (sw *StreamWriter) publishToRedis(line string) {
 	rdb := pkgredis.GetClient()
+	if rdb == nil {
+		return
+	}
 	seq, err := rdb.XAdd(sw.ctx, &redis.XAddArgs{
 		Stream: sw.streamKey,
 		MaxLen: maxStreamLen,
@@ -201,7 +207,9 @@ func (sw *StreamWriter) finish() {
 
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL)
+		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
+			slog.Warn("redis EXPIRE failed", "key", sw.streamKey, "error", err)
+		}
 	}
 	registry.Delete(sw.messageID)
 }
@@ -223,6 +231,8 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 		data, _ := json.Marshal(event)
 		rdb.XAdd(context.Background(), &redis.XAddArgs{
 			Stream: key,
+			MaxLen: maxStreamLen,
+			Approx: true,
 			Values: map[string]interface{}{
 				"data": fmt.Sprintf("data: %s", string(data)),
 			},
