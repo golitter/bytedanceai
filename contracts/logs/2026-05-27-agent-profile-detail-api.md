@@ -39,7 +39,10 @@
 
 ### GET /api/sessions/:sid/detail
 
-包含 profile 全部字段 + `task_id`、`workspace_path`、`created_at`、`message_count`。
+包含 profile 全部字段 + `task_id`、`repo_path`、`workspace_path`、`created_at`、`message_count`。
+
+- `repo_path`：仓库根目录路径（如 `/Users/yanghao/Lab/vscode/gormlab`）
+- `workspace_path`：Agent 实际工作目录，由 `repo_path/task_id/session_id` 拼接而来
 
 ## 后续计划
 

@@ -260,6 +260,7 @@ export interface AgentDetail {
   status: string
   session_id: string
   task_id: string
+  repo_path?: string
   workspace_path?: string
   created_at: string
   message_count: number

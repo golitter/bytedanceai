@@ -4,6 +4,7 @@ import (
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/db"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,7 @@ type AgentDetailResponse struct {
 	Status        string       `json:"status"`
 	SessionID     string       `json:"session_id"`
 	TaskID        string       `json:"task_id"`
+	RepoPath      string       `json:"repo_path,omitempty"`
 	WorkspacePath string       `json:"workspace_path,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
 	MessageCount  int64        `json:"message_count"`
@@ -103,7 +105,8 @@ func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
 		Status:        session.Status,
 		SessionID:     session.SessionID,
 		TaskID:        session.TaskID,
-		WorkspacePath: task.RepoPath,
+		RepoPath:      task.RepoPath,
+		WorkspacePath: filepath.Join(task.RepoPath, session.TaskID, session.SessionID),
 		CreatedAt:     session.CreatedAt,
 		MessageCount:  messageCount,
 		Skills:        mockSkills,

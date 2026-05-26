@@ -5,6 +5,7 @@ export function AgentMeta({ detail }: { detail: AgentDetail }) {
     <div className="grid grid-cols-2 gap-4 rounded-[10px] border border-border bg-card p-4">
       <MetaItem label="Session ID" value={detail.session_id} mono />
       <MetaItem label="Task ID" value={detail.task_id} mono />
+      {detail.repo_path && <MetaItem label="Repo Path" value={detail.repo_path} />}
       {detail.workspace_path && <MetaItem label="Workspace" value={detail.workspace_path} />}
       <MetaItem label="创建时间" value={new Date(detail.created_at).toLocaleString('zh-CN')} />
       <MetaItem label="消息数" value={String(detail.message_count)} />
