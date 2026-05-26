@@ -1,9 +1,13 @@
-.PHONY: run-frontend run-backend run-agentend \
+.PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
-       restart-frontend restart-backend restart-agentend \
+       restart restart-frontend restart-backend restart-agentend \
        status tidy generate
 
 SCRIPT := ./scripts/run.sh
+
+# 默认：启动全部服务
+all:
+	$(SCRIPT) start
 
 # 启动前端（热重载）— Vite dev server，localhost:5173
 run-frontend:
@@ -32,6 +36,10 @@ stop-backend:
 # 停止 Agent 端
 stop-agentend:
 	$(SCRIPT) stop agentend
+
+# 重启全部服务
+restart:
+	$(SCRIPT) restart
 
 # 重启前端（热重载）
 restart-frontend:

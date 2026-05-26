@@ -80,7 +80,18 @@ stop_service() {
   local pid
   pid=$(pid_on_port "$port")
   echo "停止 $name (PID $pid)"
-  kill "$pid" 2>/dev/null || true
+  # 杀整个进程树（父进程及其子进程）
+  kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  # 等待进程退出（最多 5 秒）
+  local waited=0
+  while [ $waited -lt 50 ] && is_running "$entry"; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  if is_running "$entry"; then
+    pid=$(pid_on_port "$port")
+    kill -9 "$pid" 2>/dev/null || true
+  fi
 }
 
 # ── 状态表格 ──────────────────────────────────────
@@ -117,13 +128,12 @@ find_entry() {
 case "$cmd" in
   start)
     if [ -z "$target" ]; then
-      echo "错误：不允许同时启动全部服务，请指定单个服务"
-      echo "用法: $0 start <frontend|backend|agentend>"
-      exit 1
+      for e in "${SERVICES[@]}"; do start_service "$e"; done
+    else
+      entry=$(find_entry "$target")
+      [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
+      start_service "$entry"
     fi
-    entry=$(find_entry "$target")
-    [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
-    start_service "$entry"
     ;;
   stop)
     if [ -n "$target" ]; then
@@ -137,24 +147,25 @@ case "$cmd" in
     ;;
   restart)
     if [ -z "$target" ]; then
-      echo "错误：不允许同时重启全部服务，请指定单个服务"
-      echo "用法: $0 restart <frontend|backend|agentend>"
-      exit 1
+      for e in "${SERVICES[@]}"; do stop_service "$e"; done
+      echo "✓ 全部已停止"
+      for e in "${SERVICES[@]}"; do start_service "$e"; done
+    else
+      entry=$(find_entry "$target")
+      [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
+      stop_service "$entry"
+      start_service "$entry"
     fi
-    entry=$(find_entry "$target")
-    [ -z "$entry" ] && { echo "未知服务: $target"; exit 1; }
-    stop_service "$entry"
-    start_service "$entry"
     ;;
   status)
     show_status
     ;;
   help|*)
-    echo "用法: ./scripts/run.sh <start|stop|restart|status> <frontend|backend|agentend>"
+    echo "用法: ./scripts/run.sh <start|stop|restart|status> [frontend|backend|agentend]"
     echo ""
-    echo "  start    启动单个服务（必须指定）"
+    echo "  start    启动服务（不指定则全部启动）"
     echo "  stop     停止服务（不指定则全部停止）"
-    echo "  restart  重启单个服务（必须指定）"
+    echo "  restart  重启服务（不指定则全部重启）"
     echo "  status   查看三端运行状态"
     ;;
 esac

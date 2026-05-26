@@ -33,6 +33,10 @@ class CodexAdapter(BaseAgentAdapter):
                 cli_session_id,
                 "--json",
                 "--dangerously-bypass-approvals-and-sandbox",
+                "--disable",
+                "apps",
+                "--disable",
+                "plugins",
             ]
         else:
             cmd = [
@@ -40,6 +44,10 @@ class CodexAdapter(BaseAgentAdapter):
                 "exec",
                 "--json",
                 "--dangerously-bypass-approvals-and-sandbox",
+                "--disable",
+                "apps",
+                "--disable",
+                "plugins",
                 "-s",
                 "danger-full-access",
             ]
