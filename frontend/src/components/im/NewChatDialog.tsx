@@ -30,6 +30,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const [repoPathValidated, setRepoPathValidated] = useState(false)
   const [repoPathError, setRepoPathError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
+  const [nameError, setNameError] = useState(false)
 
   const [prevOpen, setPrevOpen] = useState(open)
   if (prevOpen !== open) {
@@ -41,6 +42,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
       setRepoPathValidated(false)
       setRepoPathError(null)
       setValidating(false)
+      setNameError(false)
     }
   }
 
@@ -147,7 +149,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 onClick={() => {
                   if (!repoPathValidated) return
                   if (expandedAgent === agent.type) {
-                    handleSelect(agent.type as AgentType, agentName || undefined)
+                    if (!agentName.trim()) {
+                      setNameError(true)
+                      return
+                    }
+                    handleSelect(agent.type as AgentType, agentName.trim())
                   } else {
                     setExpandedAgent(agent.type)
                   }
@@ -168,24 +174,38 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 <div className="flex items-center gap-2 px-3 pt-1 pb-2">
                   <input
                     value={agentName}
-                    placeholder="自定义名称（可选）"
-                    className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-                    onChange={(e) => setAgentName(e.target.value)}
+                    placeholder="输入 Agent 名称"
+                    className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
+                    style={{
+                      borderColor: nameError ? 'var(--destructive)' : 'var(--border)',
+                      animation: nameError ? 'shake 0.4s ease' : undefined,
+                    }}
+                    onChange={(e) => {
+                      setAgentName(e.target.value)
+                      setNameError(false)
+                    }}
+                    onAnimationEnd={() => setNameError(false)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleSelect(agent.type as AgentType, agentName || undefined)
-                      }
+                      if (e.key === 'Enter') e.preventDefault()
                     }}
                   />
                   <button
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                    onClick={() => handleSelect(agent.type as AgentType, agentName || undefined)}
+                    onClick={() => {
+                      if (!agentName.trim()) {
+                        setNameError(true)
+                        return
+                      }
+                      handleSelect(agent.type as AgentType, agentName.trim())
+                    }}
                     disabled={createMutation.isPending}
                   >
                     开始
                   </button>
                 </div>
+              )}
+              {expandedAgent === agent.type && nameError && (
+                <p className="px-3 pb-1 text-xs text-destructive">请输入 Agent 名称</p>
               )}
             </div>
           ))}
