@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,17 +22,30 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   })
   const createMutation = useCreateConversation()
   const { setCurrentSession } = useChatNav()
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
-  const nameRef = useRef<HTMLInputElement>(null)
-  const repoPathRef = useRef<HTMLInputElement>(null)
   const agentHover = useHoverStyle()
 
+  const [repoPath, setRepoPath] = useState('')
+  const [agentName, setAgentName] = useState('')
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [repoPathValidated, setRepoPathValidated] = useState(false)
   const [repoPathError, setRepoPathError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) {
+      setRepoPath('')
+      setAgentName('')
+      setExpandedAgent(null)
+      setRepoPathValidated(false)
+      setRepoPathError(null)
+      setValidating(false)
+    }
+  }
+
   const handleValidate = async () => {
-    const path = repoPathRef.current?.value?.trim()
+    const path = repoPath.trim()
     if (!path) {
       setRepoPathError('请输入仓库路径')
       setRepoPathValidated(false)
@@ -57,15 +70,10 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     }
   }
 
-  const handleRepoPathChange = () => {
-    setRepoPathValidated(false)
-    setRepoPathError(null)
-  }
-
-  const handleSelect = (agentType: AgentType, agentName?: string) => {
+  const handleSelect = (agentType: AgentType, name?: string) => {
     if (!repoPathValidated) return
     createMutation.mutate(
-      { agentType, agentName, repoPath: repoPathRef.current?.value?.trim() },
+      { agentType, agentName: name, repoPath: repoPath.trim() },
       {
         onSuccess: (conversation) => {
           setCurrentSession(conversation.sessionId)
@@ -94,7 +102,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           <label className="mb-1 block text-xs font-medium text-muted-foreground">仓库路径</label>
           <div className="flex items-center gap-2">
             <input
-              ref={repoPathRef}
+              value={repoPath}
               placeholder="/path/to/repo"
               className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
               style={{
@@ -104,7 +112,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     ? 'var(--color-success)'
                     : 'var(--border)',
               }}
-              onChange={handleRepoPathChange}
+              onChange={(e) => {
+                setRepoPath(e.target.value)
+                setRepoPathValidated(false)
+                setRepoPathError(null)
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleValidate()
               }}
@@ -134,7 +146,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 onClick={() => {
                   if (!repoPathValidated) return
                   if (expandedAgent === agent.type) {
-                    handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
+                    handleSelect(agent.type as AgentType, agentName || undefined)
                   } else {
                     setExpandedAgent(agent.type)
                   }
@@ -154,20 +166,19 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               {expandedAgent === agent.type && repoPathValidated && (
                 <div className="flex items-center gap-2 px-3 pt-1 pb-2">
                   <input
-                    ref={nameRef}
+                    value={agentName}
                     placeholder="自定义名称（可选）"
                     className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
+                    onChange={(e) => setAgentName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
+                        handleSelect(agent.type as AgentType, agentName || undefined)
                       }
                     }}
                   />
                   <button
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                    onClick={() =>
-                      handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
-                    }
+                    onClick={() => handleSelect(agent.type as AgentType, agentName || undefined)}
                     disabled={createMutation.isPending}
                   >
                     开始

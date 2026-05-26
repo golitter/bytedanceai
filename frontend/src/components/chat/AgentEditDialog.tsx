@@ -25,12 +25,13 @@ export function AgentEditDialog({
   const fileRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) {
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) {
       setName(initialName)
       setAvatarUrl(initialAvatarUrl)
     }
-    onOpenChange(nextOpen)
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +64,7 @@ export function AgentEditDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-foreground">编辑 Agent</DialogTitle>
