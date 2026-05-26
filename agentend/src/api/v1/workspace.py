@@ -7,6 +7,8 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from src.api.dependencies import get_preview_manager, get_workspace_manager
+from src.app.agent_config import get_agent_config_dir
+from src.app.config import settings
 from src.preview.server import PreviewManager
 from src.schemas.request import AgentType
 from src.workspace.manager import WorkspaceManager
@@ -41,6 +43,14 @@ def _resolve_worktree_file(worktree_path: str, file_path: str) -> Path:
     if not str(target).startswith(str(base) + "/") and target != base:
         raise HTTPException(status_code=403, detail="Path traversal not allowed")
     return target
+
+
+def _get_skill_exclusion_prefixes(agent_type: AgentType) -> list[str]:
+    """Return path prefixes like '{config_dir}/skills/{name}/' for manifest skills."""
+    config_dir = get_agent_config_dir(agent_type)
+    if not config_dir:
+        return []
+    return [f"{config_dir}/skills/{name}/" for name in settings.skills.manifest]
 
 
 async def _run_git(*args: str, cwd: str) -> tuple[bool, str]:
@@ -117,8 +127,13 @@ async def get_diff(
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # Tracked changes
-    ok, output = await _run_git("diff", "HEAD", cwd=ws.worktree_path)
+    skill_prefixes = _get_skill_exclusion_prefixes(ws.agent_type) if ws.agent_type else []
+
+    # Tracked changes — exclude skill paths via pathspec
+    diff_args = ["diff", "HEAD"]
+    for prefix in skill_prefixes:
+        diff_args.extend([":!" + prefix.rstrip("/")])
+    ok, output = await _run_git(*diff_args, cwd=ws.worktree_path)
     if not ok:
         raise HTTPException(status_code=500, detail=output)
 
@@ -130,6 +145,8 @@ async def get_diff(
         for rel in untracked.splitlines():
             rel = rel.strip()
             if not rel:
+                continue
+            if any(rel.startswith(pre) for pre in skill_prefixes):
                 continue
             fp = base / rel
             if not fp.is_file():
