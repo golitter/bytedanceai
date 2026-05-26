@@ -72,8 +72,9 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   const handleSelect = (agentType: AgentType, name?: string) => {
     if (!repoPathValidated) return
+    const trimmed = name?.trim()
     createMutation.mutate(
-      { agentType, agentName: name, repoPath: repoPath.trim() },
+      { agentType, agentName: trimmed || undefined, repoPath: repoPath.trim() },
       {
         onSuccess: (conversation) => {
           setCurrentSession(conversation.sessionId)
