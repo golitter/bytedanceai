@@ -98,11 +98,12 @@ export function useChatStream(taskId: string, sessionId: string) {
   useEffect(() => {
     let cancelled = false
 
-    getTaskMessages(taskId)
-      .then((msgs) => {
-        if (cancelled || msgs.length === 0) return
-        const chatMessages: ChatMessage[] = msgs.map((m) => ({
+    getTaskMessages(taskId, { limit: 20 })
+      .then((res) => {
+        if (cancelled || res.data.length === 0) return
+        const chatMessages: ChatMessage[] = res.data.map((m) => ({
           id: `${m.role}-${m.id}`,
+          dbId: m.id,
           role: m.role,
           content: m.content,
           agentType: m.agent_type as AgentType | undefined,
@@ -110,9 +111,9 @@ export function useChatStream(taskId: string, sessionId: string) {
           messageId: m.message_id,
           status: m.status,
         }))
-        store.loadHistory(sessionId, chatMessages)
+        store.loadHistory(sessionId, chatMessages, res.has_more)
 
-        const streaming = msgs.find((m) => m.role === 'agent' && m.status === 'streaming')
+        const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
         if (streaming && streaming.message_id) {
           connectToStream(streaming.message_id)
         }

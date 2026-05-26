@@ -170,8 +170,21 @@ export async function submitMessage(
   return json.data
 }
 
-export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/messages`)
+export interface TaskMessagesResponse {
+  data: TaskMessage[]
+  has_more: boolean
+}
+
+export async function getTaskMessages(
+  taskId: string,
+  params?: { limit?: number; before?: number },
+): Promise<TaskMessagesResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.limit) searchParams.set('limit', String(params.limit))
+  if (params?.before) searchParams.set('before', String(params.before))
+  const qs = searchParams.toString()
+  const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
+  const res = await fetch(url)
   const json = await res.json()
   return json.data
 }

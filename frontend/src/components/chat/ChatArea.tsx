@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
-import { validateRepoPath } from '@/lib/api'
+import { getTaskMessages, validateRepoPath } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
-import { useChatStore } from '@/stores/chat'
+import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
 import { AgentEditDialog } from './AgentEditDialog'
@@ -37,6 +37,30 @@ export function ChatArea({
 
   const { data: conversations } = useConversations()
   const getSession = useChatStore((s) => s.getSession)
+  const prependMessages = useChatStore((s) => s.prependMessages)
+  const setLoadingMore = useChatStore((s) => s.setLoadingMore)
+
+  const loadMoreMessages = useCallback(async () => {
+    const firstMsg = state.messages[0]
+    if (!firstMsg?.dbId) return
+    setLoadingMore(sessionId, true)
+    try {
+      const res = await getTaskMessages(taskId, { limit: 20, before: firstMsg.dbId })
+      const chatMessages: ChatMessage[] = res.data.map((m) => ({
+        id: `${m.role}-${m.id}`,
+        dbId: m.id,
+        role: m.role as 'user' | 'agent',
+        content: m.content,
+        agentType: m.agent_type as AgentType | undefined,
+        timestamp: new Date(m.created_at).getTime(),
+        messageId: m.message_id,
+        status: m.status,
+      }))
+      prependMessages(sessionId, chatMessages, res.has_more)
+    } catch {
+      setLoadingMore(sessionId, false)
+    }
+  }, [taskId, sessionId, state.messages, prependMessages, setLoadingMore])
 
   const sendDisabledHint = useMemo(() => {
     if (!isStreaming) return undefined
@@ -127,6 +151,9 @@ export function ChatArea({
           avatarUrl={avatarUrl}
           agentName={agentName}
           sessionId={sessionId}
+          hasMore={state.hasMore}
+          isLoadingMore={state.isLoadingMore}
+          onLoadMore={loadMoreMessages}
         />
       )}
 

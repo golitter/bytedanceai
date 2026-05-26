@@ -4,6 +4,7 @@ import (
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/db"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,6 +13,11 @@ type MessageHandler struct{}
 
 func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{}
+}
+
+type ListMessagesResponse struct {
+	Data    []model.Message `json:"data"`
+	HasMore bool            `json:"has_more"`
 }
 
 func (h *MessageHandler) ListMessages(c *gin.Context) {
@@ -23,7 +29,39 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 		return
 	}
 
+	limitStr := c.Query("limit")
+	beforeStr := c.Query("before")
+
+	// No pagination params: return all messages, has_more=false
+	if limitStr == "" && beforeStr == "" {
+		var messages []model.Message
+		db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
+		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
+		return
+	}
+
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	query := db.GetDB().Where("task_id = ?", taskID)
+
+	if beforeStr != "" {
+		if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
+			query = query.Where("id < ?", beforeID)
+		}
+	}
+
 	var messages []model.Message
-	db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
-	vo.OK(c, messages)
+	query.Order("created_at ASC").Limit(limit + 1).Find(&messages)
+
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
 }

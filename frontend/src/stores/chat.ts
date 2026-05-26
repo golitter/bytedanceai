@@ -6,6 +6,7 @@ import type { MessageBlock } from '@/lib/block-types'
 
 export interface ChatMessage {
   id: string
+  dbId?: number
   role: 'user' | 'agent' | 'system'
   content: string
   blocks?: MessageBlock[]
@@ -30,6 +31,8 @@ interface SessionChatState {
   error: Error | null
   toolName?: string
   activeStream: ActiveStream | null
+  hasMore: boolean
+  isLoadingMore: boolean
 }
 
 interface ChatNavState {
@@ -48,7 +51,7 @@ interface ChatStoreState {
 
   // Session actions
   getSession: (sessionId: string) => SessionChatState
-  loadHistory: (sessionId: string, messages: ChatMessage[]) => void
+  loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
   streamText: (sessionId: string, text: string) => void
@@ -57,6 +60,10 @@ interface ChatStoreState {
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   resetSession: (sessionId: string) => void
+
+  // Pagination actions
+  prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
+  setLoadingMore: (sessionId: string, loading: boolean) => void
 }
 
 const initialSessionState: SessionChatState = {
@@ -67,6 +74,8 @@ const initialSessionState: SessionChatState = {
   error: null,
   toolName: undefined,
   activeStream: null,
+  hasMore: true,
+  isLoadingMore: false,
 }
 
 function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
@@ -83,7 +92,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   getSession: (sessionId) => get().sessions[sessionId] ?? { ...initialSessionState },
 
-  loadHistory: (sessionId, messages) =>
+  loadHistory: (sessionId, messages, hasMore) =>
     set((s) => ({
       sessions: {
         ...s.sessions,
@@ -95,6 +104,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
               : msg,
           ),
+          hasMore: hasMore ?? false,
         },
       },
     })),
@@ -211,6 +221,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       sessions: {
         ...s.sessions,
         [sessionId]: { ...initialSessionState },
+      },
+    })),
+
+  prependMessages: (sessionId, messages, hasMore) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const mapped = messages.map((msg) =>
+        msg.role === 'agent' && msg.content
+          ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+          : msg,
+      )
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            messages: [...mapped, ...session.messages],
+            hasMore,
+            isLoadingMore: false,
+          },
+        },
+      }
+    }),
+
+  setLoadingMore: (sessionId, loading) =>
+    set((s) => ({
+      sessions: {
+        ...s.sessions,
+        [sessionId]: {
+          ...ensureSession(s, sessionId),
+          isLoadingMore: loading,
+        },
       },
     })),
 }))
