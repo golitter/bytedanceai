@@ -217,6 +217,15 @@ func (sw *StreamWriter) finish() {
 
 ### 辅助函数
 
+**Fail** — 主动标记消息为 failed（例如 context 取消或 scanner 出错时调用）：
+
+```go
+func (sw *StreamWriter) Fail() {
+	sw.doFlush()
+	sw.updateStatus("failed")
+}
+```
+
 **PublishErrorAndFail** — 当 AgentEnd 在流式之前或中途失败时，向 Redis Stream 写入 error 事件并标记 Message 为 failed：
 
 ```go

@@ -1,8 +1,10 @@
 # CLI Adapter 适配差异对比
 
-## 概述
+## 实现了什么
 
-三个 CLI Adapter（ClaudeCodeAdapter、OpenCodeAdapter、CodexAdapter）共享相同的 subprocess 模式，但 CLI 接口差异导致命令构建、输出解析、会话恢复的实现各不相同。OrchestratorAdapter 是 in-process 模式，不在本文档范围内。
+三个 CLI Adapter（ClaudeCodeAdapter、OpenCodeAdapter、CodexAdapter）共享相同的 subprocess 模式，但 CLI 接口差异导致命令构建、输出解析、会话恢复的实现各不相同。本文档对比三者的关键差异，OrchestratorAdapter 是 in-process 模式，不在本文档范围内。
+
+## 怎么实现的
 
 ## 架构总览
 
@@ -19,7 +21,7 @@
 │                 │                 │ --dangerously-bypass-       │
 │                 │                 │ approvals-and-sandbox       │
 │                 │                 │                             │
-│                 │                 │ -s workspace-write          │
+│                 │                 │ -s danger-full-access       │
 ├─────────────────┴─────────────────┴─────────────────────────────┤
 │  共享: asyncio subprocess / _processes dict / SIGTERM→SIGKILL  │
 └─────────────────────────────────────────────────────────────────┘

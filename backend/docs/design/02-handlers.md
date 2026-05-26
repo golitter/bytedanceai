@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 8 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、头像上传、SSE 流式订阅、Diff 快照和工作区代理，构成完整的 RESTful API 层。
+基于 Gin 框架实现了 9 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、Agent Profile、头像上传、SSE 流式订阅、Diff 快照和工作区代理，构成完整的 RESTful API 层。
 
 ## 怎么实现的
 
@@ -68,7 +68,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 }
 ```
 
-**RunTask** — 核心 handler，启动 Agent 会话并返回流式 message_id：
+**RunTask** — 核心 handler，启动 Agent 会话并返回流式 message_id（202 Accepted）：
 
 ```go
 type RunTaskReq struct {
@@ -90,6 +90,9 @@ go func() {
 		Message:   req.Message,
 		AgentType: generated.AgentType(agentType),
 		Stream:    true,
+	}
+	if task.RepoPath != "" {
+		agentReq.RepoPath = &task.RepoPath
 	}
 	resp, err := h.agentClient.StreamAgent(agentReq)
 	// ...
@@ -212,6 +215,46 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	vo.OK(c, agentTypes)
 }
 ```
+
+### Agent Profile (`internal/handler/agent_profile.go`)
+
+`AgentProfileHandler` 提供 Agent 档案（Profile）和详情（Detail）两个只读接口，数据来源为 Session + SessionAgent + Task 表的聚合查询。
+
+```go
+type AgentProfileHandler struct{}
+
+var mockSkills = []AgentSkill{
+    {Name: "taskctl", Description: "任务管理技能...", Builtin: true, Source: "agentend/skills/taskctl"},
+    {Name: "render", Description: "内容渲染技能...", Builtin: true, Source: "agentend/skills/render"},
+}
+```
+
+**GetProfile** — 按 session_id 返回 Agent 档案摘要（名称、类型、头像、状态、技能列表）：
+
+```go
+func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
+    sessionID := c.Param("sessionId")
+    var session model.Session
+    db.GetDB().Where("session_id = ?", sessionID).First(&session)
+    vo.OK(c, AgentProfileResponse{...})
+}
+```
+
+**GetDetail** — 按 session_id 返回 Agent 完整详情（额外包含 task_id、repo_path、workspace_path、message_count）：
+
+```go
+func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
+    sessionID := c.Param("sessionId")
+    // 查询 Session → Task → Message count
+    vo.OK(c, AgentDetailResponse{
+        WorkspacePath: filepath.Join(task.RepoPath, session.TaskID, session.SessionID),
+        MessageCount:  messageCount,
+        ...
+    })
+}
+```
+
+当前 Skills 为硬编码 mock 数据，后续将由契约层统一供给。
 
 ### 头像上传 (`internal/handler/avatar.go`)
 

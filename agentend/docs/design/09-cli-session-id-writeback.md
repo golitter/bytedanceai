@@ -1,14 +1,12 @@
 # CLI session_id 回写机制
 
-## 问题
+## 实现了什么
 
-CLI（claudecode / opencode）首次调用时返回自己的 session ID（如 `ses_xxx`），但该 ID 没有被写回 `SessionMappingStore`。导致：
+修复 CLI session 映射的三个问题：(1) `_resolve_session` 预生成 UUID 但 CLI 不认；(2) kwargs key 不匹配（`agent.py` 传 `"cli_session_id"`，opencode adapter 读 `"opencode_session_id"`）；(3) 两个适配器返回的 cli_session_id 格式不同但 mapping 逻辑应统一。
 
-1. `_resolve_session` 预生成 UUID 写入 mapping，但 CLI 不认这个 UUID
-2. kwargs key 不匹配：`agent.py` 传 `"cli_session_id"`，opencode adapter 读 `"opencode_session_id"`，`--session` 参数从未生效
-3. 两个适配器（claudecode / opencode）返回的 cli_session_id 格式不同，但 mapping 逻辑应统一
+改为"首次不传 session，CLI 自建 → INIT 事件回写 mapping → 后续 resume"的模式。
 
-## 修复
+## 怎么实现的
 
 ### 核心思路
 

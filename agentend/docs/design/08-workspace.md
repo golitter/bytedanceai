@@ -1,17 +1,17 @@
 # Workspace 多 Agent 隔离实现
 
-## 问题背景
+## 实现了什么
 
-多 Agent 并行执行编码任务时，如果所有 Agent 都在同一个仓库目录下工作，会遇到以下问题：
+使用 git worktree 实现多 Agent 并行编码的物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构（`main -> task/{task_id} -> agent/{session_id}/{task_id}`）、JSON 文件持久化存储、per-task 并发锁、启动恢复和 DB inactive 清理，构成完整的多 Agent 隔离方案。
+
+解决了以下问题：
 
 1. **分支污染**：所有 Agent branch 直接 merge 到 main，多 Agent 并发会互相覆盖
 2. **状态丢失**：workspace 状态纯内存存储，进程崩溃或重启后全部丢失，git worktree 变成无人管理的孤儿
 3. **竞态条件**：create/merge/cleanup 无并发保护，高并发下 worktree 状态不一致
 4. **资源泄漏**：无自动清理机制，worktree 目录和分支会无限积累占用磁盘
 
-## 解决方案
-
-使用 git worktree 实现物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构、持久化存储、并发锁、启动恢复和 DB inactive 清理，构成生产级的多 Agent 隔离方案。
+## 怎么实现的
 
 ## 分支结构设计
 

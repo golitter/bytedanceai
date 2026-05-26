@@ -81,7 +81,7 @@ backend/
 │   └── config.yaml          # 配置文件
 ├── internal/
 │   ├── conf/                # 配置加载
-│   ├── handler/             # HTTP 处理器（task, session, message, agent, avatar, stream, diff_snapshot, workspace）
+│   ├── handler/             # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace）
 │   ├── stream/              # SSE 流式写入（Redis Stream → MySQL 批量刷写）
 │   ├── middleware/           # 中间件（auth, cors, logger）
 │   ├── model/               # 数据模型（task, session, message, diff_snapshot, session_agent）

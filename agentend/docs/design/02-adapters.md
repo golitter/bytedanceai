@@ -42,7 +42,7 @@ adapter_cls = registry.get(AgentType.CLAUDE_CODE)  # 返回类，由调用方实
 将请求参数组装为 CLI 命令：
 
 ```python
-claude -p "<message>" --output-format stream-json --verbose --include-partial-messages \
+claude -p "<message>" --output-format stream-json --verbose --include-partial-messages --dangerously-skip-permissions \
     [--resume <cli_session_id> | --session-id <cli_session_id>] \
     [--append-system-prompt "<text>"] \
     [--allowedTools Read,Write] \
@@ -116,7 +116,7 @@ Codex CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.creat
 
 ```python
 # 新建会话
-codex exec --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins -s danger-full-access [-C <cwd>] [-m <model>] <message>
+codex exec --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins -s danger-full-access <message> [-C <cwd>] [-m <model>]
 
 # 恢复会话
 codex exec resume <cli_session_id> --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins <message>

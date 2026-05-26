@@ -131,7 +131,7 @@ class StreamEvent(BaseModel):
 
 **命令构造**：
 ```python
-cmd = [settings.cli.claude_path, "-p", message, "--output-format", "stream-json", "--verbose"]
+cmd = [cli_path, "-p", message, "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--dangerously-skip-permissions"]
 # --session-id / --resume    会话管理
 # --append-system-prompt     追加系统提示
 # --allowedTools             工具白名单

@@ -75,9 +75,10 @@ Claude Code CLI 的 stream-json 输出类型 → StreamEvent 类型：
 | CLI 输出 type | StreamEvent type | 说明 |
 |---------------|-----------------|------|
 | `system`      | `init`          | 包含 `session_id` |
-| `assistant`   | `text`          | 从 `data.message.content` 提取 |
 | `stream_event`| `text`          | token 级流式（`--include-partial-messages`），提取 `content_block_delta` |
+| `assistant`   | 忽略            | 完整 assistant 消息，已被 stream_event 覆盖 |
 | `tool_use`    | `tool_call`     | 工具名 + 参数 |
 | `tool_result` | `tool_result`   | 工具执行结果 |
 | `result`      | `done`          | 最终文本 + usage |
+| 非 JSON 行    | `text`          | 原文包装为 TEXT 事件 |
 | 其他          | 忽略            | 返回 None |

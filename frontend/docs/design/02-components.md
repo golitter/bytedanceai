@@ -60,7 +60,7 @@ Active 态通过 `borderLeft: 2px solid var(--primary)` 品牌色竖线标识，
 
 ```tsx
 const handleValidate = async () => {
-  const path = repoPathRef.current?.value?.trim()
+  const path = repoPath.trim()
   if (!path) {
     setRepoPathError('请输入仓库路径')
     setRepoPathValidated(false)
@@ -80,7 +80,7 @@ const handleValidate = async () => {
 }
 ```
 
-可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator']`。选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
+可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex']`。选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
 
 ---
 
@@ -96,7 +96,7 @@ export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentNa
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
 ```
 
-发送消息前会先验证 `repoPath`（如果存在），通过 `validateRepoPath()` API 校验路径有效性。Header 区域显示 `AgentAvatar` + Agent 显示名 + "正在回复..." 状态。点击 Header 中的头像或名称可打开 `AgentEditDialog`。
+发送消息前会先验证 `repoPath`（如果存在），通过 `validateRepoPath()` API 校验路径有效性。Header 区域显示 Agent 显示名 + "正在回复..." 状态。空态时居中显示大尺寸 `AgentAvatar` + 显示名 + "发送消息开始对话" 提示。
 
 ### MessageList (`src/components/chat/MessageList.tsx`)
 
@@ -158,7 +158,7 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 ```
 
 - **user**：右对齐，`bg-primary-soft` 背景 + `border-primary-border` 边框
-- **agent**：左对齐 + AgentAvatar，`bg-card` 背景 + 左侧 3px Agent 色竖线，流式输出时显示闪烁光标 `▌`
+- **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），`bg-card` 背景 + 左侧 3px Agent 色竖线，流式输出时显示闪烁光标 `▌`
 - **system**：居中，小字 `text-muted-foreground`
 
 ### MessageInput (`src/components/chat/MessageInput.tsx`)
@@ -193,7 +193,7 @@ const AGENT_COLORS: Record<AgentType, string> = {
 
 ### AgentEditDialog (`src/components/chat/AgentEditDialog.tsx`)
 
-Agent 编辑弹窗，支持修改名称和上传头像。上传头像调用 `uploadAvatar` API，保存时调用 `updateSession` API 并 invalidate `conversations` 缓存：
+Agent 编辑弹窗（shadcn Dialog），支持修改名称和上传头像。上传头像调用 `uploadAvatar` API，保存时调用 `updateSession` API 并 invalidate `conversations` 缓存。打开时通过 `prevOpen` 状态同步重置表单值：
 
 ```tsx
 const handleSave = async () => {
@@ -204,6 +204,54 @@ const handleSave = async () => {
     await updateSession(sessionId, data)
     await queryClient.invalidateQueries({ queryKey: ['conversations'] })
   }
+}
+```
+
+### AgentHoverCard (`src/components/chat/AgentHoverCard.tsx`)
+
+Agent 悬停卡片（Popover），鼠标悬停 300ms 后展示。通过 `fetchAgentProfile` API 获取 Agent 技能列表（最多显示 3 个），底部提供 "查看 Agent 详情" 链接跳转到 `AgentProfilePage`。使用 `PopoverAnchor` 包裹 `AgentAvatar` 作为触发区域，内容区显示头像 + 名称 + 状态 Badge + Skills 预览 + Session ID。
+
+```tsx
+export function AgentHoverCard(props: AgentHoverCardProps) {
+  // 300ms show delay, 200ms hide delay, pointer-inside tracking
+  // Popover + PopoverAnchor wrapping AgentAvatar
+  // Content: AgentAvatar + name + status badge + skills (max 3) + link to /agent/:sessionId
+}
+```
+
+在 `MessageBubble` 的 agent 变体中，替代了直接使用的 `AgentAvatar`——通过 `AgentHoverCard` 包裹，实现悬停即展示 Agent 信息。
+
+### AgentMeta (`src/components/chat/AgentMeta.tsx`)
+
+Agent 元数据网格组件，在 `AgentProfilePage` 中使用。2 列 grid 布局展示 Session ID、Task ID、Repo Path、Workspace、创建时间、消息数：
+
+```tsx
+export function AgentMeta({ detail }: { detail: AgentDetail }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 rounded-[10px] border border-border bg-card p-4">
+      <MetaItem label="Session ID" value={detail.session_id} mono />
+      <MetaItem label="Task ID" value={detail.task_id} mono />
+      {/* Repo Path、Workspace、创建时间、消息数 */}
+    </div>
+  )
+}
+```
+
+### SkillCard (`src/components/chat/SkillCard.tsx`)
+
+Agent 技能卡片，显示技能名称、描述、来源，builtin 技能显示绿色 Badge。在 `AgentProfilePage` 中列表渲染：
+
+```tsx
+export function SkillCard({ skill }: { skill: AgentSkill }) {
+  return (
+    <div className="rounded-[10px] border border-border bg-card p-3.5">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-sm font-semibold">{skill.name}</span>
+        {skill.builtin && <span className="badge">builtin</span>}
+      </div>
+      <p className="text-[13px] leading-relaxed text-foreground/75">{skill.description}</p>
+    </div>
+  )
 }
 ```
 

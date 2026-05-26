@@ -25,6 +25,11 @@ export interface ChatMessage {
 
 export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
 
+export interface ActiveStream {
+  messageId: string
+  sessionId: string
+}
+
 interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
@@ -249,7 +254,7 @@ export function useCreateConversation() {
 
 ### useChatStream Hook (`src/hooks/use-chat-stream.ts`)
 
-核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE：
+核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort }`：
 
 ```typescript
 export function useChatStream(taskId: string, sessionId: string) {
@@ -266,11 +271,16 @@ export function useChatStream(taskId: string, sessionId: string) {
       reconnect: true,
       onEvent: (event: StreamEvent) => {
         switch (event.type) {
+          case EventTypeValues.Init:
+            break
           case EventTypeValues.Text:
             store.streamText(sessionId, (event.content?.text as string) ?? '')
             break
           case EventTypeValues.ToolCall:
             store.streamToolCall(sessionId, (event.content?.name as string) ?? 'unknown')
+            break
+          case EventTypeValues.ToolResult:
+            store.streamToolResult(sessionId)
             break
           case EventTypeValues.Done:
             store.streamDone(sessionId)

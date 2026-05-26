@@ -134,7 +134,6 @@ pnpm dev
 | gorm.io/gorm + gorm.io/driver/mysql | ORM + MySQL 驱动 |
 | gopkg.in/yaml.v3 | 配置解析（YAML → struct） |
 | golang-jwt/jwt/v5 | JWT 认证 |
-| go-playground/validator/v10 | 参数校验 |
 | google/uuid | UUID 生成 |
 | joho/godotenv | 环境变量加载 |
 | gin-contrib/cors | CORS 中间件 |

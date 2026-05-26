@@ -16,11 +16,13 @@ src/
 │   ├── markdown/           # Markdown 渲染
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/
-│   └── ImPage.tsx          # 主页面
-├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations 等）
+│   ├── ImPage.tsx          # 主页面
+│   └── AgentProfilePage.tsx # Agent 详情页
+├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style）
 ├── stores/
 │   └── chat.ts             # Zustand Store
 ├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, diff-parser）
+├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```
 

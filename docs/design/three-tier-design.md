@@ -888,14 +888,19 @@ backend/
 │   │   └── logger.go
 │   ├── handler/                     # Gin HTTP Handlers
 │   │   ├── agent.go                 # SSE 订阅 + 透传到 AgentEnd
+│   │   ├── agent_profile.go         # Agent Profile CRUD
 │   │   ├── avatar.go                # 头像上传
+│   │   ├── diff_snapshot.go         # Diff 快照
 │   │   ├── message.go               # 消息 CRUD
 │   │   ├── session.go               # Session CRUD
 │   │   ├── stream.go                # SSE 流处理
-│   │   └── task.go                  # Task CRUD + State Machine
+│   │   ├── task.go                  # Task CRUD + State Machine
+│   │   └── workspace.go             # Workspace 代理
 │   ├── model/                       # GORM 模型
+│   │   ├── diff_snapshot.go
 │   │   ├── message.go
 │   │   ├── session.go
+│   │   ├── session_agent.go
 │   │   └── task.go
 │   ├── stream/                      # Redis Stream 写入
 │   │   └── writer.go

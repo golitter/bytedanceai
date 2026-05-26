@@ -49,8 +49,8 @@
 
 ### 3.2 三层组件模型
 
-- **Page（页面层）**：负责路由、布局编排、数据组合。对应 React Router 的页面组件，如 ChatPage、TaskDetailPage。通过 useQuery/useLoaderData 获取数据，向下传递。
-- **Smart（容器层）**：负责状态管理、数据请求、业务编排。如 ChatArea 管理 streaming 状态，SessionManager 管理会话切换。内部使用 useReducer 或 TanStack Query。
+- **Page（页面层）**：负责路由、布局编排、数据组合。对应 React Router 的页面组件，如 ImPage、AgentProfilePage。通过 useQuery/useLoaderData 获取数据，向下传递。
+- **Smart（容器层）**：负责状态管理、数据请求、业务编排。如 ChatArea 管理 streaming 状态，ConversationList 管理会话切换。内部使用 useReducer 或 TanStack Query。
 - **Dumb（展示层）**：只接收 props 渲染 UI，无内部请求或全局状态。如 MessageBubble、AgentAvatar、CodeBlock。优先从 shadcn/ui 扩展，保持 Radix 无障碍特性。
 
 ### 3.3 本项目组件规划（Phase 2 Chat UI）
@@ -125,7 +125,7 @@ AI Chat 天然是状态机，状态在 idle → loading → streaming → tool_r
 
 使用 React Router 7 的 BrowserRouter 客户端路由。路由定义集中在 main.tsx。
 
-当前路由结构：`/*` → `ImPage`（IM 聊天界面），所有路径统一渲染双栏布局。后续可按需添加 `/settings`、`/history` 等路由。
+当前路由结构：`/agent/:sessionId` → `AgentProfilePage`（Agent 详情页）、`/*` → `ImPage`（IM 聊天界面）。后续可按需添加 `/settings`、`/history` 等路由。
 
 ---
 

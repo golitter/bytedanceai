@@ -8,7 +8,7 @@
 
 ### 应用入口 (`src/main.tsx`)
 
-顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，所有路由指向 `ImPage`：
+顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条路由：Agent 详情页 + IM 主页 catch-all：
 
 ```tsx
 const queryClient = new QueryClient()
@@ -18,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
+          <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
           <Route path="/*" element={<ImPage />} />
         </Routes>
       </BrowserRouter>
@@ -93,7 +94,8 @@ src/
 ├── index.css                         # 全局样式：Tailwind + CSS 变量暗色主题
 │
 ├── pages/
-│   └── ImPage.tsx                    # 主页面：ConversationList + ChatArea 双栏布局
+│   ├── ImPage.tsx                    # 主页面：ConversationList + ChatArea 双栏布局
+│   └── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
 │
 ├── components/
 │   ├── im/                           # 对话列表侧栏
@@ -106,8 +108,11 @@ src/
 │   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动 + 向上翻页加载）
 │   │   ├── MessageBubble.tsx         # 消息气泡（user / agent / system 三种变体）
 │   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送）
-│   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯）
+│   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯 + DiceBear initials）
+│   │   ├── AgentHoverCard.tsx        # Agent 悬停卡片（Popover + 技能预览 + 跳转详情页）
 │   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
+│   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
+│   │   ├── SkillCard.tsx             # Agent 技能卡片（名称 + 描述 + builtin 标记）
 │   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）
@@ -131,7 +136,8 @@ src/
 │   │   └── CodeBlock.tsx             # 代码块（Shiki 高亮 + 行号）
 │   │
 │   └── ui/                           # shadcn/ui 基础组件
-│       └── dialog.tsx
+│       ├── dialog.tsx
+│       └── popover.tsx
 │
 ├── hooks/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
@@ -179,3 +185,4 @@ src/
 | 代码编辑 | @uiw/react-codemirror + @codemirror/* | Diff 文件编辑器（语法高亮 + 懒加载） |
 | 图标 | Lucide React | 统一图标系统 |
 | 字体 | @fontsource-variable/geist | Geist Variable 字体 |
+| 无障碍原语 | radix-ui + @radix-ui/react-dialog | shadcn/ui 底层 Popover / Dialog 原语 |

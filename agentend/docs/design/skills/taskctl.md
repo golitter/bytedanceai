@@ -1,10 +1,18 @@
 # taskctl — Agent 共享上下文管理工具
 
-## 概述
+## 实现了什么
 
 `taskctl` 是一个 Go 编写的轻量 CLI 工具，用于多 Agent 协作场景下的共享上下文读写。它通过解析自身可执行文件的路径，自动识别当前 Agent 身份（taskID / sessionID / agentType），无需额外配置。
 
-## 源码位置
+核心能力：
+- 任务级配置和内存管理
+- 共享内存（common）和私有内存（sub）隔离
+- 基于 Git 分支的多 Agent 协作
+- Agent 分支 → 任务分支的安全合并
+
+## 怎么实现的
+
+### 源码位置
 
 ```
 agentend/src/skills/builtin/taskctl/
@@ -16,9 +24,32 @@ agentend/src/skills/builtin/taskctl/
 └── SKILL.md       # 使用说明（面向 Agent）
 ```
 
-## 路径约定
+### 路径解析 (`main.go`)
 
 `taskctl` 通过 `os.Executable()` 获取自身路径，然后向上回溯解析出 taskID、sessionID 和 agentType：
+
+```go
+func main() {
+    exePath, err := os.Executable()
+    // ...
+    exePath, err = filepath.EvalSymlinks(exePath)
+    // ...
+    taskID, sessionID, sharedDir, _, err := parsePath(exePath)
+    // ...
+    cmd := os.Args[1]
+    switch cmd {
+    case "help":    printHelp()
+    case "ls":      cmdLs(sharedDir)
+    case "summary": cmdSummary(sharedDir, sessionID)
+    case "common-memory": cmdMemory(filepath.Join(sharedDir, "memory", "common"), os.Args[2:])
+    case "sub-memory":    cmdMemory(filepath.Join(sharedDir, "memory", sessionID), os.Args[2:])
+    case "write-sub-memory": cmdWriteMemory(filepath.Join(sharedDir, "memory", sessionID), os.Args[2:])
+    case "merge":   cmdMerge(taskID, sessionID)
+    }
+}
+```
+
+路径约定：
 
 ```
 <worktrees_root>/worktrees/<taskID>/<sessionID>/<configDir>/skills/taskctl/taskctl
@@ -40,7 +71,7 @@ agentend/src/skills/builtin/taskctl/
     └── <sessionID>/     # Agent 私有记忆
 ```
 
-## 命令
+### 命令
 
 | 命令 | 说明 |
 |------|------|
@@ -64,7 +95,7 @@ agentend/src/skills/builtin/taskctl/
 4. 合并成功：切回 agent 分支，输出 `merged to task/{taskID}`
 5. 合并冲突：执行 `git merge --abort`，切回 agent 分支，输出错误到 stderr，退出码 1
 
-## 分发机制
+### 分发机制
 
 `taskctl` 由 `SkillProvisioner` 自动分发到 agent worktree，流程：
 
@@ -82,7 +113,7 @@ taskctl:
     - taskctl
 ```
 
-## 编译与测试
+### 编译与测试
 
 ```bash
 cd agentend/src/skills/builtin/taskctl
@@ -98,34 +129,3 @@ GOOS=linux GOARCH=amd64 go build -o taskctl .
 ```
 
 编译后 `taskctl` 文件替换到当前目录即可，下次 `provision` 会自动分发新版本。
-
-## 修改指南
-
-### 新增命令
-
-1. 在 `main.go` 的 `switch cmd` 中添加 `case`
-2. 实现对应函数（参考 `cmdLs` / `cmdMerge` 等现有命令）
-3. 在 `printHelp()` 中补充说明
-4. 在 `main_test.go` 中添加测试
-5. 更新 `SKILL.md` 中的命令列表
-6. 重新编译：`go build -o taskctl .`
-
-### 路径解析变更
-
-路径解析逻辑在 `parsePath()` 函数中。如果 worktree 目录结构发生变化，需同步修改此函数和对应测试（`TestParsePath` / `TestParsePathOpenCode` / `TestParsePathInvalid`）。
-
-### 添加新 builtin skill
-
-1. 在 `builtin/` 下创建新目录，放入 `SKILL.md` 和所需文件
-2. 在 `config.yaml` 的 `skills.manifest` 中添加声明：
-
-```yaml
-new-skill:
-  file:
-    - SKILL.md
-    - taskctl
-  dir:                    # 可选，按需声明
-    - templates
-```
-
-3. `SkillProvisioner` 会自动读取 manifest 并分发

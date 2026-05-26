@@ -101,6 +101,7 @@ backend/
 │   ├── generated/                # 契约生成的类型文件
 │   ├── handler/                  # Gin HTTP Handlers
 │   │   ├── agent.go              # SSE 订阅 + 透传到 AgentEnd
+│   │   ├── agent_profile.go      # Agent Profile CRUD
 │   │   ├── avatar.go             # 头像上传
 │   │   ├── diff_snapshot.go      # Diff 快照
 │   │   ├── message.go            # 消息 CRUD

@@ -10,6 +10,7 @@
 - [06-cards.md](design/06-cards.md) — 技能输出卡片系统（DiffCard + HtmlCard + ImageCard + AttachmentCard + PreviewCard）
 - [07-diff-viewer.md](design/07-diff-viewer.md) — 多文件 Diff 查看与编辑（DiffFileTabs + DiffFileView + DiffFileEditor）
 - [08-block-parser.md](design/08-block-parser.md) — 消息结构化解析（MessageBlock 类型 + aka_yhy 标记协议 + diff-parser）
+- [09-time-and-pagination.md](design/09-time-and-pagination.md) — 消息时间分隔线与 Cursor 分页（formatRelativeTime + shouldShowTimeSeparator + DisplayItem + prependMessages）
 
 ## reference/
 

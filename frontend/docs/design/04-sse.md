@@ -191,5 +191,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchAgentTypes` | GET | `/api/agent-types` | 获取可用 Agent 类型列表 |
 | `uploadAvatar` | POST | `/api/agents/avatar` | 上传头像 |
 | `validateRepoPath` | POST | `/api/validate-repo-path` | 校验仓库路径 |
+| `fetchAgentProfile` | GET | `/api/sessions/:id/profile` | 获取 Agent 悬停卡片数据（名称 + 头像 + 技能） |
+| `fetchAgentDetail` | GET | `/api/sessions/:id/detail` | 获取 Agent 详情页数据（元数据 + 技能 + 统计） |
 | `fetchConversations` | GET | 多接口聚合 | Task+Session 扁平化对话列表 |
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |

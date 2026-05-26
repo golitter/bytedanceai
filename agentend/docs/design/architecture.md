@@ -1,18 +1,63 @@
 # AgentEnd Runtime 实现文档
 
-## 概述
+## 实现了什么
 
-AgentEnd Runtime 是一个 Python FastAPI 服务，作为 AgentHub 多 Agent 协作平台的 AI 执行引擎。
-
-架构定位：
+AgentEnd Runtime 是一个 Python FastAPI 服务，作为 AgentHub 多 Agent 协作平台的 AI 执行引擎。架构定位：
 
 ```
-React 前端 → Go Backend → AgentEnd Runtime (本服务) → Claude Code CLI
+React 前端 → Go Backend → AgentEnd Runtime (本服务) → Claude Code CLI / OpenCode CLI / Orchestrator
 ```
 
-Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 Claude Code CLI 子进程执行编码任务，结果通过 SSE（Server-Sent Events）流式返回。
+Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码任务，结果通过 SSE 流式返回。
 
-## 项目结构
+核心模块：
+- **adapters/** — Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
+- **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin）
+- **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
+- **orchestrator/** — Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
+- **preview/** — 工作区预览服务（aiohttp 静态文件服务器）
+- **rules/** — 规则引擎（Safety / Scope / Taskctl）
+- **session/** — 会话管理（状态机 + 持久化）
+- **skills/** — 技能供给系统（内置 taskctl）
+- **workspace/** — 工作区管理（Git Worktree 隔离）
+
+## 怎么实现的
+
+### 应用入口 (`src/app/main.py`)
+
+FastAPI 应用通过 lifespan 管理生命周期，启动时完成依赖注入、工作区恢复和清理任务：
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.adapter_registry = create_adapter_registry()
+    app.state.session_manager = create_session_manager()
+    app.state.session_store = create_session_store()
+    app.state.rule_engine = create_rule_engine()
+    app.state.workspace_manager = create_workspace_manager()
+    app.state.preview_manager = create_preview_manager()
+
+    # Startup: load persisted workspaces and recover
+    ws_mgr = app.state.workspace_manager
+    await ws_mgr._load_from_store()
+    repo_paths = {ws.repo_path for ws in ws_mgr.list()}
+    for rp in repo_paths:
+        await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
+
+    # Startup: connect DB reader and begin inactive cleanup
+    db_reader = create_db_reader()
+    await db_reader.connect()
+    await ws_mgr.start_inactive_cleanup(db_reader, interval=settings.workspace.cleanup_interval)
+
+    yield
+
+    # Shutdown
+    await ws_mgr.stop_inactive_cleanup()
+    await app.state.preview_manager.stop_all()
+    await db_reader.close()
+```
+
+### 项目结构
 
 ```
 agentend/

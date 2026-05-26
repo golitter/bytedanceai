@@ -77,12 +77,12 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
 
 ### DiffFileView (`src/components/diff/DiffFileView.tsx`)
 
-基于 `react-diff-view` 的统一视图渲染，只接收 `ParsedDiffFile` 并渲染 hunks：
+基于 `react-diff-view` 的视图渲染，支持 Split / Unified 两种模式，通过 `viewType` 属性切换：
 
 ```tsx
-export function DiffFileView({ file }: DiffFileViewProps) {
+export function DiffFileView({ file, viewType = 'split' }: DiffFileViewProps) {
   return (
-    <Diff viewType="unified" diffType={file.type} hunks={file.hunks}>
+    <Diff viewType={viewType} diffType={file.type} hunks={file.hunks}>
       {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
     </Diff>
   )

@@ -98,10 +98,10 @@ agentend/
 - [10-workspace-branch-cleanup.md](../design/10-workspace-branch-cleanup.md) — Workspace 分支清理
 - [11-orchestrator-planning.md](../design/11-orchestrator-planning.md) — Orchestrator 规划（LangGraph）
 - [12-cli-adapter-comparison.md](../design/12-cli-adapter-comparison.md) — CLI Adapter 适配差异对比
-- [11-orchestrator-planning.md](../design/11-orchestrator-planning.md) — Orchestrator 规划（LangGraph）
 - [13-preview-server.md](../design/13-preview-server.md) — 工作区预览服务（aiohttp 静态文件服务器）
 - [14-pin-memory.md](../design/14-pin-memory.md) — 约束钉住与上下文注入（PinMemory）
 - [architecture.md](../design/architecture.md) — 架构总览
+- [skills/taskctl.md](../design/skills/taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
 
 ### reference/
 
