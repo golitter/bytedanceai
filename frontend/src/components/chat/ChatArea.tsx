@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
+import { useConversations } from '@/hooks/use-conversations'
 import { validateRepoPath } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
+import { useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
 import { AgentEditDialog } from './AgentEditDialog'
@@ -32,6 +34,22 @@ export function ChatArea({
   const [editOpen, setEditOpen] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
+
+  const { data: conversations } = useConversations()
+  const getSession = useChatStore((s) => s.getSession)
+
+  const sendDisabledHint = useMemo(() => {
+    if (!isStreaming) return undefined
+    const taskSessions = conversations?.filter((c) => c.taskId === taskId) ?? []
+    const streamingNames = taskSessions
+      .filter((c) => {
+        const s = getSession(c.sessionId)
+        return ['loading', 'streaming', 'tool_running'].includes(s.status)
+      })
+      .map((c) => c.agentName ?? AGENT_NAMES[c.agentType] ?? c.agentType)
+    if (streamingNames.length === 0) return undefined
+    return `正在等待 ${streamingNames.join('、')} 回复中…`
+  }, [isStreaming, conversations, taskId, getSession])
 
   const handleSend = async (message: string) => {
     setValidationError(null)
@@ -115,7 +133,9 @@ export function ChatArea({
       {/* Input */}
       <MessageInput
         onSend={handleSend}
-        disabled={isStreaming || validating}
+        disabled={validating}
+        sendDisabled={isStreaming}
+        sendDisabledHint={sendDisabledHint}
         placeholder={validating ? '校验路径中...' : `发消息给 ${displayName}...`}
       />
 
