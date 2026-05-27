@@ -50,7 +50,7 @@
 
 ```
 新增路由:
-  GET /api/sessions/:sid/tasks          查询 session 下的 task 列表
+  GET /api/tasks?session_id=xxx        查询 session 下的 task 列表
 ```
 
 > 前端加载历史消息时，从 task 列表中恢复 user message + result。

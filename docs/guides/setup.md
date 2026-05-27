@@ -108,7 +108,8 @@ backend/
 │   │   ├── session.go            # Session CRUD
 │   │   ├── stream.go             # SSE 流处理
 │   │   ├── task.go               # Task CRUD + 运行
-│   │   └── workspace.go          # Workspace 代理
+│   │   ├── workspace.go          # Workspace 代理
+│   │   └── admin*.go             # 管理面板 API（认证、Agent、健康、资源、会话、统计、工作区）
 │   ├── middleware/                # Gin 中间件（auth, cors, logger）
 │   ├── model/                    # GORM 模型（session, task, message, diff_snapshot, session_agent）
 │   ├── stream/                   # Redis Stream 写入
@@ -306,6 +307,7 @@ frontend/src/
 │   ├── im/             # IM 会话管理组件
 │   ├── cards/          # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
 │   ├── diff/           # Diff 查看器（多文件 tab + CodeMirror 编辑）
+│   ├── layout/         # 布局组件（AdminMenu, IconSidebar）
 │   ├── markdown/       # Markdown 渲染组件
 │   └── ui/             # shadcn/ui 组件（自动生成）
 ├── pages/              # 页面组件

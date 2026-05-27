@@ -197,6 +197,7 @@ agentend/src/
 ├── adapters/             # 简化：Adapter 只负责 execute
 │   ├── base.py           # 精简为 execute + stream_execute
 │   ├── claude.py
+│   ├── codex.py
 │   ├── opencode.py
 │   └── orchestrator.py
 ├── orchestrator/         # 保留 LangGraph，只做 Planner Engine
@@ -882,8 +883,9 @@ backend/
 │   ├── conf/                        # 配置加载（YAML + env override）
 │   │   └── conf.go
 │   ├── generated/                   # 契约生成的类型文件
-│   ├── middleware/                   # auth, cors, logger
+│   ├── middleware/                   # auth, cors, logger, admin_auth
 │   │   ├── auth.go
+│   │   ├── admin_auth.go
 │   │   ├── cors.go
 │   │   └── logger.go
 │   ├── handler/                     # Gin HTTP Handlers
@@ -895,7 +897,8 @@ backend/
 │   │   ├── session.go               # Session CRUD
 │   │   ├── stream.go                # SSE 流处理
 │   │   ├── task.go                  # Task CRUD + State Machine
-│   │   └── workspace.go             # Workspace 代理
+│   │   ├── workspace.go             # Workspace 代理
+│   │   └── admin*.go                # 管理面板 API（认证、Agent、健康、资源、会话、统计、工作区）
 │   ├── model/                       # GORM 模型
 │   │   ├── diff_snapshot.go
 │   │   ├── message.go

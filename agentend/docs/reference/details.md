@@ -27,6 +27,7 @@
 | POST | `/v1/pin/add` | 添加 Pin 到共享内存 |
 | POST | `/v1/pin/remove` | 移除 Pin |
 | GET | `/v1/pin/list` | 列出所有 Pin |
+| GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
 | GET | `/health` | 健康检查 |
 
 ## 项目结构
@@ -36,7 +37,7 @@ agentend/
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin）
+│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin, resources）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
 │   ├── orchestrator/   # Orchestrator 规划模块（LangGraph + LLM 任务拆解）
@@ -51,7 +52,6 @@ agentend/
 │   ├── reference/      # 参考文档（API 端点、适配器差异）
 │   ├── testing/        # 测试手册（手动测试流程）
 │   └── backlog/        # 待办 / 设计笔记
-├── tests/              # 测试
 ├── pyproject.toml      # 项目配置与依赖
 └── ruff.toml           # 代码风格
 ```

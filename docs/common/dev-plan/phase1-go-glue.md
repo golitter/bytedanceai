@@ -13,7 +13,7 @@ curl -X POST http://localhost:8080/api/sessions \
 # → {"code": 200, "data": {"session_id": "xxx", ...}}
 
 # 运行 task 并拿到 SSE 流
-curl -N http://localhost:8080/api/sessions/{sid}/tasks/run \
+curl -N http://localhost:8080/api/tasks/{taskId}/run \
   -H "Content-Type: application/json" \
   -d '{"message": "hello", "agent_type": "claude-code"}'
 # → SSE: data: {"type": "text", "content": "...", ...}
@@ -95,7 +95,7 @@ type Task struct {
 
 ```
 核心路由:
-  POST   /api/sessions/:sid/tasks/run   运行 agent (SSE 流式)
+  POST   /api/tasks/:taskId/run          运行 agent (SSE 流式)
 
 处理流程:
   1. 解析请求, 生成 task_id

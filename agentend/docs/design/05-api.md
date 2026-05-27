@@ -17,6 +17,7 @@ def get_rule_engine(request) -> RuleEngine
 def get_session_store(request) -> SessionMappingStore
 def get_workspace_manager(request) -> WorkspaceManager
 def get_preview_manager(request) -> PreviewManager
+# 注：resources.py 不通过 DI，直接调用 shutil/platform 获取系统信息
 ```
 
 ### Health Check (`src/api/v1/health.py`)
@@ -85,6 +86,16 @@ GET /health → {"status": "ok", "version": "<config.yaml app.version>"}
 ### Pin 管理 (`src/api/v1/pin.py`)
 
 Pin Memory 上下文管理端点，允许用户将关键约束"钉住"供 Orchestrator 使用。
+
+### Resources (`src/api/v1/resources.py`)
+
+系统资源监控端点，返回磁盘和内存使用情况：
+
+```
+GET /v1/resources → {"disk": {"used": ..., "total": ..., "unit": "GB"}, "memory": {...}}
+```
+
+macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/meminfo` 获取。
 
 ### Validate Repo Path (`src/api/v1/validate.py`)
 

@@ -6,12 +6,12 @@ Session 映射存储在本地 JSON 文件（路径来自 `config.yaml` 的 `sess
 
 ## 待办事项
 
-### 1. 将 SessionMappingStore 替换为抽象接口
+### 1. 将 SessionMappingStore 替换为抽象接口（Protocol）
 
-当前 `SessionMappingStore` 直接读写文件。需要抽象出接口，支持多种后端实现：
+当前 `SessionMappingStore` 是一个具体类（直接读写 JSON 文件）。需要抽象出接口，支持多种后端实现：
 
 ```python
-class SessionMappingStore(Protocol):
+class SessionMappingStoreProtocol(Protocol):
     def get_cli_session_id(self, session_id: str, task_id: str = "") -> str | None: ...
     def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None: ...
     def delete(self, session_id: str, task_id: str = "") -> None: ...

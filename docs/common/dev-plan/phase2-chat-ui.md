@@ -104,7 +104,7 @@
   用 fetch + ReadableStream (不用 EventSource)
   因为需要 POST body
 
-  const resp = await fetch('/api/sessions/${sid}/tasks/run', {
+  const resp = await fetch('/api/tasks/${taskId}/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, agent_type })

@@ -100,6 +100,7 @@ app.include_router(agent_router)      # /v1/agent/*
 app.include_router(pin_router)        # /v1/pin/*
 app.include_router(workspace_router)  # /v1/workspace/*
 app.include_router(validate_router)   # /v1/validate-repo-path
+app.include_router(resources_router)  # GET /v1/resources
 ```
 
 #### CORS

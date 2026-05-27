@@ -43,10 +43,11 @@ contracts/
 
 ## Pre-commit Hook
 
-`.husky/pre-commit` 包含两个阶段：
+`.husky/pre-commit` 包含三个阶段：
 
 1. **lint-staged** — 代码格式检查
 2. **契约变更检测** — 检测 staged 文件是否涉及契约相关目录，触发时自动运行 `make generate` 并暂存
+3. **Secret 验证** — 契约变更触发时，要求输入 commit secret 确认（密钥存储在 `.husky/.commit-secret`）
 
 ### 契约相关目录
 
@@ -57,11 +58,9 @@ contracts/
 - `agentend/src/adapters/`
 - `backend/internal/model/`
 - `backend/internal/handler/`
-- `backend/internal/types/`
-- `frontend/src/types/`
-- `frontend/src/api/`
+- `frontend/src/lib/`
 - `contracts/`
 
 ### Secret 配置
 
-> 已移除。当前 pre-commit hook 不包含 Secret 验证阶段。
+契约变更触发时，pre-commit hook 会要求输入 commit secret 进行确认。密钥存储在 `.husky/.commit-secret` 文件中（不纳入版本控制）。

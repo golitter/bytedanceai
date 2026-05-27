@@ -56,12 +56,14 @@ streamHandler := handler.NewStreamHandler()
 agentProfileHandler := handler.NewAgentProfileHandler()
 workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 diffSnapshotHandler := handler.NewDiffSnapshotHandler()
+adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 ```
 
 - `TaskHandler` 依赖 `agentend_client.Client`（转发 run 和 validate-repo-path）
 - `AvatarHandler` 依赖 `qiniu.Uploader`（头像上传）
 - `AgentProfileHandler` 无外部依赖（读取 Session/Task/Message 表）
 - `WorkspaceHandler` 依赖 `agentend_client.Client`（代理工作区操作到 AgentEnd）
+- `AdminHandler` 依赖 `Config`（密码验证）+ `qiniu.Uploader`（头像管理）+ `agentend_client.Client`（代理资源/健康请求）
 - 其余 Handler 无外部依赖
 
 ### 中间件
@@ -140,6 +142,9 @@ api := r.Group("/api")
 		ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
 	}
 }
+
+	// Admin panel routes (self-registered via RegisterRoutes)
+	adminHandler.RegisterRoutes(api)
 ```
 
 健康检查端点：

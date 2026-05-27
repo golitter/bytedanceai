@@ -53,7 +53,7 @@ cat /tmp/orch-test/.agent/tasks/task-002.md # OpenCode 的任务
 
 ### Step 1: config.yaml + LlmConfig
 
-**修改**: `agentend/configs/config.yaml`
+**修改**: `agentend/config.yaml`
 
 ```yaml
 # 新增 llm 段
@@ -209,7 +209,7 @@ OrchestratorAdapter 实现 `BaseAgentAdapter`：
 
 ```
 AgentEnd:
-├── configs/config.yaml                     # 修改: 加 llm 段
+├── config.yaml                          # 修改: 加 llm 段
 ├── src/
 │   ├── orchestrator/                       # 🆕 整个目录
 │   │   ├── __init__.py
@@ -249,7 +249,7 @@ Frontend:
 
 ```bash
 # 1. 启动三端
-make run-all
+make all
 
 # 2. AgentEnd 单元验证 (Step 1-7 完成后)
 curl -X POST http://localhost:8001/v1/agent/execute \

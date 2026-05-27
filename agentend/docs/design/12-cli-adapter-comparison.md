@@ -53,8 +53,8 @@
 
 | Adapter | 首次 | 恢复 |
 |---------|------|------|
-| Claude | `--session-id <ID>` | `--resume <ID>` |
-| OpenCode | `--session <ID>` | `--session <ID> --fork` |
+| Claude | 不传 session 参数，CLI 自建 session（INIT 事件回写 mapping） | `--resume <ID>` |
+| OpenCode | 不传 session 参数，CLI 自建 session（INIT 事件回写 mapping） | `--session <ID> --fork` |
 | Codex | 无参数（从 thread.started 事件获取 thread_id） | `exec resume <ID>` |
 
 Codex 恢复命令的特殊性：

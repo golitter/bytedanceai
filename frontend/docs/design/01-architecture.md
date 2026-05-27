@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 React 19 + Vite 8 的单页应用，采用 IM 聊天体验的双栏布局。左侧为对话列表侧栏，右侧为聊天区。使用 Zustand 管理聊天导航与会话状态，TanStack React Query 管理服务端数据缓存。
+基于 React 19 + Vite 8 的单页应用，采用 QQ 风格三栏布局。最左为图标导航栏（IconSidebar），中栏为对话列表或管理菜单（根据 NavTab 切换），右栏为聊天区或管理页面。使用 Zustand 管理聊天导航与会话状态，TanStack React Query 管理服务端数据缓存。
 
 ## 怎么实现的
 
@@ -29,39 +29,42 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-双栏布局编排：`ConversationList` 固定宽度侧栏 + `ChatArea` 弹性填充主区域。通过 `useConversations()` 获取对话列表，通过 `useChatNav()` 读取当前选中会话：
+三栏布局编排：`IconSidebar` 56px 图标导航栏 + 中栏（`ConversationList` 或 `AdminMenu`，根据 `activeTab` 切换）+ 右栏（`ChatArea` 或管理页面）。通过 `useActiveTab()` 读取当前导航 Tab，`useConversations()` 获取对话列表，`useChatNav()` 读取当前选中会话：
 
 ```tsx
 export function ImPage() {
   const { data: conversations } = useConversations()
   const { currentSessionId } = useChatNav()
+  const { activeTab } = useActiveTab()
 
   const active = conversations?.find((c) => c.sessionId === currentSessionId)
 
   return (
     <div className="flex h-screen bg-background">
-      <ConversationList />
-      <div className="flex-1">
-        {active ? (
-          <ChatArea
-            taskId={active.taskId}
-            sessionId={active.sessionId}
-            agentType={active.agentType}
-            agentName={active.agentName || undefined}
-            avatarUrl={active.avatarUrl}
-            repoPath={active.repoPath}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1} />
-            <p className="text-sm text-tertiary">选择一个对话开始聊天</p>
+      <IconSidebar />
+      <AdminPasswordDialog />
+
+      {activeTab === 'chat' ? (
+        <>
+          <ConversationList />
+          <div className="flex-1">
+            {active ? <ChatArea ... /> : <EmptyState />}
           </div>
-        )}
-      </div>
+        </>
+      ) : activeTab === 'admin' ? (
+        <>
+          <AdminMenu />
+          <div className="flex-1 overflow-auto">
+            <AdminContent />
+          </div>
+        </>
+      ) : <PlaceholderPage />}
     </div>
   )
 }
 ```
+
+NavTab 类型：`'chat' | 'contacts' | 'admin' | 'settings'`，其中 `contacts` 和 `settings` 为占位状态。`admin` Tab 进入时需先通过密码验证（`AdminPasswordDialog`），验证后根据 `activeMenuKey` 渲染对应管理页面。
 
 ### 构建配置 (`vite.config.ts`)
 
@@ -94,8 +97,15 @@ src/
 ├── index.css                         # 全局样式：Tailwind + CSS 变量暗色主题
 │
 ├── pages/
-│   ├── ImPage.tsx                    # 主页面：ConversationList + ChatArea 双栏布局
-│   └── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
+│   ├── ImPage.tsx                    # 主页面：三栏布局编排（IconSidebar + 中栏 + 右栏）+ NavTab 路由
+│   ├── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
+│   └── admin/                        # 管理面板页面（6 模块）
+│       ├── DashboardPage.tsx         #   总览仪表盘（磁盘/内存/Redis 用量）
+│       ├── SessionCleanupPage.tsx    #   会话清理（批量删除 + 筛选）
+│       ├── WorkspacePage.tsx         #   工作区管理
+│       ├── AgentOverviewPage.tsx     #   Agent 概览
+│       ├── ServiceHealthPage.tsx     #   服务健康
+│       └── StatisticsPage.tsx        #   数据统计
 │
 ├── components/
 │   ├── im/                           # 对话列表侧栏
@@ -131,6 +141,11 @@ src/
 │   │   ├── DiffFileEditor.tsx        # 懒加载编辑器外壳（Suspense）
 │   │   └── DiffFileEditorInner.tsx   # CodeMirror 编辑器（语法高亮 + 保存）
 │   │
+│   ├── layout/                       # 布局组件
+│   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavTab 切换）
+│   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（6 模块导航）
+│   │   └── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
+│   │
 │   ├── markdown/                     # Markdown 渲染
 │   │   ├── MarkdownRenderer.tsx      # react-markdown + remark-gfm + 自定义组件
 │   │   └── CodeBlock.tsx             # 代码块（Shiki 高亮 + 行号）
@@ -156,7 +171,8 @@ src/
 │       └── block-reducer.test.ts
 │
 ├── stores/
-│   └── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态（含分页）
+│   ├── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态（含分页）+ NavTab
+│   └── admin.ts                      # Zustand Store：管理面板认证状态 + 菜单选择
 │
 ├── utils/
 │   └── time.ts                       # 时间工具（formatRelativeTime + shouldShowTimeSeparator）

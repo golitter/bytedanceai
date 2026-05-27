@@ -6,15 +6,16 @@
 
 - 脚本在 `.pids/` 目录下记录每个服务的 PID 文件
 - 启动前检测 PID 文件 + 进程是否存活，已运行则跳过
-- **启动/重启必须指定单个服务**，不允许同时启动全部
-- **停止可以一次性全停**
+- `make all` 或 `make` 可同时启动全部服务
+- 也可通过 `make run-<service>` 单独启动某个服务
 
 ## 命令一览
 
-### 启动（单个）
+### 启动
 
 | 命令 | 服务 | 热重载工具 | 端口 |
 |------|------|-----------|------|
+| `make` 或 `make all` | 启动全部服务 | — | — |
 | `make run-frontend` | Vite dev server | Vite 内置 HMR | localhost:5173 |
 | `make run-backend` | Go server | Air | localhost:8080 |
 | `make run-agentend` | FastAPI server | uvicorn --reload | 见 agentend config |
@@ -28,10 +29,11 @@
 | `make stop-backend` | 停止后端 |
 | `make stop-agentend` | 停止 Agent 端 |
 
-### 重启（单个）
+### 重启
 
 | 命令 | 说明 |
 |------|------|
+| `make restart` | 重启全部服务 |
 | `make restart-frontend` | 重启前端 |
 | `make restart-backend` | 重启后端 |
 | `make restart-agentend` | 重启 Agent 端 |

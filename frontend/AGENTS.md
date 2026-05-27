@@ -13,14 +13,17 @@ src/
 │   ├── im/                 # 会话列表模块
 │   ├── cards/              # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
 │   ├── diff/               # Diff 查看器（多文件 tab + CodeMirror 编辑）
+│   ├── layout/             # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog）
 │   ├── markdown/           # Markdown 渲染
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/
-│   ├── ImPage.tsx          # 主页面
-│   └── AgentProfilePage.tsx # Agent 详情页
+│   ├── ImPage.tsx          # 主页面（三栏布局 + NavTab 路由）
+│   ├── AgentProfilePage.tsx # Agent 详情页
+│   └── admin/              # 管理面板（6 模块页面）
 ├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style）
 ├── stores/
-│   └── chat.ts             # Zustand Store
+│   ├── chat.ts             # 聊天状态 Store
+│   └── admin.ts            # 管理面板认证 Store
 ├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, diff-parser）
 ├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）

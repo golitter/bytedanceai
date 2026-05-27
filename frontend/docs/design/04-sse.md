@@ -195,3 +195,11 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchAgentDetail` | GET | `/api/sessions/:id/detail` | 获取 Agent 详情页数据（元数据 + 技能 + 统计） |
 | `fetchConversations` | GET | 多接口聚合 | Task+Session 扁平化对话列表 |
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |
+| `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |
+| `getAdminResources` | GET | `/api/admin/resources` | 获取系统资源（磁盘/内存/Redis 用量） |
+| `deleteAdminSessions` | POST | `/api/admin/sessions/delete` | 批量删除会话 |
+| `getAdminWorkspaces` | GET | `/api/admin/workspaces` | 获取工作区列表 |
+| `deleteAdminWorkspace` | DELETE | `/api/admin/workspaces/:id` | 删除工作区 |
+| `getAdminAgents` | GET | `/api/admin/agents` | 获取 Agent 列表 |
+| `getAdminServices` | GET | `/api/admin/services` | 获取服务健康状态 |
+| `getAdminStatistics` | GET | `/api/admin/statistics` | 获取统计数据 |

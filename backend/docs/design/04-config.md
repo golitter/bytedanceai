@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Redis 五个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
+通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Redis、Admin 六个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
 
 ## 怎么实现的
 
@@ -15,6 +15,7 @@ type Config struct {
 	AgentEnd AgentEndConfig `yaml:"agentend"`
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
 	Redis    RedisConfig    `yaml:"redis"`
+	Admin    AdminConfig    `yaml:"admin"`
 }
 ```
 
@@ -72,6 +73,10 @@ type QiniuConfig struct {
 	Bucket    string `yaml:"bucket"`
 	Domain    string `yaml:"domain"`
 	Region    string `yaml:"region"`
+}
+
+type AdminConfig struct {
+	Password string `yaml:"password"`
 }
 ```
 

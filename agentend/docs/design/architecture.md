@@ -74,7 +74,6 @@ agentend/
 │   ├── session/        # Session 会话管理
 │   ├── skills/         # 技能供给系统（内置 taskctl + render）
 │   └── workspace/      # 工作区管理（Git Worktree 隔离）
-├── tests/              # 测试
 ├── pyproject.toml      # 项目配置与依赖
 └── ruff.toml           # 代码风格
 ```

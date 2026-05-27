@@ -54,7 +54,7 @@
   GET /v1/artifacts?task_id=xxx     列表
 ```
 
-**修改**: `agentend/src/api/v1/router.py` — 注册 artifact 路由
+**修改**: `agentend/src/api/v1/agent.py` — 注册 artifact 路由
 
 ### 2. Go Backend: Artifact 代理
 
@@ -218,7 +218,7 @@ AgentEnd:
 │   └── models.py                       # 新增 ~20 行
 ├── src/api/v1/
 │   ├── artifact.py                     # 新增 ~50 行
-│   └── router.py                       # 修改: 注册路由
+│   └── agent.py                       # 修改: 注册 artifact 路由
 
 Go Backend:
 ├── internal/model/artifact.go          # 新增 ~20 行

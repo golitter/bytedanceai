@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-三层状态架构：Zustand 管理聊天导航与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview）。
+三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview）。
 
 ## 怎么实现的
 
 ### Zustand Store (`src/stores/chat.ts`)
 
-单一 store 管理导航状态 + 各会话独立聊天状态。导航状态存储 `currentSessionId`，会话状态以 `sessions[sessionId]` 的 Map 形式隔离：
+单一 store 管理导航状态 + 各会话独立聊天状态。导航状态存储 `currentSessionId` 和 `activeTab`（NavTab 类型），会话状态以 `sessions[sessionId]` 的 Map 形式隔离：
 
 ```typescript
 export interface ChatMessage {
@@ -24,6 +24,8 @@ export interface ChatMessage {
 }
 
 export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
+
+export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
 
 export interface ActiveStream {
   messageId: string
@@ -45,9 +47,11 @@ interface SessionChatState {
 interface ChatStoreState {
   nav: ChatNavState
   sessions: Record<string, SessionChatState>
+  activeTab: NavTab
   // Nav actions
   setCurrentSession: (sessionId: string) => void
   clearNavigation: () => void
+  setActiveTab: (tab: NavTab) => void
   // Session actions
   getSession: (sessionId: string) => SessionChatState
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
@@ -215,9 +219,9 @@ streamDone: (sessionId) =>
   }),
 ```
 
-### useChatNav 选择器
+### useChatNav / useActiveTab 选择器
 
-暴露导航状态的选择器 hook，组件通过它订阅 `currentSessionId`，避免订阅整个 store 导致不必要的 re-render：
+暴露导航状态的选择器 hook，组件通过它订阅 `currentSessionId` 或 `activeTab`，避免订阅整个 store 导致不必要的 re-render：
 
 ```typescript
 export function useChatNav() {
@@ -225,6 +229,12 @@ export function useChatNav() {
   const setCurrentSession = useChatStore((s) => s.setCurrentSession)
   const clearNavigation = useChatStore((s) => s.clearNavigation)
   return { currentSessionId, setCurrentSession, clearNavigation }
+}
+
+export function useActiveTab() {
+  const activeTab = useChatStore((s) => s.activeTab)
+  const setActiveTab = useChatStore((s) => s.setActiveTab)
+  return { activeTab, setActiveTab }
 }
 ```
 

@@ -9,9 +9,9 @@ cmd/server/main.go            # 入口
 configs/config.yaml           # 配置文件
 internal/
 ├── conf/                     # 配置加载
-├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace）
+├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, admin）
 ├── stream/                   # SSE 流式写入（Redis Stream → MySQL 批量刷写）
-├── middleware/                # 中间件（auth, cors, logger）
+├── middleware/                # 中间件（auth, admin_auth, cors, logger）
 ├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 ├── vo/                       # 统一响应封装
