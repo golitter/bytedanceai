@@ -4,18 +4,20 @@ import (
 	"agenthub/backend/internal/conf"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/vo"
+	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/qiniu"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AdminHandler struct {
-	cfg      *conf.Config
-	uploader *qiniu.Uploader
+	cfg         *conf.Config
+	uploader    *qiniu.Uploader
+	agentClient *agentend_client.Client
 }
 
-func NewAdminHandler(cfg *conf.Config, uploader *qiniu.Uploader) *AdminHandler {
-	return &AdminHandler{cfg: cfg, uploader: uploader}
+func NewAdminHandler(cfg *conf.Config, uploader *qiniu.Uploader, agentClient *agentend_client.Client) *AdminHandler {
+	return &AdminHandler{cfg: cfg, uploader: uploader, agentClient: agentClient}
 }
 
 func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {

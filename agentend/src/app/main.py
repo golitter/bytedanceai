@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.agent import router as agent_router
 from src.api.v1.health import router as health_router
 from src.api.v1.pin import router as pin_router
+from src.api.v1.resources import router as resources_router
 from src.api.v1.session import router as session_router
 from src.api.v1.validate import router as validate_router
 from src.api.v1.workspace import router as workspace_router
@@ -71,6 +72,7 @@ app.include_router(agent_router)
 app.include_router(pin_router)
 app.include_router(workspace_router)
 app.include_router(validate_router)
+app.include_router(resources_router)
 
 
 if __name__ == "__main__":

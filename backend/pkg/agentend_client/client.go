@@ -79,3 +79,11 @@ func (c *Client) HealthCheck() error {
 	}
 	return nil
 }
+
+func (c *Client) GetResources() (*http.Response, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/v1/resources")
+	if err != nil {
+		return nil, fmt.Errorf("get resources: %w", err)
+	}
+	return resp, nil
+}

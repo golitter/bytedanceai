@@ -2,11 +2,8 @@ package handler
 
 import (
 	"context"
-	"os/exec"
-	"runtime"
+	"encoding/json"
 	"strconv"
-	"strings"
-	"syscall"
 
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/redis"
@@ -20,70 +17,29 @@ type ResourceInfo struct {
 	Unit  string  `json:"unit"`
 }
 
-type ResourcesResponse struct {
-	Disk   ResourceInfo `json:"disk"`
-	Memory ResourceInfo `json:"memory"`
-	Redis  ResourceInfo `json:"redis"`
-}
-
 func (h *AdminHandler) GetResources(c *gin.Context) {
-	vo.OK(c, ResourcesResponse{
-		Disk:   getDiskUsage(),
-		Memory: getMemoryUsage(),
-		Redis:  getRedisUsage(),
-	})
-}
+	// disk + memory: delegate to agentend
+	var disk ResourceInfo
+	var memory ResourceInfo
 
-func getDiskUsage() ResourceInfo {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
-		return ResourceInfo{Used: 0, Total: 0, Unit: "GB"}
-	}
-	total := float64(stat.Blocks*uint64(stat.Bsize)) / 1e9
-	used := float64((stat.Blocks-stat.Bfree)*uint64(stat.Bsize)) / 1e9
-	return ResourceInfo{Used: used, Total: total, Unit: "GB"}
-}
-
-func getMemoryUsage() ResourceInfo {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	_ = m
-
-	// macOS: use sysctl hw.memsize for total, vm_stat for used
-	out, err := exec.Command("sysctl", "-n", "hw.memsize").Output()
-	if err != nil {
-		return ResourceInfo{Used: 0, Total: 0, Unit: "GB"}
-	}
-	totalBytes, _ := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-	totalGB := totalBytes / 1e9
-
-	// Parse vm_stat for free page count
-	vmOut, err := exec.Command("vm_stat").Output()
-	if err != nil {
-		return ResourceInfo{Used: 0, Total: totalGB, Unit: "GB"}
-	}
-	freePages := parseVMStatPages(string(vmOut), "Pages free")
-	inactivePages := parseVMStatPages(string(vmOut), "Pages inactive")
-	pageSize := 4096.0 // macOS default
-	freeGB := float64(freePages+inactivePages) * pageSize / 1e9
-	usedGB := totalGB - freeGB
-
-	return ResourceInfo{Used: usedGB, Total: totalGB, Unit: "GB"}
-}
-
-func parseVMStatPages(vmStat, prefix string) int {
-	for _, line := range strings.Split(vmStat, "\n") {
-		if strings.HasPrefix(line, prefix) {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				val := strings.TrimSpace(parts[1])
-				val = strings.ReplaceAll(val, ".", "")
-				n, _ := strconv.Atoi(strings.TrimSpace(val))
-				return n
-			}
+	resp, err := h.agentClient.GetResources()
+	if err == nil {
+		defer resp.Body.Close()
+		var result struct {
+			Disk   ResourceInfo `json:"disk"`
+			Memory ResourceInfo `json:"memory"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&result) == nil {
+			disk = result.Disk
+			memory = result.Memory
 		}
 	}
-	return 0
+
+	vo.OK(c, gin.H{
+		"disk":   disk,
+		"memory": memory,
+		"redis":  getRedisUsage(),
+	})
 }
 
 func getRedisUsage() ResourceInfo {
