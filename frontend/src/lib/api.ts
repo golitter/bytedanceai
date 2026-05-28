@@ -86,6 +86,10 @@ export interface Conversation {
   status: string
   avatarUrl?: string
   repoPath?: string
+  isGroupChat?: boolean
+  memberCount?: number
+  groupAgentTypes?: AgentType[]
+  groupAgentNames?: string[]
 }
 
 export async function fetchConversations(): Promise<Conversation[]> {
@@ -93,7 +97,32 @@ export async function fetchConversations(): Promise<Conversation[]> {
   const details = await Promise.all(tasks.map((t) => fetchTask(t.task_id)))
   const convos: Conversation[] = []
   for (const detail of details) {
-    for (const s of detail.sessions) {
+    const sessions = detail.sessions
+    if (sessions.length === 0) continue
+
+    // Group chat: task has multiple sessions → show as one conversation using orchestrator
+    if (sessions.length > 1) {
+      const orchestrator = sessions.find((s) => s.agent_type === 'orchestrator')
+      const primary = orchestrator ?? sessions[0]
+      convos.push({
+        taskId: detail.task.task_id,
+        sessionId: primary.session_id,
+        agentType: primary.agent_type,
+        agentName: primary.agent_name ?? '',
+        title: detail.task.title,
+        lastActiveAt: primary.updated_at,
+        taskTitle: detail.task.title,
+        status: primary.status,
+        avatarUrl: primary.avatar_url || undefined,
+        repoPath: detail.task.repo_path || undefined,
+        isGroupChat: true,
+        memberCount: sessions.length,
+        groupAgentTypes: sessions.map((s) => s.agent_type),
+        groupAgentNames: sessions.map((s) => s.agent_name || s.agent_type),
+      })
+    } else {
+      // Single agent: show as individual conversation
+      const s = sessions[0]
       convos.push({
         taskId: s.task_id,
         sessionId: s.session_id,
@@ -113,27 +142,46 @@ export async function fetchConversations(): Promise<Conversation[]> {
 }
 
 export async function createConversation(
-  agentType: AgentType,
-  agentName?: string,
-  title?: string,
+  agents: { type: AgentType; name: string }[],
   repoPath?: string,
+  title?: string,
 ): Promise<Conversation> {
-  const taskTitle = title ?? `Chat with ${agentName || agentType}`
-  const task = await createTask(taskTitle, [{ type: agentType, name: agentName }], repoPath)
+  // Auto-inject orchestrator when multiple agents are selected
+  const hasOrchestrator = agents.some((a) => a.type === 'orchestrator')
+  const allAgents = hasOrchestrator
+    ? agents
+    : agents.length >= 2
+      ? [{ type: 'orchestrator' as AgentType, name: '项目经理' }, ...agents]
+      : agents
+
+  const names = agents.map((a) => a.name || a.type).join(' + ')
+  const taskTitle = title ?? (allAgents.length > 1 ? `群聊: ${names}` : `Chat with ${names}`)
+  const task = await createTask(
+    taskTitle,
+    allAgents.map((a) => ({ type: a.type, name: a.name })),
+    repoPath,
+  )
   const detail = await fetchTask(task.task_id)
-  const session = detail.sessions[0]
-  if (!session) throw new Error('Backend failed to create session')
+  // Primary session: orchestrator for group chats, first session for single
+  const orchestrator = detail.sessions.find((s) => s.agent_type === 'orchestrator')
+  const primary = orchestrator ?? detail.sessions[0]
+  if (!primary) throw new Error('Backend failed to create session')
+  const isGroup = allAgents.length > 1
   return {
     taskId: task.task_id,
-    sessionId: session.session_id,
-    agentType,
-    agentName: agentName ?? '',
-    title: agentName || agentType,
-    lastActiveAt: session.updated_at,
+    sessionId: primary.session_id,
+    agentType: primary.agent_type,
+    agentName: primary.agent_name ?? '',
+    title: task.title,
+    lastActiveAt: primary.updated_at,
     taskTitle: task.title,
-    status: session.status,
-    avatarUrl: session.avatar_url || undefined,
+    status: primary.status,
+    avatarUrl: primary.avatar_url || undefined,
     repoPath: task.repo_path || undefined,
+    isGroupChat: isGroup || undefined,
+    memberCount: isGroup ? detail.sessions.length : undefined,
+    groupAgentTypes: isGroup ? detail.sessions.map((s) => s.agent_type) : undefined,
+    groupAgentNames: isGroup ? detail.sessions.map((s) => s.agent_name || s.agent_type) : undefined,
   }
 }
 

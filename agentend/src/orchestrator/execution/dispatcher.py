@@ -13,11 +13,15 @@ class Dispatcher:
         for task in plan.tasks:
             agent_cfg = self._agent_map.get(task.session_id, {})
             workspace_path = agent_cfg.get("workspace_path", "")
+            real_session_id = agent_cfg.get("session_id", "")
+            agent_type = agent_cfg.get("type", task.session_id)
 
             results.append(
                 DispatchResult(
                     task_id=task.task_id,
                     agent=task.session_id,
+                    agent_type=agent_type,
+                    real_session_id=real_session_id,
                     mention=f"@{task.session_id}",
                     content=task.content,
                     depends_on=[],

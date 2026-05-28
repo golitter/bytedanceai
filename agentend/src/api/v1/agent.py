@@ -25,20 +25,35 @@ from src.workspace.manager import WorkspaceManager
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
 
 
-def _orchestrator_kwargs(request: AgentRequest) -> dict:
+def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
     """Build kwargs specific to OrchestratorAdapter from request.config."""
     if request.agent_type != AgentType.ORCHESTRATOR:
         return {}
     config = request.config or {}
     task_id = config.get("task_id", request.task_id)
-    shared_dir = config.get(
-        "shared_dir",
-        f"{task_id}/shared/.agent",
-    )
+
+    # Resolve shared_dir to absolute path under worktrees/{task_id}/shared/.agent
+    if config.get("shared_dir"):
+        shared_dir = config["shared_dir"]
+    elif workspace_path:
+        # workspace_path is like {repo}/worktrees/{task_id}/{session_id}
+        # shared_dir should be {repo}/worktrees/{task_id}/shared/.agent
+        from pathlib import Path
+
+        task_dir = str(Path(workspace_path).parent)
+        shared_dir = str(Path(task_dir) / "shared" / ".agent")
+    elif request.repo_path:
+        from pathlib import Path
+
+        shared_dir = str(Path(request.repo_path).resolve().parent / "worktrees" / task_id / "shared" / ".agent")
+    else:
+        shared_dir = f"{task_id}/shared/.agent"
+
     return {
         "agents": config.get("agents", []),
         "task_id": task_id,
         "shared_dir": shared_dir,
+        "repo_path": request.repo_path or "",
     }
 
 
@@ -99,6 +114,7 @@ async def _execute_stream(
     session_mgr: SessionManager,
     session_store: SessionMappingStore,
     workspace_path: str = "",
+    workspace_mgr: WorkspaceManager | None = None,
 ):
     session_mgr.update_state(session_id, SessionState.RUNNING)
     session_mgr.record_history(session_id, {"role": "user", "content": request.message})
@@ -110,9 +126,11 @@ async def _execute_stream(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
-    stream_kwargs.update(_orchestrator_kwargs(request))
+    stream_kwargs.update(_orchestrator_kwargs(request, workspace_path))
     if workspace_path:
         stream_kwargs["cwd"] = workspace_path
+    if workspace_mgr and request.agent_type == AgentType.ORCHESTRATOR:
+        stream_kwargs["workspace_mgr"] = workspace_mgr
 
     try:
         async for event in adapter.stream_chat(session_id, request.message, **stream_kwargs):
@@ -150,7 +168,12 @@ async def agent_stream(
         raise HTTPException(status_code=400, detail=rule_result)
 
     adapter_cls = adapter_registry.get(request.agent_type)
-    adapter = adapter_cls()
+    if request.agent_type == AgentType.ORCHESTRATOR:
+        from src.adapters.orchestrator import OrchestratorAdapter
+
+        adapter = OrchestratorAdapter(registry=adapter_registry)
+    else:
+        adapter = adapter_cls()
     session_id, cli_session_id, is_resume = await _resolve_session(
         request,
         session_mgr,
@@ -169,6 +192,7 @@ async def agent_stream(
             session_mgr,
             session_store,
             workspace_path,
+            workspace_mgr,
         )
     )
 
@@ -195,7 +219,12 @@ async def agent_execute(
         raise HTTPException(status_code=400, detail=rule_result)
 
     adapter_cls = adapter_registry.get(request.agent_type)
-    adapter = adapter_cls()
+    if request.agent_type == AgentType.ORCHESTRATOR:
+        from src.adapters.orchestrator import OrchestratorAdapter
+
+        adapter = OrchestratorAdapter(registry=adapter_registry)
+    else:
+        adapter = adapter_cls()
     session_id, cli_session_id, is_resume = await _resolve_session(
         request,
         session_mgr,
@@ -216,6 +245,8 @@ async def agent_execute(
     chat_kwargs.update(_orchestrator_kwargs(request))
     if workspace_path:
         chat_kwargs["cwd"] = workspace_path
+    if request.agent_type == AgentType.ORCHESTRATOR:
+        chat_kwargs["workspace_mgr"] = workspace_mgr
 
     async def _collect() -> str:
         chunks: list[str] = []

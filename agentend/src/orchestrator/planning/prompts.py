@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.orchestrator.evolution import EvolutionStore
-from src.orchestrator.pin_memory import PinMemory
+from src.orchestrator.memory.evolution import EvolutionStore
+from src.orchestrator.memory.pin_memory import PinMemory
 
 PLAN_PROMPT = """\
 你是一个 AI 项目经理（Orchestrator）。你的任务是根据用户需求，将其拆解为可由不同 Agent 并行或顺序执行的具体任务。
@@ -16,7 +16,7 @@ PLAN_PROMPT = """\
 
 ## 规则
 
-1. 每个任务的 agent 字段必须使用上面列表中的 agent id（如 claude-code、opencode），不要用名称
+1. 每个任务的 session_id 字段必须使用上面列表中的 agent id（加粗的名称，如 Alice、Bob），不要用类型
 2. 任务数量不超过 5 个
 3. 每个任务的 content 必须具体、可执行，包含明确的输入/输出期望
 4. 任务按执行顺序排列，如果某些任务可以并行，在 overview 中说明
@@ -32,7 +32,7 @@ PLAN_PROMPT = """\
   "tasks": [
     {{
       "task_id": "task-001",
-      "session_id": "claude-code",
+      "session_id": "Alice",
       "title": "任务标题",
       "content": "任务详细描述"
     }}

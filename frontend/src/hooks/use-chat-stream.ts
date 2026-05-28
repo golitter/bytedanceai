@@ -10,7 +10,11 @@ import { type ChatMessage, useChatStore } from '@/stores/chat'
 // Re-export ChatMessage for consumers
 export type { ChatMessage }
 
-export function useChatStream(taskId: string, sessionId: string) {
+export function useChatStream(
+  taskId: string,
+  sessionId: string,
+  agentType: AgentType = 'claude-code',
+) {
   const store = useChatStore()
   const abortRef = useRef<AbortController | null>(null)
   const session = store.getSession(sessionId)
@@ -19,7 +23,7 @@ export function useChatStream(taskId: string, sessionId: string) {
     (messageId: string) => {
       abortRef.current?.abort()
 
-      store.streamStart(sessionId, 'claude-code')
+      store.streamStart(sessionId, agentType)
 
       const controller = connectSSE({
         url: `/api/tasks/${taskId}/stream`,
@@ -29,9 +33,15 @@ export function useChatStream(taskId: string, sessionId: string) {
           switch (event.type) {
             case EventTypeValues.Init:
               break
-            case EventTypeValues.Text:
+            case EventTypeValues.Text: {
+              const textAgent = event.content?.agent as string | undefined
+              const textAgentType = event.content?.agent_type as AgentType | undefined
+              if (textAgent && textAgentType) {
+                store.streamAgentUpdate(sessionId, textAgentType, textAgent)
+              }
               store.streamText(sessionId, (event.content?.text as string) ?? '')
               break
+            }
             case EventTypeValues.ToolCall:
               store.streamToolCall(sessionId, (event.content?.name as string) ?? 'unknown')
               break
@@ -50,6 +60,63 @@ export function useChatStream(taskId: string, sessionId: string) {
                     'Unknown error',
                 ),
               )
+              break
+            case EventTypeValues.RuntimeExecuting:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                agent: (event.content?.agent as string) ?? '',
+                status: 'running',
+              })
+              break
+            case EventTypeValues.RuntimeCompleted: {
+              const success = event.content?.success ?? false
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                agent: (event.content?.agent as string) ?? '',
+                status: success ? 'completed' : 'failed',
+              })
+              break
+            }
+            case EventTypeValues.Planning: {
+              const node = event.content?.node as string
+              if (node === 'dispatch') {
+                const dispatch = event.content?.dispatch as
+                  | { task_id?: string; agent?: string; content?: string }
+                  | undefined
+                if (dispatch) {
+                  store.streamPlanEvent(
+                    sessionId,
+                    [
+                      {
+                        task_id: dispatch.task_id ?? '',
+                        agent: dispatch.agent ?? '',
+                        title: (dispatch.content ?? '').slice(0, 80),
+                        status: 'pending',
+                      },
+                    ],
+                    '',
+                  )
+                }
+              }
+              break
+            }
+            case EventTypeValues.CoordinationStart:
+              // coordination channel opens — no action needed, messages will follow
+              break
+            case EventTypeValues.CoordinationMessage:
+              store.streamCoordinationEvent(sessionId, {
+                from: (event.content?.from as string) ?? '',
+                to: (event.content?.to as string) ?? '',
+                text: (event.content?.text as string) ?? '',
+                round: (event.content?.round as number) ?? 1,
+              })
+              break
+            case EventTypeValues.CoordinationDone: {
+              const decisions = event.content?.decisions as string[] | undefined
+              store.streamCoordinationDone(sessionId, decisions?.join('\n') ?? '')
+              break
+            }
+            default:
               break
           }
         },
@@ -107,6 +174,7 @@ export function useChatStream(taskId: string, sessionId: string) {
           role: m.role,
           content: m.content,
           agentType: m.agent_type as AgentType | undefined,
+          agentName: m.agent_name || undefined,
           timestamp: new Date(m.created_at).getTime(),
           messageId: m.message_id,
           status: m.status,

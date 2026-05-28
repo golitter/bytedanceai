@@ -1,4 +1,5 @@
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
+import { GroupAvatar } from '@/components/chat/GroupAvatar'
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
@@ -22,8 +23,10 @@ function relativeTime(dateStr: string): string {
 }
 
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
-  const name =
+  const isGroup = !!conversation.isGroupChat
+  const singleName =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
+  const displayName = isGroup ? conversation.title : singleName
   const hoverStyle = useHoverStyle()
 
   return (
@@ -36,19 +39,26 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
       onClick={onClick}
       {...(!isActive && hoverStyle)}
     >
-      <AgentAvatar
-        agentType={conversation.agentType}
-        status={conversation.status === 'running' ? 'running' : 'ready'}
-        avatarUrl={conversation.avatarUrl}
-        agentName={conversation.agentName || undefined}
-      />
+      {isGroup && conversation.groupAgentTypes && conversation.groupAgentNames ? (
+        <GroupAvatar
+          agentTypes={conversation.groupAgentTypes}
+          agentNames={conversation.groupAgentNames}
+        />
+      ) : (
+        <AgentAvatar
+          agentType={conversation.agentType}
+          status={conversation.status === 'running' ? 'running' : 'ready'}
+          avatarUrl={conversation.avatarUrl}
+          agentName={conversation.agentName || undefined}
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">
           <span
             className="truncate text-sm font-medium"
             style={{ color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)' }}
           >
-            {name}
+            {displayName}
           </span>
           <span className="shrink-0 text-[11px] text-tertiary">
             {relativeTime(conversation.lastActiveAt)}

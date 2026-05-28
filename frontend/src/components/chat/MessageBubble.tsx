@@ -1,6 +1,16 @@
 import type { ReactNode } from 'react'
 
-import { AttachmentCard, DiffCard, HtmlCard, ImageCard, PreviewCard } from '@/components/cards'
+import {
+  AttachmentCard,
+  CoordChannel,
+  DiffCard,
+  HtmlCard,
+  ImageCard,
+  PlanCard,
+  PreviewCard,
+  RuntimeStatus,
+  ToolCard,
+} from '@/components/cards'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import type { AgentType } from '@/generated/request'
 import type { MessageBlock } from '@/lib/block-types'
@@ -22,6 +32,18 @@ function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: 
       return <DiffCard snapshotId={block.snapshotId} sessionId={sessionId} />
     case 'preview':
       return <PreviewCard url={block.url} />
+    case 'plan':
+      return <PlanCard overview={block.overview} tasks={block.tasks} />
+    case 'runtime_status':
+      return <RuntimeStatus task_id={block.task_id} agent={block.agent} status={block.status} />
+    case 'coordination':
+      return (
+        <CoordChannel messages={block.messages} closed={block.closed} summary={block.summary} />
+      )
+    case 'tool_call':
+      return <ToolCard name={block.name} input={block.input} />
+    case 'tool_result':
+      return <ToolCard output={block.output} />
   }
 }
 

@@ -5,19 +5,23 @@ package generated
 type EventType string
 
 const (
-	EventTypeInit EventType = "init"
-	EventTypeText EventType = "text"
-	EventTypeToolCall EventType = "tool_call"
-	EventTypeToolResult EventType = "tool_result"
-	EventTypeArtifact EventType = "artifact"
-	EventTypePlanning EventType = "planning"
-	EventTypeDone EventType = "done"
-	EventTypeError EventType = "error"
+	EventTypeInit                EventType = "init"
+	EventTypeText                EventType = "text"
+	EventTypeToolCall            EventType = "tool_call"
+	EventTypeToolResult          EventType = "tool_result"
+	EventTypeArtifact            EventType = "artifact"
+	EventTypePlanning            EventType = "planning"
+	EventTypeDone                EventType = "done"
+	EventTypeError               EventType = "error"
+	EventTypeRuntimeExecuting    EventType = "runtime_executing"
+	EventTypeRuntimeCompleted    EventType = "runtime_completed"
+	EventTypeCoordinationStart   EventType = "coordination_start"
+	EventTypeCoordinationMessage EventType = "coordination_message"
+	EventTypeCoordinationDone    EventType = "coordination_done"
 )
 
 type StreamEvent struct {
-	Type EventType `json:"type"`
-	Content map[string]interface{} `json:"content,omitempty"`
-	Timestamp float64 `json:"timestamp,omitempty"`
+	Type      EventType              `json:"type"`
+	Content   map[string]interface{} `json:"content,omitempty"`
+	Timestamp float64                `json:"timestamp,omitempty"`
 }
-

@@ -98,6 +98,10 @@ export function ImPage() {
                 agentName={active.agentName || undefined}
                 avatarUrl={active.avatarUrl}
                 repoPath={active.repoPath}
+                isGroupChat={active.isGroupChat}
+                groupTitle={active.isGroupChat ? active.title : undefined}
+                groupAgentTypes={active.groupAgentTypes}
+                groupAgentNames={active.groupAgentNames}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3">

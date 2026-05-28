@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class TaskDef(BaseModel):
     task_id: str = Field(description="任务唯一标识，如 task-001")
-    session_id: str = Field(description="负责执行的 agent id，如 claude-code, opencode")
+    session_id: str = Field(description="负责执行的 agent 名称/id")
     title: str = Field(description="任务标题，简明扼要")
     content: str = Field(description="任务的详细描述和执行要求")
 
@@ -23,7 +23,9 @@ class TaskResult(BaseModel):
 
 class DispatchResult(BaseModel):
     task_id: str = Field(description="任务唯一标识")
-    agent: str = Field(description="目标 agent id")
+    agent: str = Field(description="目标 agent 名称/id")
+    agent_type: str = Field(default="", description="目标 agent 类型，如 claude-code, opencode")
+    real_session_id: str = Field(default="", description="DB 分配的真实 session_id")
     mention: str = Field(description="@agent 群聊提及字符串")
     content: str = Field(description="任务详细描述")
     depends_on: list[str] = Field(default_factory=list, description="依赖的任务 ID 列表")

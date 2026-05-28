@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.orchestrator.pin_memory import PinMemory
+from src.orchestrator.memory.pin_memory import PinMemory
 
 router = APIRouter(prefix="/v1/pin", tags=["pin"])
 

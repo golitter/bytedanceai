@@ -14,6 +14,7 @@ interface MessageListProps {
   messages: ChatMessage[]
   streamingContent: string
   streamingAgentType?: string
+  streamingAgentName?: string
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
@@ -34,6 +35,7 @@ export function MessageList({
   messages,
   streamingContent,
   streamingAgentType,
+  streamingAgentName,
   isStreaming,
   avatarUrl,
   agentName,
@@ -142,6 +144,7 @@ export function MessageList({
           avatarUrl={avatarUrl}
           agentName={agentName}
           sessionId={sessionId}
+          streamingAgentName={streamingAgentName}
         />
       </div>
     )
@@ -215,24 +218,29 @@ function MessageRenderer({
   avatarUrl,
   agentName,
   sessionId,
+  streamingAgentName,
 }: {
   msg: ChatMessage
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
   sessionId?: string
+  streamingAgentName?: string
 }) {
   if (msg.role === 'user') {
     return <MessageBubble variant="user">{msg.content}</MessageBubble>
   }
 
   if (msg.role === 'agent') {
+    const displayAgentName = isStreaming
+      ? streamingAgentName || msg.agentName || agentName
+      : msg.agentName || agentName
     return (
       <MessageBubble
         variant="agent"
         agentType={msg.agentType ?? 'claude-code'}
         avatarUrl={avatarUrl}
-        agentName={agentName}
+        agentName={displayAgentName}
         status={isStreaming ? 'running' : 'ready'}
         isStreaming={isStreaming}
         blocks={msg.blocks}

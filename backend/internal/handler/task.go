@@ -222,6 +222,13 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 	}
 
 	// Create agent message with streaming status
+	// Look up agent name from session
+	var agentSession model.Session
+	agentName := ""
+	if err := db.GetDB().Where("session_id = ?", req.SessionID).First(&agentSession).Error; err == nil {
+		agentName = agentSession.AgentName
+	}
+
 	messageID := uuid.New().String()
 	agentMsg := model.Message{
 		MessageID: messageID,
@@ -231,6 +238,7 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		Content:   "",
 		Status:    "streaming",
 		AgentType: agentType,
+		AgentName: agentName,
 	}
 	if err := db.GetDB().Create(&agentMsg).Error; err != nil {
 		vo.InternalError(c, fmt.Sprintf("create agent message: %v", err))
@@ -248,6 +256,29 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		}
 		if task.RepoPath != "" {
 			agentReq.RepoPath = &task.RepoPath
+		}
+
+		// For orchestrator, inject agents config from sibling sessions
+		if agentType == "orchestrator" {
+			var siblings []model.Session
+			db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
+			var agents []map[string]string
+			for _, s := range siblings {
+				agents = append(agents, map[string]string{
+					"id":         s.AgentName,
+					"type":       s.AgentType,
+					"session_id": s.SessionID,
+					"name":       s.AgentName,
+				})
+			}
+			if len(agents) > 0 {
+				config := map[string]interface{}{
+					"agents":  agents,
+					"task_id": taskID,
+				}
+				configIface := interface{}(config)
+				agentReq.Config = &configIface
+			}
 		}
 
 		resp, err := h.agentClient.StreamAgent(agentReq)

@@ -8,6 +8,7 @@ import { AGENT_NAMES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
+import { GroupAvatar } from './GroupAvatar'
 import { MessageInput } from './MessageInput'
 import { MessageList } from './MessageList'
 
@@ -18,6 +19,10 @@ interface ChatAreaProps {
   agentName?: string
   avatarUrl?: string
   repoPath?: string
+  isGroupChat?: boolean
+  groupTitle?: string
+  groupAgentTypes?: AgentType[]
+  groupAgentNames?: string[]
 }
 
 export function ChatArea({
@@ -27,8 +32,12 @@ export function ChatArea({
   agentName,
   avatarUrl,
   repoPath,
+  isGroupChat,
+  groupTitle,
+  groupAgentTypes,
+  groupAgentNames,
 }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId, sessionId)
+  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
@@ -96,12 +105,17 @@ export function ChatArea({
     sendMessage(message, agentType)
   }
 
-  const displayName = agentName ?? AGENT_NAMES[agentType] ?? agentType
+  const displayName = isGroupChat
+    ? (groupTitle ?? '群聊')
+    : (agentName ?? AGENT_NAMES[agentType] ?? agentType)
 
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-6">
+        {isGroupChat && groupAgentTypes && groupAgentNames ? (
+          <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={24} />
+        ) : null}
         <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
         {isStreaming && <p className="text-[11px] text-primary">正在回复...</p>}
       </div>
@@ -119,13 +133,17 @@ export function ChatArea({
       {/* Messages */}
       {state.messages.length === 0 && !isStreaming ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2">
-          <AgentAvatar
-            agentType={agentType}
-            status="ready"
-            size={48}
-            avatarUrl={avatarUrl}
-            agentName={agentName}
-          />
+          {isGroupChat && groupAgentTypes && groupAgentNames ? (
+            <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={48} />
+          ) : (
+            <AgentAvatar
+              agentType={agentType}
+              status="ready"
+              size={48}
+              avatarUrl={avatarUrl}
+              agentName={agentName}
+            />
+          )}
           <p className="mt-2 text-sm font-medium text-foreground">{displayName}</p>
           <p className="text-xs text-tertiary">发送消息开始对话</p>
         </div>
@@ -134,6 +152,7 @@ export function ChatArea({
           messages={state.messages}
           streamingContent={state.streamingContent}
           streamingAgentType={state.streamingAgentType}
+          streamingAgentName={state.streamingAgentName}
           isStreaming={isStreaming}
           avatarUrl={avatarUrl}
           agentName={agentName}

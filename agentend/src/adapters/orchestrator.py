@@ -1,19 +1,24 @@
 from collections.abc import AsyncIterator
 
 from src.adapters.base import BaseAgentAdapter
-from src.orchestrator.aggregator import Aggregator
-from src.orchestrator.dispatcher import Dispatcher
-from src.orchestrator.evolution import EvolutionStore
-from src.orchestrator.graph import build_graph
+from src.adapters.registry import AdapterRegistry
+from src.app.config import settings
+from src.orchestrator.execution.coordination import CoordinationChannel
+from src.orchestrator.execution.dispatcher import Dispatcher
+from src.orchestrator.execution.engine import ExecutionEngine
+from src.orchestrator.execution.state import RuntimeState
+from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import TaskResult
-from src.orchestrator.state import RuntimeState
+from src.orchestrator.planning.graph import build_graph
+from src.orchestrator.reporting.aggregator import Aggregator
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
 
 class OrchestratorAdapter(BaseAgentAdapter):
-    def __init__(self) -> None:
+    def __init__(self, registry: AdapterRegistry | None = None) -> None:
         self._graph = build_graph()
+        self._registry = registry
 
     async def create_session(self, session_id: str) -> None:
         pass
@@ -33,6 +38,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         agents = kwargs["agents"]
         task_id = kwargs["task_id"]
         shared_dir = kwargs["shared_dir"]
+        cwd = kwargs.get("cwd", "")
+        repo_path = kwargs.get("repo_path", "")
+        workspace_mgr = kwargs.get("workspace_mgr")
         results_callback = kwargs.get("results_callback")
 
         # --- Phase 1: Planning ---
@@ -58,6 +66,18 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
         overview = plan.overview
 
+        # --- Phase 1.5: Coordination ---
+        if self._registry:
+            channel = CoordinationChannel(
+                self._registry,
+                model=settings.llm.model,
+                base_url=settings.llm.base_url,
+                api_key=settings.llm.api_key,
+            )
+            async for event in channel.coordinate(plan, agents):
+                yield event
+            _coord_context = channel.summary()
+
         # --- Phase 2: Dispatch ---
         runtime = RuntimeState()
         for task in plan.tasks:
@@ -74,10 +94,32 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 dispatch=dr.model_dump(),
             )
 
-        # --- Phase 3: Collect ---
+        # --- Phase 3: Execute + Collect ---
         task_results: list[TaskResult] = []
-        if results_callback:
+        if self._registry:
+            engine = ExecutionEngine(
+                registry=self._registry,
+                workspace_mgr=workspace_mgr,
+                repo_path=repo_path,
+                task_id=task_id,
+                shared_dir=shared_dir,
+                cwd=cwd,
+            )
+            async for event, result in engine.execute(dispatch_results):
+                yield event
+                if result is not None:
+                    task_results.append(result)
+                    if result.success:
+                        runtime.set_completed(result.task_id, result.content)
+                    else:
+                        runtime.set_failed(result.task_id)
+        elif results_callback:
             task_results = await results_callback(dispatch_results)
+            for tr in task_results:
+                if tr.success:
+                    runtime.set_completed(tr.task_id, tr.content)
+                else:
+                    runtime.set_failed(tr.task_id)
         else:
             for dr in dispatch_results:
                 task_results.append(
@@ -88,12 +130,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         content=f"(mock) Task dispatched to {dr.mention}",
                     )
                 )
-
-        for tr in task_results:
-            if tr.success:
+            for tr in task_results:
                 runtime.set_completed(tr.task_id, tr.content)
-            else:
-                runtime.set_failed(tr.task_id)
 
         # --- Phase 4: Aggregate ---
         aggregator = Aggregator()

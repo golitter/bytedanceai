@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'
 import { reduceEventToBlocks } from '@/lib/block-reducer'
-import type { MessageBlock } from '@/lib/block-types'
+import type { CoordMessage, MessageBlock, PlanTask } from '@/lib/block-types'
 
 export interface ChatMessage {
   id: string
@@ -11,6 +11,7 @@ export interface ChatMessage {
   content: string
   blocks?: MessageBlock[]
   agentType?: AgentType
+  agentName?: string
   timestamp: number
   messageId?: string
   status?: string
@@ -29,12 +30,14 @@ interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
   streamingAgentType?: AgentType
+  streamingAgentName?: string
   status: ChatStatus
   error: Error | null
   toolName?: string
   activeStream: ActiveStream | null
   hasMore: boolean
   isLoadingMore: boolean
+  runtimeBlocks: MessageBlock[]
 }
 
 interface ChatNavState {
@@ -64,6 +67,14 @@ interface ChatStoreState {
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   resetSession: (sessionId: string) => void
+  streamRuntimeEvent: (
+    sessionId: string,
+    event: { task_id: string; agent: string; status: string },
+  ) => void
+  streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
+  streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
+  streamCoordinationDone: (sessionId: string, summary: string) => void
+  streamAgentUpdate: (sessionId: string, agentType: AgentType, agentName: string) => void
 
   // Pagination actions
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
@@ -74,12 +85,19 @@ const initialSessionState: SessionChatState = {
   messages: [],
   streamingContent: '',
   streamingAgentType: undefined,
+  streamingAgentName: undefined,
   status: 'idle',
   error: null,
   toolName: undefined,
   activeStream: null,
   hasMore: true,
   isLoadingMore: false,
+  runtimeBlocks: [],
+}
+
+let _runtimeBlockId = 0
+function nextRuntimeBlockId(): string {
+  return `rtb-${++_runtimeBlockId}`
 }
 
 function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
@@ -138,6 +156,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           ...ensureSession(s, sessionId),
           status: 'streaming',
           streamingAgentType: agentType,
+          streamingAgentName: undefined,
         },
       },
     })),
@@ -152,6 +171,21 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ...session,
             status: session.status === 'tool_running' ? 'streaming' : session.status,
             streamingContent: session.streamingContent + text,
+          },
+        },
+      }
+    }),
+
+  streamAgentUpdate: (sessionId, agentType, agentName) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            streamingAgentType: agentType,
+            streamingAgentName: agentName,
           },
         },
       }
@@ -191,6 +225,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         content: session.streamingContent,
         blocks,
         agentType: session.streamingAgentType,
+        agentName: session.streamingAgentName,
         timestamp: Date.now(),
       }
       return {
@@ -202,6 +237,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             messages: [...session.messages, agentMessage],
             streamingContent: '',
             streamingAgentType: undefined,
+            streamingAgentName: undefined,
             activeStream: null,
           },
         },
@@ -221,6 +257,84 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
       },
     })),
+
+  streamRuntimeEvent: (sessionId, event) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = [...session.runtimeBlocks]
+      const idx = blocks.findIndex(
+        (b) => b.type === 'runtime_status' && b.task_id === event.task_id,
+      )
+      const newBlock: MessageBlock = { type: 'runtime_status', id: nextRuntimeBlockId(), ...event }
+      if (idx >= 0) {
+        blocks[idx] = newBlock
+      } else {
+        blocks.push(newBlock)
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamPlanEvent: (sessionId, tasks, overview) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = [...session.runtimeBlocks]
+      const existing = blocks.find((b) => b.type === 'plan')
+      if (existing && existing.type === 'plan') {
+        existing.tasks = tasks
+      } else {
+        blocks.push({ type: 'plan', id: nextRuntimeBlockId(), overview, tasks })
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamCoordinationEvent: (sessionId, msg) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = [...session.runtimeBlocks]
+      let coord = blocks.find((b) => b.type === 'coordination')
+      if (coord && coord.type === 'coordination') {
+        coord = { ...coord, messages: [...coord.messages, msg] }
+        const ci = blocks.findIndex((b) => b.type === 'coordination')
+        blocks[ci] = coord
+      } else {
+        blocks.push({
+          type: 'coordination',
+          id: nextRuntimeBlockId(),
+          messages: [msg],
+          closed: false,
+        })
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamCoordinationDone: (sessionId, summary) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = session.runtimeBlocks.map((b) =>
+        b.type === 'coordination' ? { ...b, closed: true, summary } : b,
+      )
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
 
   resetSession: (sessionId) =>
     set((s) => ({
