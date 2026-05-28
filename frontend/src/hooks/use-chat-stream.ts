@@ -175,6 +175,7 @@ export function useChatStream(
           content: m.content,
           agentType: m.agent_type as AgentType | undefined,
           agentName: m.agent_name || undefined,
+          sessionId: m.session_id || undefined,
           timestamp: new Date(m.created_at).getTime(),
           messageId: m.message_id,
           status: m.status,

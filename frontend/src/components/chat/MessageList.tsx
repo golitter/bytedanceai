@@ -3,6 +3,7 @@ import { ArrowDown, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
+import type { AgentSessionInfo } from '@/lib/api'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
@@ -19,6 +20,8 @@ interface MessageListProps {
   avatarUrl?: string
   agentName?: string
   sessionId?: string
+  sessionAgentType?: AgentType
+  agentSessionLookup?: Map<string, AgentSessionInfo>
   hasMore: boolean
   isLoadingMore: boolean
   onLoadMore: () => Promise<void>
@@ -40,6 +43,8 @@ export function MessageList({
   avatarUrl,
   agentName,
   sessionId,
+  sessionAgentType,
+  agentSessionLookup,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -144,6 +149,8 @@ export function MessageList({
           avatarUrl={avatarUrl}
           agentName={agentName}
           sessionId={sessionId}
+          sessionAgentType={sessionAgentType}
+          agentSessionLookup={agentSessionLookup}
           streamingAgentName={streamingAgentName}
         />
       </div>
@@ -218,6 +225,8 @@ function MessageRenderer({
   avatarUrl,
   agentName,
   sessionId,
+  sessionAgentType,
+  agentSessionLookup,
   streamingAgentName,
 }: {
   msg: ChatMessage
@@ -225,6 +234,8 @@ function MessageRenderer({
   avatarUrl?: string
   agentName?: string
   sessionId?: string
+  sessionAgentType?: AgentType
+  agentSessionLookup?: Map<string, AgentSessionInfo>
   streamingAgentName?: string
 }) {
   if (msg.role === 'user') {
@@ -235,16 +246,32 @@ function MessageRenderer({
     const displayAgentName = isStreaming
       ? streamingAgentName || msg.agentName || agentName
       : msg.agentName || agentName
+
+    const resolvedAgentType = msg.agentType ?? sessionAgentType ?? 'claude-code'
+
+    // Resolve the correct sessionId/avatarUrl for this agent
+    const agentSession =
+      agentSessionLookup?.get(displayAgentName ?? '') ??
+      (msg.sessionId
+        ? {
+            sessionId: msg.sessionId,
+            agentType: resolvedAgentType,
+            agentName: displayAgentName ?? '',
+          }
+        : undefined)
+    const msgSessionId = agentSession?.sessionId ?? sessionId ?? ''
+    const msgAvatarUrl = agentSession?.avatarUrl ?? avatarUrl
+
     return (
       <MessageBubble
         variant="agent"
-        agentType={msg.agentType ?? 'claude-code'}
-        avatarUrl={avatarUrl}
+        agentType={resolvedAgentType}
+        avatarUrl={msgAvatarUrl}
         agentName={displayAgentName}
         status={isStreaming ? 'running' : 'ready'}
         isStreaming={isStreaming}
         blocks={msg.blocks}
-        sessionId={sessionId}
+        sessionId={msgSessionId}
       >
         <MarkdownRenderer content={msg.content} />
       </MessageBubble>

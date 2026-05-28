@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
-import { getTaskMessages, validateRepoPath } from '@/lib/api'
+import { type AgentSessionInfo, getTaskMessages, validateRepoPath } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -23,6 +23,7 @@ interface ChatAreaProps {
   groupTitle?: string
   groupAgentTypes?: AgentType[]
   groupAgentNames?: string[]
+  groupSessions?: AgentSessionInfo[]
 }
 
 export function ChatArea({
@@ -36,6 +37,7 @@ export function ChatArea({
   groupTitle,
   groupAgentTypes,
   groupAgentNames,
+  groupSessions,
 }: ChatAreaProps) {
   const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
@@ -59,6 +61,7 @@ export function ChatArea({
         role: m.role as 'user' | 'agent',
         content: m.content,
         agentType: m.agent_type as AgentType | undefined,
+        sessionId: m.session_id || undefined,
         timestamp: new Date(m.created_at).getTime(),
         messageId: m.message_id,
         status: m.status,
@@ -68,6 +71,15 @@ export function ChatArea({
       setLoadingMore(sessionId, false)
     }
   }, [taskId, sessionId, state.messages, prependMessages, setLoadingMore])
+
+  const agentSessionLookup = useMemo(() => {
+    if (!groupSessions) return undefined
+    const map = new Map<string, AgentSessionInfo>()
+    for (const s of groupSessions) {
+      map.set(s.agentName, s)
+    }
+    return map
+  }, [groupSessions])
 
   const sendDisabledHint = useMemo(() => {
     if (!isStreaming) return undefined
@@ -157,6 +169,8 @@ export function ChatArea({
           avatarUrl={avatarUrl}
           agentName={agentName}
           sessionId={sessionId}
+          sessionAgentType={agentType}
+          agentSessionLookup={agentSessionLookup}
           hasMore={state.hasMore}
           isLoadingMore={state.isLoadingMore}
           onLoadMore={loadMoreMessages}

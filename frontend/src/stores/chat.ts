@@ -12,6 +12,8 @@ export interface ChatMessage {
   blocks?: MessageBlock[]
   agentType?: AgentType
   agentName?: string
+  sessionId?: string
+  avatarUrl?: string
   timestamp: number
   messageId?: string
   status?: string
@@ -179,6 +181,37 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   streamAgentUpdate: (sessionId, agentType, agentName) =>
     set((s) => {
       const session = ensureSession(s, sessionId)
+      const agentChanged =
+        (session.streamingAgentType && session.streamingAgentType !== agentType) ||
+        (session.streamingAgentName && session.streamingAgentName !== agentName)
+
+      if (agentChanged && session.streamingContent.trim()) {
+        // Agent switched mid-stream — finalize current content as a separate message
+        const blocks = reduceEventToBlocks(session.streamingContent)
+        const prevMessage: ChatMessage = {
+          id: `agent-${Date.now()}`,
+          role: 'agent',
+          content: session.streamingContent,
+          blocks,
+          agentType: session.streamingAgentType,
+          agentName: session.streamingAgentName,
+          sessionId,
+          timestamp: Date.now(),
+        }
+        return {
+          sessions: {
+            ...s.sessions,
+            [sessionId]: {
+              ...session,
+              messages: [...session.messages, prevMessage],
+              streamingContent: '',
+              streamingAgentType: agentType,
+              streamingAgentName: agentName,
+            },
+          },
+        }
+      }
+
       return {
         sessions: {
           ...s.sessions,
@@ -218,15 +251,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   streamDone: (sessionId) =>
     set((s) => {
       const session = ensureSession(s, sessionId)
-      const blocks = reduceEventToBlocks(session.streamingContent)
-      const agentMessage: ChatMessage = {
-        id: `agent-${Date.now()}`,
-        role: 'agent',
-        content: session.streamingContent,
-        blocks,
-        agentType: session.streamingAgentType,
-        agentName: session.streamingAgentName,
-        timestamp: Date.now(),
+      const newMessages = [...session.messages]
+      if (session.streamingContent.trim()) {
+        const blocks = reduceEventToBlocks(session.streamingContent)
+        newMessages.push({
+          id: `agent-${Date.now()}`,
+          role: 'agent',
+          content: session.streamingContent,
+          blocks,
+          agentType: session.streamingAgentType,
+          agentName: session.streamingAgentName,
+          sessionId,
+          timestamp: Date.now(),
+        })
       }
       return {
         sessions: {
@@ -234,7 +271,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           [sessionId]: {
             ...session,
             status: 'done',
-            messages: [...session.messages, agentMessage],
+            messages: newMessages,
             streamingContent: '',
             streamingAgentType: undefined,
             streamingAgentName: undefined,

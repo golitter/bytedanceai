@@ -74,6 +74,13 @@ export async function fetchAgentTypes(): Promise<AgentTypeInfo[]> {
   )
 }
 
+export interface AgentSessionInfo {
+  sessionId: string
+  agentType: AgentType
+  agentName: string
+  avatarUrl?: string
+}
+
 // IM Conversation — a flattened view of Session across Tasks
 export interface Conversation {
   taskId: string
@@ -90,6 +97,7 @@ export interface Conversation {
   memberCount?: number
   groupAgentTypes?: AgentType[]
   groupAgentNames?: string[]
+  groupSessions?: AgentSessionInfo[]
 }
 
 export async function fetchConversations(): Promise<Conversation[]> {
@@ -119,6 +127,12 @@ export async function fetchConversations(): Promise<Conversation[]> {
         memberCount: sessions.length,
         groupAgentTypes: sessions.map((s) => s.agent_type),
         groupAgentNames: sessions.map((s) => s.agent_name || s.agent_type),
+        groupSessions: sessions.map((s) => ({
+          sessionId: s.session_id,
+          agentType: s.agent_type,
+          agentName: s.agent_name || s.agent_type,
+          avatarUrl: s.avatar_url || undefined,
+        })),
       })
     } else {
       // Single agent: show as individual conversation
@@ -182,6 +196,14 @@ export async function createConversation(
     memberCount: isGroup ? detail.sessions.length : undefined,
     groupAgentTypes: isGroup ? detail.sessions.map((s) => s.agent_type) : undefined,
     groupAgentNames: isGroup ? detail.sessions.map((s) => s.agent_name || s.agent_type) : undefined,
+    groupSessions: isGroup
+      ? detail.sessions.map((s) => ({
+          sessionId: s.session_id,
+          agentType: s.agent_type,
+          agentName: s.agent_name || s.agent_type,
+          avatarUrl: s.avatar_url || undefined,
+        }))
+      : undefined,
   }
 }
 

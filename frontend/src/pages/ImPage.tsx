@@ -102,6 +102,7 @@ export function ImPage() {
                 groupTitle={active.isGroupChat ? active.title : undefined}
                 groupAgentTypes={active.groupAgentTypes}
                 groupAgentNames={active.groupAgentNames}
+                groupSessions={active.groupSessions}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3">
