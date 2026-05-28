@@ -23,6 +23,7 @@
       "cli_path": "codex"
     },
     "orchestrator": {
+      "config_dir": ".orchestrator",
       "event_type": "orchestrator"
     }
   }

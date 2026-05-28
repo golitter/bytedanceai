@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
@@ -310,7 +311,15 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 
 		sw.Run(func(fn func(string)) {
 			for scanner.Scan() {
-				fn(scanner.Text())
+				line := scanner.Text()
+				// Skip SSE event type lines and blank separators —
+				// agentend (sse_starlette) sends "event: <type>\ndata: <json>\n\n"
+				// per event. Only forward data lines to Redis so each SSE event
+				// stays atomic and doesn't get split into separate events.
+				if line == "" || strings.HasPrefix(line, "event:") {
+					continue
+				}
+				fn(line)
 			}
 			if scanner.Err() != nil {
 				slog.Warn("SSE scanner error", "task_id", taskID, "error", scanner.Err())

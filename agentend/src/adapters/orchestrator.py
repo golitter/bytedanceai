@@ -14,6 +14,7 @@ from src.orchestrator.planning.graph import build_graph
 from src.orchestrator.reporting.aggregator import Aggregator
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
+from src.skills.provisioner import SkillProvisioner
 
 
 class OrchestratorAdapter(BaseAgentAdapter):
@@ -48,6 +49,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         # --- Phase 1: Planning ---
         yield StreamEvent.create(EventType.PLANNING, status="started")
 
+        # Provision skills to shared_dir for orchestrator's progressive disclosure
+        SkillProvisioner().provision(shared_dir, "orchestrator")
+
         result = await self._graph.ainvoke(
             {
                 "message": message,
@@ -67,6 +71,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
             return
 
         overview = plan.overview
+
+        # Yield orchestrator plan as a chat message (triggers agent switch in frontend)
+        yield StreamEvent.create(EventType.TEXT, text=overview, agent="Orchestrator", agent_type="orchestrator")
 
         # --- Phase 1.5: Coordination ---
         if self._registry:
@@ -98,6 +105,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
         # --- Phase 3: Execute + Collect ---
         task_results: list[TaskResult] = []
+        dispatch_map = {dr.task_id: dr for dr in dispatch_results}
+
         if backend_client:
             engine = ExecutionEngine(
                 backend_client=backend_client,
@@ -115,6 +124,14 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         runtime.set_completed(result.task_id, result.content)
                     else:
                         runtime.set_failed(result.task_id)
+                    # Yield sub-agent response as a chat message
+                    dr = dispatch_map.get(result.task_id)
+                    yield StreamEvent.create(
+                        EventType.TEXT,
+                        text=result.content or "(no output)",
+                        agent=result.agent,
+                        agent_type=dr.agent_type if dr else "unknown",
+                    )
         elif results_callback:
             task_results = await results_callback(dispatch_results)
             for tr in task_results:
@@ -122,6 +139,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     runtime.set_completed(tr.task_id, tr.content)
                 else:
                     runtime.set_failed(tr.task_id)
+                dr = dispatch_map.get(tr.task_id)
+                yield StreamEvent.create(
+                    EventType.TEXT,
+                    text=tr.content or "(no output)",
+                    agent=tr.agent,
+                    agent_type=dr.agent_type if dr else "unknown",
+                )
         else:
             for dr in dispatch_results:
                 task_results.append(
@@ -134,12 +158,24 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 )
             for tr in task_results:
                 runtime.set_completed(tr.task_id, tr.content)
+                dr = dispatch_map.get(tr.task_id)
+                yield StreamEvent.create(
+                    EventType.TEXT,
+                    text=tr.content,
+                    agent=tr.agent,
+                    agent_type=dr.agent_type if dr else "unknown",
+                )
 
         # --- Phase 4: Aggregate ---
         aggregator = Aggregator()
         aggregated = await aggregator.aggregate(task_results, overview)
 
-        yield StreamEvent.create(EventType.TEXT, text=aggregated or overview)
+        yield StreamEvent.create(
+            EventType.TEXT,
+            text=aggregated or overview,
+            agent="Orchestrator",
+            agent_type="orchestrator",
+        )
 
         # --- Phase 5: Record experience ---
         evolution = EvolutionStore(shared_dir)

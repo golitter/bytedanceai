@@ -100,5 +100,17 @@ class BackendClient:
                             event.get("type"),
                         )
                         yield event
+
+                # Drain remaining buffer (last event may not end with \n)
+                if buf.strip():
+                    line = buf.strip()
+                    if line.startswith("data: "):
+                        payload = line[6:]
+                        try:
+                            event = json.loads(payload)
+                            logger.debug("BackendClient.stream_result: drained final event type=%s", event.get("type"))
+                            yield event
+                        except json.JSONDecodeError:
+                            pass
         finally:
             await sse_client.aclose()

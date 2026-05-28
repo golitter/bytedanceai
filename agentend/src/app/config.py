@@ -67,6 +67,14 @@ class SkillsConfig(BaseModel):
     block_marker: str = "aka_yhy"
     manifest: dict
 
+    @property
+    def builtin_dir_resolved(self) -> Path:
+        """Resolve builtin_dir to absolute path relative to agentend project root."""
+        p = Path(self.builtin_dir)
+        if p.is_absolute():
+            return p
+        return _CONFIG_PATH.parent / p
+
 
 class LlmConfig(BaseModel):
     model: str = ""

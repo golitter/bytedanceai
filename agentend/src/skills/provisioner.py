@@ -26,7 +26,7 @@ class SkillProvisioner:
             return
 
         # builtin 目录和 manifest 清单均来自 config.yaml 的 skills 分区
-        builtin_dir = Path(settings.skills.builtin_dir)
+        builtin_dir = settings.skills.builtin_dir_resolved
         if not builtin_dir.is_dir():
             logger.warning("Builtin skills directory not found: %s", builtin_dir)
             return

@@ -46,11 +46,12 @@ type StreamWriter struct {
 	agentType string
 	streamKey string
 
-	buf       strings.Builder
-	bufLen    int
-	lastSeq   string
-	lastFlush time.Time
-	mu        sync.Mutex
+	buf        strings.Builder
+	bufLen     int
+	flushedLen int
+	lastSeq    string
+	lastFlush  time.Time
+	mu         sync.Mutex
 }
 
 // NewStreamWriter creates a new StreamWriter and registers it.
@@ -145,7 +146,7 @@ func (sw *StreamWriter) appendText(text string) {
 	sw.mu.Lock()
 	sw.buf.WriteString(text)
 	sw.bufLen += len(text)
-	shouldFlush := sw.bufLen >= flushThreshold
+	shouldFlush := sw.bufLen-sw.flushedLen >= flushThreshold
 	sw.mu.Unlock()
 
 	if shouldFlush {
@@ -180,8 +181,7 @@ func (sw *StreamWriter) doFlush() {
 		sw.mu.Unlock()
 		return
 	}
-	sw.buf.Reset()
-	sw.bufLen = 0
+	sw.flushedLen = sw.bufLen
 	sw.lastFlush = time.Now()
 	sw.mu.Unlock()
 

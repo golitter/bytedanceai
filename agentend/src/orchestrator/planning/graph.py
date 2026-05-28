@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import TypedDict
 
 import yaml
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
 
+from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.orchestrator.models import PlanOutput
 from src.orchestrator.planning.prompts import build_planner_prompt
+from src.orchestrator.planning.skill_loader import discover_skills, load_skill_l2
+from src.orchestrator.planning.tools import build_tools
 
 
 class GraphState(TypedDict):
@@ -21,6 +24,10 @@ class GraphState(TypedDict):
     task_id: str
     shared_dir: str
     plan: PlanOutput | None
+    l1_skills: list[dict]
+    selected_skill_names: list[str]
+    l2_content: dict[str, str]
+    l3_content: dict[str, str]
 
 
 def _build_agents_desc(agents: list[dict]) -> str:
@@ -46,7 +53,70 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
+# --- Progressive Disclosure Nodes ---
+
+
+def _skills_dir(state: GraphState) -> Path:
+    """Resolve orchestrator's skills directory: shared_dir/.orchestrator/skills/."""
+    config_dir = get_agent_config_dir("orchestrator")
+    return Path(state["shared_dir"]) / (config_dir or ".orchestrator") / "skills"
+
+
+def discover_node(state: GraphState) -> dict:
+    """L1: Scan skills directory for SKILL.md frontmatter metadata."""
+    skills_dir = _skills_dir(state)
+    l1_skills = discover_skills(skills_dir)
+    return {"l1_skills": l1_skills}
+
+
+def select_node(state: GraphState) -> dict:
+    """L1→L2: Use one LLM call to semantically select relevant skills."""
+    l1_skills = state.get("l1_skills", [])
+    if not l1_skills:
+        return {"selected_skill_names": []}
+
+    skill_list = "\n".join(f"- {s['name']}: {s['description']}" for s in l1_skills)
+    select_prompt = f"""Based on the user's task, select the most relevant skills from the list below.
+Return ONLY a comma-separated list of skill names, nothing else.
+If no skills are relevant, return an empty string.
+
+Available skills:
+{skill_list}
+
+User task: {state["message"]}"""
+
+    try:
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            base_url=settings.llm.base_url,
+            api_key=settings.llm.api_key,
+            temperature=0,
+        )
+        response = llm.invoke([HumanMessage(content=select_prompt)])
+        valid_names = {s["name"] for s in l1_skills}
+        selected = [n.strip() for n in response.content.split(",") if n.strip() in valid_names]
+        return {"selected_skill_names": selected}
+    except Exception:
+        return {"selected_skill_names": []}
+
+
+def load_l2_node(state: GraphState) -> dict:
+    """L2: Load SKILL.md body for each selected skill."""
+    skills_dir = _skills_dir(state)
+    selected = state.get("selected_skill_names", [])
+    l2_content: dict[str, str] = {}
+    for name in selected:
+        content = load_skill_l2(name, skills_dir)
+        if content:
+            l2_content[name] = content
+    return {"l2_content": l2_content}
+
+
+# --- Plan Node (Tool-Calling Agent Loop) ---
+
+
 def plan_node(state: GraphState) -> dict:
+    """Generate plan via tool-calling agent loop."""
     try:
         llm = ChatOpenAI(
             model=settings.llm.model,
@@ -55,20 +125,63 @@ def plan_node(state: GraphState) -> dict:
         )
 
         agents_desc = _build_agents_desc(state["agents"])
-        prompt = build_planner_prompt(
+        tools = build_tools(state["shared_dir"])
+        llm_with_tools = llm.bind_tools(tools)
+
+        system_prompt = build_planner_prompt(
             agents_desc=agents_desc,
             message=state["message"],
             shared_dir=state["shared_dir"],
+            l2_content=state.get("l2_content", {}),
         )
 
-        response = llm.invoke([HumanMessage(content=prompt)])
-        extracted = _extract_json(response.content)
-        if extracted is None:
-            return {"plan": None}
-        plan = PlanOutput.model_validate(extracted)
-        return {"plan": plan}
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=state["message"]),
+        ]
+
+        max_iterations = 10
+        for _ in range(max_iterations):
+            response = llm_with_tools.invoke(messages)
+
+            if not response.tool_calls:
+                # LLM is done — parse PlanOutput
+                extracted = _extract_json(response.content)
+                if extracted is not None:
+                    try:
+                        plan = PlanOutput.model_validate(extracted)
+                        return {"plan": plan}
+                    except Exception:
+                        pass
+                return {"plan": None}
+
+            # Process tool calls
+            messages.append(response)
+            for tc in response.tool_calls:
+                tool_fn = _find_tool(tools, tc["name"])
+                if tool_fn is None:
+                    result = f"Error: unknown tool '{tc['name']}'"
+                else:
+                    try:
+                        result = tool_fn.invoke(tc["args"])
+                    except Exception as e:
+                        result = f"Error: {e}"
+                messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+
+        return {"plan": None}
     except Exception:
         return {"plan": None}
+
+
+def _find_tool(tools: list, name: str):
+    """Find a tool by name in the list."""
+    for t in tools:
+        if t.name == name:
+            return t
+    return None
+
+
+# --- Write Shared Node ---
 
 
 def _build_session_map(agents: list[dict]) -> dict[str, str]:
@@ -112,9 +225,16 @@ def write_shared_node(state: GraphState) -> dict:
 
 def build_graph() -> StateGraph:
     graph = StateGraph(GraphState)
+    graph.add_node("discover", discover_node)
+    graph.add_node("select", select_node)
+    graph.add_node("load_l2", load_l2_node)
     graph.add_node("plan", plan_node)
     graph.add_node("write_shared", write_shared_node)
-    graph.set_entry_point("plan")
+
+    graph.set_entry_point("discover")
+    graph.add_edge("discover", "select")
+    graph.add_edge("select", "load_l2")
+    graph.add_edge("load_l2", "plan")
     graph.add_edge("plan", "write_shared")
     graph.set_finish_point("write_shared")
     return graph.compile()
