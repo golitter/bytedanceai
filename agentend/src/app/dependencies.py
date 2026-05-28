@@ -4,6 +4,7 @@ from src.adapters.opencode import OpenCodeAdapter
 from src.adapters.orchestrator import OrchestratorAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
+from src.clients.backend_client import BackendClient
 from src.preview.server import PreviewManager
 from src.rules.builtin import SafetyRule, ScopeRule, SkillRule, TaskctlRule
 from src.rules.engine import RuleEngine
@@ -54,3 +55,7 @@ def create_db_reader() -> DBReader:
         password=settings.database.password,
         db=settings.database.dbname,
     )
+
+
+def create_backend_client() -> BackendClient:
+    return BackendClient(base_url=settings.backend.url)

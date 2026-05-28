@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
+from src.clients.backend_client import BackendClient
 from src.orchestrator.execution.coordination import CoordinationChannel
 from src.orchestrator.execution.dispatcher import Dispatcher
 from src.orchestrator.execution.engine import ExecutionEngine
@@ -42,6 +43,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         repo_path = kwargs.get("repo_path", "")
         workspace_mgr = kwargs.get("workspace_mgr")
         results_callback = kwargs.get("results_callback")
+        backend_client: BackendClient | None = kwargs.get("backend_client")
 
         # --- Phase 1: Planning ---
         yield StreamEvent.create(EventType.PLANNING, status="started")
@@ -96,9 +98,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
         # --- Phase 3: Execute + Collect ---
         task_results: list[TaskResult] = []
-        if self._registry:
+        if backend_client:
             engine = ExecutionEngine(
-                registry=self._registry,
+                backend_client=backend_client,
                 workspace_mgr=workspace_mgr,
                 repo_path=repo_path,
                 task_id=task_id,
@@ -137,7 +139,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         aggregator = Aggregator()
         aggregated = await aggregator.aggregate(task_results, overview)
 
-        yield StreamEvent.create(EventType.TEXT, text=overview)
+        yield StreamEvent.create(EventType.TEXT, text=aggregated or overview)
 
         # --- Phase 5: Record experience ---
         evolution = EvolutionStore(shared_dir)

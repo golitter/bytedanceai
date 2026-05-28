@@ -45,6 +45,10 @@ execution:
   timeout: 300                         # 单次执行最大等待时间（秒）
   process_terminate_timeout: 5.0       # 子进程 terminate 后等待 kill 的超时（秒）
 
+# 后端服务地址（agentend 回调后端 RunTask API 用）
+backend:
+  url: "http://localhost:8080"
+
 # Skills 配置（原 skills/builtin/manifest.yaml 已合并至此）
 skills:
   builtin_dir: "src/skills/builtin"    # builtin skills 目录（相对于 agentend/）

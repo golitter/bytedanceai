@@ -5,7 +5,7 @@ import logging
 import time
 from collections.abc import AsyncIterator
 
-from src.adapters.registry import AdapterRegistry
+from src.clients.backend_client import BackendClient
 from src.generated.events import EventType
 from src.orchestrator.models import DispatchResult, TaskResult
 from src.schemas.events import StreamEvent
@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 class ExecutionEngine:
     def __init__(
         self,
-        registry: AdapterRegistry,
+        backend_client: BackendClient,
         workspace_mgr: WorkspaceManager | None = None,
         repo_path: str = "",
         task_id: str = "",
         shared_dir: str = "",
         cwd: str = "",
     ) -> None:
-        self._registry = registry
+        self._backend_client = backend_client
         self._workspace_mgr = workspace_mgr
         self._repo_path = repo_path
         self._task_id = task_id
@@ -37,9 +37,33 @@ class ExecutionEngine:
         dispatches: list[DispatchResult],
         timeout_per_task: float = 300.0,
     ) -> AsyncIterator[tuple[StreamEvent, TaskResult | None]]:
-        for dispatch in dispatches:
+        if len(dispatches) <= 1:
+            for dispatch in dispatches:
+                async for item in self._execute_task(dispatch, timeout_per_task):
+                    yield item
+            return
+
+        queue: asyncio.Queue[tuple[StreamEvent, TaskResult | None]] = asyncio.Queue()
+
+        async def _run(dispatch: DispatchResult) -> None:
             async for item in self._execute_task(dispatch, timeout_per_task):
-                yield item
+                await queue.put(item)
+
+        tasks = [asyncio.create_task(_run(d)) for d in dispatches]
+
+        async def _drain() -> None:
+            await asyncio.gather(*tasks)
+            await queue.put(None)  # sentinel
+
+        drain_task = asyncio.create_task(_drain())
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield item
+
+        await drain_task
 
     async def _ensure_worktree(self, dispatch: DispatchResult) -> str:
         """为子 agent 创建独立 worktree，返回 worktree 路径作为 cwd。"""
@@ -101,7 +125,6 @@ class ExecutionEngine:
             None,
         )
 
-        adapter = None
         session_id = dispatch.real_session_id or f"orch-{task_id}"
         success = False
         collected: list[str] = []
@@ -109,19 +132,8 @@ class ExecutionEngine:
         try:
             agent_cwd = await self._ensure_worktree(dispatch)
 
-            adapter_cls = self._registry.get(agent_type)
-            adapter = adapter_cls()
-            await adapter.create_session(session_id)
-
-            stream_kwargs: dict = {
-                "task_id": task_id,
-                "shared_dir": self._shared_dir,
-            }
-            if agent_cwd:
-                stream_kwargs["cwd"] = agent_cwd
-
             logger.info(
-                "ExecutionEngine: starting agent=%s type=%s task=%s session=%s cwd=%s",
+                "ExecutionEngine: dispatching agent=%s type=%s task=%s session=%s cwd=%s via backend RunTask",
                 agent_name,
                 agent_type,
                 task_id,
@@ -129,16 +141,40 @@ class ExecutionEngine:
                 agent_cwd,
             )
 
-            async for event in adapter.stream_chat(session_id, dispatch.content, **stream_kwargs):
-                # Inject agent identity into sub-agent text events
-                if event.type in (EventType.TEXT.value, "text"):
-                    event.content["agent"] = agent_name
-                    event.content["agent_type"] = agent_type
-                yield (event, None)
-                if event.type in (EventType.TEXT.value, "text"):
-                    text = event.content.get("text", "")
-                    if text:
-                        collected.append(text)
+            message_id = await asyncio.wait_for(
+                self._backend_client.run_task(
+                    task_id=self._task_id,
+                    session_id=session_id,
+                    message=dispatch.content,
+                    agent_type=agent_type,
+                    cwd=agent_cwd,
+                ),
+                timeout=30.0,
+            )
+
+            # Collect SSE events with an overall timeout as safety net
+            async def _collect_stream() -> None:
+                nonlocal success
+                async for event in self._backend_client.stream_result(
+                    task_id=self._task_id,
+                    message_id=message_id,
+                    session_id=session_id,
+                ):
+                    event_type = event.get("type", "")
+                    if event_type == "text":
+                        content = event.get("content", {})
+                        text = content.get("text", "") if isinstance(content, dict) else str(content)
+                        if text:
+                            collected.append(text)
+                    elif event_type == "done":
+                        break
+                    elif event_type == "error":
+                        content = event.get("content", {})
+                        msg = content.get("message", "unknown error") if isinstance(content, dict) else str(content)
+                        collected.append(f"[Error] {msg}")
+                        break
+
+            await asyncio.wait_for(_collect_stream(), timeout=timeout)
 
             success = True
             logger.info(
@@ -157,12 +193,6 @@ class ExecutionEngine:
             logger.error("ExecutionEngine: %s", msg, exc_info=True)
             collected.append(msg)
             yield (StreamEvent.create(EventType.ERROR, error=msg), None)
-        finally:
-            if adapter:
-                try:
-                    await adapter.destroy_session(session_id)
-                except Exception:
-                    pass
 
         duration = time.monotonic() - start
         result = TaskResult(

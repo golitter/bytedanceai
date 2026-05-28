@@ -52,6 +52,10 @@ class DatabaseConfig(BaseModel):
     dbname: str
 
 
+class BackendConfig(BaseModel):
+    url: str = "http://localhost:8080"
+
+
 class ExecutionConfig(BaseModel):
     max_turns: int
     timeout: int
@@ -87,6 +91,7 @@ class Settings(BaseSettings):
     session: SessionConfig
     database: DatabaseConfig
     execution: ExecutionConfig
+    backend: BackendConfig = BackendConfig()
     skills: SkillsConfig
     llm: LlmConfig
 

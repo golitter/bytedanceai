@@ -7,12 +7,14 @@ from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
 from src.api.dependencies import (
     get_adapter_registry,
+    get_backend_client,
     get_rule_engine,
     get_session_manager,
     get_session_store,
     get_workspace_manager,
 )
 from src.app.config import settings
+from src.clients.backend_client import BackendClient
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
 from src.schemas.request import AgentRequest, AgentType
@@ -115,6 +117,7 @@ async def _execute_stream(
     session_store: SessionMappingStore,
     workspace_path: str = "",
     workspace_mgr: WorkspaceManager | None = None,
+    backend_client: BackendClient | None = None,
 ):
     session_mgr.update_state(session_id, SessionState.RUNNING)
     session_mgr.record_history(session_id, {"role": "user", "content": request.message})
@@ -131,6 +134,8 @@ async def _execute_stream(
         stream_kwargs["cwd"] = workspace_path
     if workspace_mgr and request.agent_type == AgentType.ORCHESTRATOR:
         stream_kwargs["workspace_mgr"] = workspace_mgr
+    if backend_client and request.agent_type == AgentType.ORCHESTRATOR:
+        stream_kwargs["backend_client"] = backend_client
 
     try:
         async for event in adapter.stream_chat(session_id, request.message, **stream_kwargs):
@@ -154,6 +159,7 @@ async def agent_stream(
     session_mgr: SessionManager = Depends(get_session_manager),
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
+    backend_client: BackendClient = Depends(get_backend_client),
 ) -> EventSourceResponse:
     workspace_path = await _resolve_workspace(request, workspace_mgr)
 
@@ -193,6 +199,7 @@ async def agent_stream(
             session_store,
             workspace_path,
             workspace_mgr,
+            backend_client,
         )
     )
 
@@ -205,6 +212,7 @@ async def agent_execute(
     session_mgr: SessionManager = Depends(get_session_manager),
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
+    backend_client: BackendClient = Depends(get_backend_client),
 ) -> AgentResponse:
     workspace_path = await _resolve_workspace(request, workspace_mgr)
 
@@ -247,6 +255,7 @@ async def agent_execute(
         chat_kwargs["cwd"] = workspace_path
     if request.agent_type == AgentType.ORCHESTRATOR:
         chat_kwargs["workspace_mgr"] = workspace_mgr
+        chat_kwargs["backend_client"] = backend_client
 
     async def _collect() -> str:
         chunks: list[str] = []

@@ -14,6 +14,7 @@ from src.api.v1.workspace import router as workspace_router
 from src.app.config import settings
 from src.app.dependencies import (
     create_adapter_registry,
+    create_backend_client,
     create_db_reader,
     create_preview_manager,
     create_rule_engine,
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     app.state.rule_engine = create_rule_engine()
     app.state.workspace_manager = create_workspace_manager()
     app.state.preview_manager = create_preview_manager()
+    app.state.backend_client = create_backend_client()
 
     # Startup: load persisted workspaces and recover
     ws_mgr = app.state.workspace_manager
@@ -48,9 +50,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: stop cleanup task and close DB connection
+    # Shutdown: stop cleanup task and close connections
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
+    await app.state.backend_client.close()
     await db_reader.close()
 
 

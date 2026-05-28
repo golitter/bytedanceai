@@ -1,6 +1,7 @@
 from fastapi import Request
 
 from src.adapters.registry import AdapterRegistry
+from src.clients.backend_client import BackendClient
 from src.preview.server import PreviewManager
 from src.rules.engine import RuleEngine
 from src.session.manager import SessionManager
@@ -30,3 +31,7 @@ def get_workspace_manager(request: Request) -> WorkspaceManager:
 
 def get_preview_manager(request: Request) -> PreviewManager:
     return request.app.state.preview_manager
+
+
+def get_backend_client(request: Request) -> BackendClient:
+    return request.app.state.backend_client

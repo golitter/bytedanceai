@@ -155,9 +155,11 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 }
 
 type RunTaskReq struct {
-	Message   string `json:"message" binding:"required"`
-	AgentType string `json:"agent_type"`
-	SessionID string `json:"session_id" binding:"required"`
+	Message         string `json:"message" binding:"required"`
+	AgentType       string `json:"agent_type"`
+	SessionID       string `json:"session_id" binding:"required"`
+	Cwd             string `json:"cwd"`
+	SkipUserMessage bool   `json:"skip_user_message"`
 }
 
 func (h *TaskHandler) RunTask(c *gin.Context) {
@@ -180,17 +182,19 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		agentType = "claude-code"
 	}
 
-	// Save user message to Message table
-	userMsg := model.Message{
-		MessageID: uuid.New().String(),
-		TaskID:    taskID,
-		SessionID: req.SessionID,
-		Role:      "user",
-		Content:   req.Message,
-	}
-	if err := db.GetDB().Create(&userMsg).Error; err != nil {
-		vo.InternalError(c, "failed to save user message")
-		return
+	// Save user message to Message table (skip for internal orchestrator dispatches)
+	if !req.SkipUserMessage {
+		userMsg := model.Message{
+			MessageID: uuid.New().String(),
+			TaskID:    taskID,
+			SessionID: req.SessionID,
+			Role:      "user",
+			Content:   req.Message,
+		}
+		if err := db.GetDB().Create(&userMsg).Error; err != nil {
+			vo.InternalError(c, "failed to save user message")
+			return
+		}
 	}
 
 	var session model.Session
@@ -254,7 +258,9 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			AgentType: generated.AgentType(agentType),
 			Stream:    true,
 		}
-		if task.RepoPath != "" {
+		if req.Cwd != "" {
+			agentReq.WorkspacePath = &req.Cwd
+		} else if task.RepoPath != "" {
 			agentReq.RepoPath = &task.RepoPath
 		}
 
