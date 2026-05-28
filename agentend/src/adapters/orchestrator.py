@@ -52,17 +52,23 @@ class OrchestratorAdapter(BaseAgentAdapter):
         # Provision skills to shared_dir for orchestrator's progressive disclosure
         SkillProvisioner().provision(shared_dir, "orchestrator")
 
-        result = await self._graph.ainvoke(
+        # Stream graph execution to yield progress events for each node
+        result: dict = {}
+        async for chunk in self._graph.astream(
             {
                 "message": message,
                 "agents": agents,
                 "task_id": task_id,
                 "shared_dir": shared_dir,
-            }
-        )
-
-        yield StreamEvent.create(EventType.PLANNING, node="plan")
-        yield StreamEvent.create(EventType.PLANNING, node="write_shared")
+            },
+            stream_mode="updates",
+        ):
+            # chunk is {node_name: node_output} in "updates" mode
+            node_name = next(iter(chunk))
+            node_output = chunk[node_name]
+            if isinstance(node_output, dict):
+                result.update(node_output)
+            yield StreamEvent.create(EventType.PLANNING, node=node_name)
 
         plan = result.get("plan")
         if not plan:

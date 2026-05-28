@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import TypedDict
 
 import yaml
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
 
@@ -16,6 +17,8 @@ from src.orchestrator.models import PlanOutput
 from src.orchestrator.planning.prompts import build_planner_prompt
 from src.orchestrator.planning.skill_loader import discover_skills, load_skill_l2
 from src.orchestrator.planning.tools import build_tools
+
+logger = logging.getLogger(__name__)
 
 
 class GraphState(TypedDict):
@@ -115,8 +118,31 @@ def load_l2_node(state: GraphState) -> dict:
 # --- Plan Node (Tool-Calling Agent Loop) ---
 
 
+def _find_tool(tools: list, name: str):
+    for t in tools:
+        if t.name == name:
+            return t
+    return None
+
+
+def _clean_ai_message(msg: AIMessage) -> AIMessage:
+    """Strip reasoning_content for non-thinking models (no-op if absent).
+
+    For thinking models (deepseek-reasoner), reasoning_content MUST be preserved.
+    This guard ensures compatibility when the model is swapped at runtime.
+    """
+    if "reasoning_content" not in msg.additional_kwargs:
+        return msg
+    kw = {k: v for k, v in msg.additional_kwargs.items() if k != "reasoning_content"}
+    return AIMessage(content=msg.content, tool_calls=msg.tool_calls, additional_kwargs=kw, id=msg.id)
+
+
 def plan_node(state: GraphState) -> dict:
-    """Generate plan via tool-calling agent loop."""
+    """Generate plan via tool-calling agent loop.
+
+    Handles DeepSeek reasoning_content by stripping it between turns.
+    Terminates when LLM responds without tool_calls or max_iterations reached.
+    """
     try:
         llm = ChatOpenAI(
             model=settings.llm.model,
@@ -141,22 +167,24 @@ def plan_node(state: GraphState) -> dict:
         ]
 
         max_iterations = 10
-        for _ in range(max_iterations):
+        for i in range(max_iterations):
             response = llm_with_tools.invoke(messages)
 
             if not response.tool_calls:
-                # LLM is done — parse PlanOutput
+                # LLM finished — parse PlanOutput
                 extracted = _extract_json(response.content)
                 if extracted is not None:
                     try:
                         plan = PlanOutput.model_validate(extracted)
                         return {"plan": plan}
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("Plan JSON validation failed: %s | raw: %.200s", e, response.content)
+                else:
+                    logger.warning("Plan response has no parseable JSON: %.200s", response.content)
                 return {"plan": None}
 
-            # Process tool calls
-            messages.append(response)
+            messages.append(_clean_ai_message(response))
+
             for tc in response.tool_calls:
                 tool_fn = _find_tool(tools, tc["name"])
                 if tool_fn is None:
@@ -168,17 +196,11 @@ def plan_node(state: GraphState) -> dict:
                         result = f"Error: {e}"
                 messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
+        logger.warning("Plan node reached max_iterations=%d without PlanOutput", max_iterations)
         return {"plan": None}
     except Exception:
+        logger.exception("Plan node failed unexpectedly")
         return {"plan": None}
-
-
-def _find_tool(tools: list, name: str):
-    """Find a tool by name in the list."""
-    for t in tools:
-        if t.name == name:
-            return t
-    return None
 
 
 # --- Write Shared Node ---
@@ -235,6 +257,6 @@ def build_graph() -> StateGraph:
     graph.add_edge("discover", "select")
     graph.add_edge("select", "load_l2")
     graph.add_edge("load_l2", "plan")
-    graph.add_edge("plan", "write_shared")
+    graph.add_conditional_edges("plan", lambda state: "write_shared" if state.get("plan") is not None else "__end__")
     graph.set_finish_point("write_shared")
     return graph.compile()
