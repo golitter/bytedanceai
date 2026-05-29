@@ -82,6 +82,23 @@ stop_service() {
   echo "停止 $name (PID $pid)"
   # 杀整个进程树（父进程及其子进程）
   kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+
+  # 清理残留的孤儿守护进程（air/uvicorn 热重载会留下不持有端口的僵尸进程）
+  local reaper_cmd
+  case "$name" in
+    backend)  reaper_cmd="air -c .air.toml" ;;
+    agentend) reaper_cmd="uvicorn src.app.main:app" ;;
+    *)        reaper_cmd="" ;;
+  esac
+  if [ -n "$reaper_cmd" ]; then
+    local orphan_pids
+    orphan_pids=$(pgrep -f "$reaper_cmd" 2>/dev/null || true)
+    if [ -n "$orphan_pids" ]; then
+      echo "清理 $name 残留进程: $orphan_pids"
+      echo "$orphan_pids" | xargs kill 2>/dev/null || true
+    fi
+  fi
+
   # 等待进程退出（最多 5 秒）
   local waited=0
   while [ $waited -lt 50 ] && is_running "$entry"; do
@@ -91,6 +108,13 @@ stop_service() {
   if is_running "$entry"; then
     pid=$(pid_on_port "$port")
     kill -9 "$pid" 2>/dev/null || true
+  fi
+  # 强制清理仍未退出的孤儿
+  if [ -n "$reaper_cmd" ]; then
+    orphan_pids=$(pgrep -f "$reaper_cmd" 2>/dev/null || true)
+    if [ -n "$orphan_pids" ]; then
+      echo "$orphan_pids" | xargs kill -9 2>/dev/null || true
+    fi
   fi
 }
 
