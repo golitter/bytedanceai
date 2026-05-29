@@ -183,7 +183,15 @@ export function useChatStream(
 
     getTaskMessages(taskId, { limit: 20, sessionId })
       .then((res) => {
-        if (cancelled || res.data.length === 0) return
+        if (cancelled) {
+          console.log('[useChatStream] effect cancelled, skipping load')
+          return
+        }
+        console.log('[useChatStream] loaded messages:', res.data.length, 'hasMore:', res.has_more)
+        if (res.data.length === 0) {
+          console.warn('[useChatStream] API returned 0 messages for session', sessionId)
+          return
+        }
         const chatMessages: ChatMessage[] = res.data.map((m) => ({
           id: `${m.role}-${m.id}`,
           dbId: m.id,
@@ -200,11 +208,12 @@ export function useChatStream(
 
         const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
         if (streaming && streaming.message_id) {
+          console.log('[useChatStream] found streaming message, reconnecting:', streaming.message_id)
           connectToStream(streaming.message_id)
         }
       })
-      .catch(() => {
-        // silently ignore — empty state is fine
+      .catch((err) => {
+        console.error('[useChatStream] getTaskMessages failed:', err)
       })
 
     return () => {

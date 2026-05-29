@@ -84,6 +84,7 @@ export function ImPage() {
   useLayoutEffect(() => {
     if (!currentSessionId) {
       const stored = localStorage.getItem(LS_KEY)
+      console.log('[ImPage] restore from localStorage:', stored, 'currentSessionId:', currentSessionId)
       if (stored) {
         setCurrentSession(stored)
       }
@@ -92,6 +93,7 @@ export function ImPage() {
 
   // Persist session to localStorage when it changes
   useEffect(() => {
+    console.log('[ImPage] persist to localStorage:', currentSessionId)
     if (currentSessionId) {
       localStorage.setItem(LS_KEY, currentSessionId)
     }
