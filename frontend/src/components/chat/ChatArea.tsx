@@ -41,14 +41,6 @@ export function ChatArea({
 }: ChatAreaProps) {
   const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
-  if (import.meta.env.DEV) {
-    console.log(
-      '[ChatArea] render session:', sessionId,
-      'messages:', state.messages.length,
-      'status:', state.status,
-      'streamingContent:', state.streamingContent.slice(0, 50),
-    )
-  }
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
