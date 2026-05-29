@@ -2,23 +2,35 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
-import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
-from src.orchestrator.models import PlanOutput
-from src.orchestrator.planning.prompts import build_planner_prompt
-from src.orchestrator.planning.skill_loader import discover_skills, load_skill_l2
+from src.orchestrator.memory.evolution import EvolutionStore
+from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
+from src.orchestrator.planning.prompts import build_reason_prompt
+from src.orchestrator.planning.skill_loader import (
+    discover_skills,
+    load_l2_content,
+    select_skills,
+)
 from src.orchestrator.planning.tools import build_tools
 
 logger = logging.getLogger(__name__)
+
+
+def _add(left: list, right: list) -> list:
+    return left + right
+
+
+def _add_one(left: int, right: int) -> int:
+    return left + right
 
 
 class GraphState(TypedDict):
@@ -27,11 +39,21 @@ class GraphState(TypedDict):
     task_id: str
     shared_dir: str
     allowed_read_dirs: list[str]
+    output_type: str  # "text" | "plan" | "error"
+    text: str
     plan: PlanOutput | None
-    l1_skills: list[dict]
-    selected_skill_names: list[str]
-    l2_content: dict[str, str]
-    l3_content: dict[str, str]
+    dispatch_results: list[DispatchResult]
+    execution_waves: list[list[DispatchResult]]
+    task_results: Annotated[list, _add]
+    task_status: dict
+    needs_replan: bool
+    replan_reason: str
+    summary: str
+    iteration: Annotated[int, _add_one]
+    max_iterations: int
+    memory_messages: Annotated[list, _add]
+    # skill_prepare intermediate state
+    system_prompt: str
 
 
 def _build_agents_desc(agents: list[dict]) -> str:
@@ -46,77 +68,9 @@ def _build_agents_desc(agents: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _extract_json(text: str) -> dict | None:
-    """Extract JSON from LLM response, handling markdown code blocks."""
-    try:
-        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-        if match:
-            return json.loads(match.group(1))
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
-
-
-# --- Progressive Disclosure Nodes ---
-
-
-def _skills_dir(state: GraphState) -> Path:
-    """Resolve orchestrator's skills directory: shared_dir/.orchestrator/skills/."""
+def _skills_dir(shared_dir: str) -> Path:
     config_dir = get_agent_config_dir("orchestrator")
-    return Path(state["shared_dir"]) / (config_dir or ".orchestrator") / "skills"
-
-
-def discover_node(state: GraphState) -> dict:
-    """L1: Scan skills directory for SKILL.md frontmatter metadata."""
-    skills_dir = _skills_dir(state)
-    l1_skills = discover_skills(skills_dir)
-    return {"l1_skills": l1_skills}
-
-
-def select_node(state: GraphState) -> dict:
-    """L1→L2: Use one LLM call to semantically select relevant skills."""
-    l1_skills = state.get("l1_skills", [])
-    if not l1_skills:
-        return {"selected_skill_names": []}
-
-    skill_list = "\n".join(f"- {s['name']}: {s['description']}" for s in l1_skills)
-    select_prompt = f"""Based on the user's task, select the most relevant skills from the list below.
-Return ONLY a comma-separated list of skill names, nothing else.
-If no skills are relevant, return an empty string.
-
-Available skills:
-{skill_list}
-
-User task: {state["message"]}"""
-
-    try:
-        llm = ChatOpenAI(
-            model=settings.llm.model,
-            base_url=settings.llm.base_url,
-            api_key=settings.llm.api_key,
-            temperature=0,
-        )
-        response = llm.invoke([HumanMessage(content=select_prompt)])
-        valid_names = {s["name"] for s in l1_skills}
-        selected = [n.strip() for n in response.content.split(",") if n.strip() in valid_names]
-        return {"selected_skill_names": selected}
-    except Exception:
-        return {"selected_skill_names": []}
-
-
-def load_l2_node(state: GraphState) -> dict:
-    """L2: Load SKILL.md body for each selected skill."""
-    skills_dir = _skills_dir(state)
-    selected = state.get("selected_skill_names", [])
-    l2_content: dict[str, str] = {}
-    for name in selected:
-        content = load_skill_l2(name, skills_dir)
-        if content:
-            l2_content[name] = content
-    return {"l2_content": l2_content}
-
-
-# --- Plan Node (Tool-Calling Agent Loop) ---
+    return Path(shared_dir) / (config_dir or ".orchestrator") / "skills"
 
 
 def _find_tool(tools: list, name: str):
@@ -127,22 +81,43 @@ def _find_tool(tools: list, name: str):
 
 
 def _clean_ai_message(msg: AIMessage) -> AIMessage:
-    """Strip reasoning_content for non-thinking models (no-op if absent).
-
-    For thinking models (deepseek-reasoner), reasoning_content MUST be preserved.
-    This guard ensures compatibility when the model is swapped at runtime.
-    """
     if "reasoning_content" not in msg.additional_kwargs:
         return msg
     kw = {k: v for k, v in msg.additional_kwargs.items() if k != "reasoning_content"}
     return AIMessage(content=msg.content, tool_calls=msg.tool_calls, additional_kwargs=kw, id=msg.id)
 
 
-def plan_node(state: GraphState) -> dict:
-    """Generate plan via tool-calling agent loop.
+# --- Skill Prepare Node (fast, yields SSE event within seconds) ---
 
-    Handles DeepSeek reasoning_content by stripping it between turns.
-    Terminates when LLM responds without tool_calls or max_iterations reached.
+
+def skill_prepare_node(state: GraphState) -> dict:
+    """L1 → L2 skill discovery + prompt construction. Runs in seconds."""
+    skills_dir_path = _skills_dir(state["shared_dir"])
+    l1_skills = discover_skills(skills_dir_path)
+
+    selection_message = state["replan_reason"] if state.get("replan_reason") else state["message"]
+    selected_names = select_skills(l1_skills, selection_message)
+    l2 = load_l2_content(selected_names, skills_dir_path)
+
+    agents_desc = _build_agents_desc(state["agents"])
+    system_prompt = build_reason_prompt(
+        agents_desc=agents_desc,
+        message=state["message"],
+        shared_dir=state["shared_dir"],
+        l2_content=l2,
+        replan_reason=state.get("replan_reason"),
+    )
+
+    return {"system_prompt": system_prompt}
+
+
+# --- REASON Node (LLM tool-calling loop) ---
+
+
+def reason_node(state: GraphState) -> dict:
+    """REASON node: LLM tool-calling loop.
+
+    Determines output_type: "text" (chitchat) or "plan" (orchestration).
     """
     try:
         llm = ChatOpenAI(
@@ -150,42 +125,91 @@ def plan_node(state: GraphState) -> dict:
             base_url=settings.llm.base_url,
             api_key=settings.llm.api_key,
         )
-
-        agents_desc = _build_agents_desc(state["agents"])
         tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"))
         llm_with_tools = llm.bind_tools(tools)
 
-        system_prompt = build_planner_prompt(
-            agents_desc=agents_desc,
-            message=state["message"],
-            shared_dir=state["shared_dir"],
-            l2_content=state.get("l2_content", {}),
-        )
+        # Use pre-built system prompt from skill_prepare_node
+        system_prompt = state.get("system_prompt", "")
+        messages: list = [SystemMessage(content=system_prompt)]
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=state["message"]),
-        ]
+        for msg in state.get("memory_messages", []):
+            messages.append(msg)
+
+        messages.append(HumanMessage(content=state["message"]))
+
+        if state.get("replan_reason"):
+            messages.append(
+                HumanMessage(content=f"[重规划请求] 以下任务执行失败，请重新规划：\n{state['replan_reason']}")
+            )
 
         max_iterations = 10
         for i in range(max_iterations):
             response = llm_with_tools.invoke(messages)
 
             if not response.tool_calls:
-                # LLM finished — parse PlanOutput
-                extracted = _extract_json(response.content)
-                if extracted is not None:
-                    try:
-                        plan = PlanOutput.model_validate(extracted)
-                        return {"plan": plan}
-                    except Exception as e:
-                        logger.warning("Plan JSON validation failed: %s | raw: %.200s", e, response.content)
+                return {
+                    "output_type": "text",
+                    "text": response.content,
+                    "plan": None,
+                    "memory_messages": [HumanMessage(content=state["message"]), response],
+                }
+
+            plan_call = None
+            other_calls = []
+            for tc in response.tool_calls:
+                if tc["name"] == "plan_and_dispatch":
+                    plan_call = tc
                 else:
-                    logger.warning("Plan response has no parseable JSON: %.200s", response.content)
-                return {"plan": None}
+                    other_calls.append(tc)
+
+            if plan_call is not None:
+                args = plan_call["args"]
+                overview = args.get("overview", "")
+                raw_tasks = args.get("tasks", [])
+
+                tasks = []
+                for t in raw_tasks:
+                    if isinstance(t, dict):
+                        tasks.append(
+                            TaskDef(
+                                task_id=t.get("task_id", f"task-{len(tasks) + 1:03d}"),
+                                session_id=t.get("session_id", ""),
+                                title=t.get("title", ""),
+                                content=t.get("content", ""),
+                            )
+                        )
+
+                plan = PlanOutput(overview=overview, tasks=tasks)
+                tool_messages = [
+                    ToolMessage(content="plan_generated", tool_call_id=plan_call["id"]),
+                ]
+                for tc in other_calls:
+                    tool_fn = _find_tool(tools, tc["name"])
+                    if tool_fn:
+                        try:
+                            result = tool_fn.invoke(tc["args"])
+                        except Exception as e:
+                            result = f"Error: {e}"
+                    else:
+                        result = f"Error: unknown tool '{tc['name']}'"
+                    wrapped = json.dumps(
+                        {"tool": tc["name"], "args": tc["args"], "output": result},
+                        ensure_ascii=False,
+                    )
+                    tool_messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
+
+                return {
+                    "output_type": "plan",
+                    "text": "",
+                    "plan": plan,
+                    "memory_messages": [
+                        HumanMessage(content=state["message"]),
+                        _clean_ai_message(response),
+                        *tool_messages,
+                    ],
+                }
 
             messages.append(_clean_ai_message(response))
-
             for tc in response.tool_calls:
                 tool_fn = _find_tool(tools, tc["name"])
                 if tool_fn is None:
@@ -195,70 +219,161 @@ def plan_node(state: GraphState) -> dict:
                         result = tool_fn.invoke(tc["args"])
                     except Exception as e:
                         result = f"Error: {e}"
-                wrapped = json.dumps({"tool": tc["name"], "args": tc["args"], "output": result}, ensure_ascii=False)
+                wrapped = json.dumps(
+                    {"tool": tc["name"], "args": tc["args"], "output": result},
+                    ensure_ascii=False,
+                )
                 messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
 
-        logger.warning("Plan node reached max_iterations=%d without PlanOutput", max_iterations)
-        return {"plan": None}
+        logger.warning("Reason node reached max_iterations=%d", max_iterations)
+        return {
+            "output_type": "text",
+            "text": "规划超时，请重新描述需求",
+            "plan": None,
+            "memory_messages": [HumanMessage(content=state["message"])],
+        }
     except Exception:
-        logger.exception("Plan node failed unexpectedly")
-        return {"plan": None}
+        logger.exception("Reason node failed unexpectedly")
+        return {
+            "output_type": "error",
+            "text": "Reasoning failed",
+            "plan": None,
+        }
 
 
-# --- Write Shared Node ---
+# --- DISPATCH Node ---
 
 
-def _build_session_map(agents: list[dict]) -> dict[str, str]:
-    """Map agent id → real session_id, e.g. 'claude-code' → 'cc-orch-test'."""
-    return {a["id"]: a["session_id"] for a in agents if "session_id" in a}
+def dispatch_node(state: GraphState) -> dict:
+    """Convert PlanOutput to DispatchResults and topologically sort into waves."""
+    from src.orchestrator.execution.dispatcher import Dispatcher, topological_sort
 
-
-def write_shared_node(state: GraphState) -> dict:
     plan = state["plan"]
-    assert plan is not None
+    if not plan:
+        return {"dispatch_results": [], "execution_waves": []}
 
-    session_map = _build_session_map(state["agents"])
+    dispatcher = Dispatcher(state["agents"])
+    dispatch_results = dispatcher.dispatch(plan)
+    waves = topological_sort(dispatch_results)
 
-    shared = Path(state["shared_dir"])
-    plans_dir = shared / "plans"
-    plans_dir.mkdir(parents=True, exist_ok=True)
+    return {"dispatch_results": dispatch_results, "execution_waves": waves}
 
-    # plans/overview.md — 整体规划（taskctl summary 可读）
-    (plans_dir / "overview.md").write_text(f"# 规划概述\n\n{plan.overview}", encoding="utf-8")
 
-    # plans/task-NNN.md — 每个任务的详细说明（taskctl summary 可读）
-    task_entries = []
-    for idx, task in enumerate(plan.tasks, start=1):
-        filename = f"task-{idx:03d}.md"
-        real_session = session_map.get(task.session_id, task.session_id)
-        (plans_dir / filename).write_text(
-            f"# {task.title}\n\n> agent: {task.session_id}\n\n{task.content}",
-            encoding="utf-8",
+# --- REVIEW Node ---
+
+
+def review_node(state: GraphState) -> dict:
+    """Check task results for failures. Set needs_replan if failures exist and under iteration limit."""
+    task_results = state.get("task_results", [])
+    failed = [tr for tr in task_results if not tr.get("success", True)]
+
+    iteration = state.get("iteration", 0)
+    max_iterations = state.get("max_iterations", 3)
+
+    if not failed:
+        return {"needs_replan": False, "replan_reason": ""}
+
+    if iteration >= max_iterations:
+        logger.warning("Review: max_iterations=%d reached, accepting partial results", max_iterations)
+        return {"needs_replan": False, "replan_reason": ""}
+
+    failure_details = []
+    for tr in failed:
+        failure_details.append(
+            f"- 任务 {tr.get('task_id', '?')} (agent: {tr.get('agent', '?')}): {tr.get('content', '')[:200]}"
         )
-        task_entries.append({"task_id": task.task_id, "session_id": real_session, "file": f"plans/{filename}"})
+    replan_reason = "以下任务执行失败，请重新规划：\n" + "\n".join(failure_details)
 
-    # config.yaml — declarative task index
-    config = {"task_id": state["task_id"], "tasks": task_entries}
-    (shared / "config.yaml").write_text(
-        yaml.dump(config, allow_unicode=True, default_flow_style=False),
-        encoding="utf-8",
-    )
+    return {"needs_replan": True, "replan_reason": replan_reason, "iteration": 1}
 
+
+# --- EVOLVE Node ---
+
+
+def evolve_node(state: GraphState) -> dict:
+    """Record orchestration experience in EvolutionStore."""
+    try:
+        evolution = EvolutionStore(state["shared_dir"])
+        plan = state.get("plan")
+        overview = plan.overview if plan else ""
+        task_results = state.get("task_results", [])
+        all_success = all(tr.get("success", True) for tr in task_results)
+        results_summary = "; ".join(
+            f"{tr.get('task_id', '?')}: {'✅' if tr.get('success') else '❌'}" for tr in task_results
+        )
+        evolution.record(
+            message=state["message"],
+            plan_summary=overview[:200],
+            results_summary=results_summary[:200],
+            success=all_success,
+            agent_performance=[
+                {
+                    "agent_id": tr.get("agent", ""),
+                    "success": tr.get("success", False),
+                    "duration": tr.get("duration", 0),
+                }
+                for tr in task_results
+            ],
+        )
+    except Exception:
+        logger.exception("Evolve node failed")
     return {}
+
+
+# --- SAVE_MEM Node ---
+
+
+def save_mem_node(state: GraphState) -> dict:
+    return {}
+
+
+# --- Conditional Routers ---
+
+
+def route_by_output_type(state: GraphState) -> str:
+    output_type = state.get("output_type", "error")
+    if output_type == "text":
+        return "save_mem"
+    elif output_type == "plan":
+        return "dispatch"
+    else:
+        return END
+
+
+def route_by_review(state: GraphState) -> str:
+    if state.get("needs_replan", False):
+        return "skill_prepare"
+    return "evolve"
+
+
+# --- Graph Builder ---
 
 
 def build_graph() -> StateGraph:
     graph = StateGraph(GraphState)
-    graph.add_node("discover", discover_node)
-    graph.add_node("select", select_node)
-    graph.add_node("load_l2", load_l2_node)
-    graph.add_node("plan", plan_node)
-    graph.add_node("write_shared", write_shared_node)
 
-    graph.set_entry_point("discover")
-    graph.add_edge("discover", "select")
-    graph.add_edge("select", "load_l2")
-    graph.add_edge("load_l2", "plan")
-    graph.add_conditional_edges("plan", lambda state: "write_shared" if state.get("plan") is not None else "__end__")
-    graph.set_finish_point("write_shared")
-    return graph.compile()
+    graph.add_node("skill_prepare", skill_prepare_node)
+    graph.add_node("reason", reason_node)
+    graph.add_node("dispatch", dispatch_node)
+    graph.add_node("execute", _execute_placeholder)
+    graph.add_node("review", review_node)
+    graph.add_node("evolve", evolve_node)
+    graph.add_node("save_mem", save_mem_node)
+
+    graph.set_entry_point("skill_prepare")
+
+    graph.add_edge("skill_prepare", "reason")
+    graph.add_conditional_edges("reason", route_by_output_type)
+    graph.add_edge("dispatch", "execute")
+    graph.add_edge("execute", "review")
+    graph.add_conditional_edges("review", route_by_review)
+    graph.add_edge("evolve", "save_mem")
+    graph.set_finish_point("save_mem")
+
+    memory = MemorySaver()
+    return graph.compile(checkpointer=memory)
+
+
+def _execute_placeholder(state: GraphState) -> dict:
+    """Placeholder execute node — actual execution is handled by OrchestratorAdapter."""
+    return {"task_results": []}

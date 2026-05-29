@@ -4,6 +4,10 @@ import re
 from pathlib import Path
 
 import yaml
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
+
+from src.app.config import settings
 
 
 def _parse_frontmatter(text: str) -> dict | None:
@@ -75,3 +79,42 @@ def load_skill_resource(skill_name: str, resource_path: str, builtin_dir: str | 
         return f"Error: resource file not found: {resource_path}"
     except Exception as e:
         return f"Error: {e}"
+
+
+def select_skills(l1_skills: list[dict], message: str) -> list[str]:
+    """Use one LLM call to semantically select relevant skills from L1 metadata."""
+    if not l1_skills:
+        return []
+
+    skill_list = "\n".join(f"- {s['name']}: {s['description']}" for s in l1_skills)
+    select_prompt = f"""Based on the user's task, select the most relevant skills from the list below.
+Return ONLY a comma-separated list of skill names, nothing else.
+If no skills are relevant, return an empty string.
+
+Available skills:
+{skill_list}
+
+User task: {message}"""
+
+    try:
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            base_url=settings.llm.base_url,
+            api_key=settings.llm.api_key,
+            temperature=0,
+        )
+        response = llm.invoke([HumanMessage(content=select_prompt)])
+        valid_names = {s["name"] for s in l1_skills}
+        return [n.strip() for n in response.content.split(",") if n.strip() in valid_names]
+    except Exception:
+        return []
+
+
+def load_l2_content(selected_names: list[str], builtin_dir: str | Path) -> dict[str, str]:
+    """Load SKILL.md body for each selected skill."""
+    content: dict[str, str] = {}
+    for name in selected_names:
+        body = load_skill_l2(name, builtin_dir)
+        if body:
+            content[name] = body
+    return content

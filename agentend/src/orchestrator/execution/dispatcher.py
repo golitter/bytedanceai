@@ -35,3 +35,50 @@ class Dispatcher:
                 )
             )
         return results
+
+
+def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[DispatchResult]]:
+    """Sort DispatchResults into execution waves based on depends_on.
+
+    Tasks within the same wave can execute in parallel.
+    Waves execute sequentially.
+    """
+    if not dispatch_results:
+        return []
+
+    # Build lookup and dependency graph
+    by_id: dict[str, DispatchResult] = {dr.task_id: dr for dr in dispatch_results}
+    all_ids = set(by_id.keys())
+
+    # Compute in-degree for each task
+    in_degree: dict[str, int] = {tid: 0 for tid in all_ids}
+    dependents: dict[str, list[str]] = {tid: [] for tid in all_ids}
+
+    for dr in dispatch_results:
+        for dep in dr.depends_on:
+            if dep in all_ids:
+                in_degree[dr.task_id] += 1
+                dependents[dep].append(dr.task_id)
+
+    # Kahn's algorithm
+    waves: list[list[DispatchResult]] = []
+    remaining = dict(in_degree)
+
+    while remaining:
+        # Find tasks with zero in-degree
+        ready = [tid for tid, deg in remaining.items() if deg == 0]
+        if not ready:
+            # Cycle detected — put remaining tasks in one wave
+            waves.append([by_id[tid] for tid in remaining])
+            break
+
+        wave = [by_id[tid] for tid in ready]
+        waves.append(wave)
+
+        for tid in ready:
+            del remaining[tid]
+            for dep_tid in dependents[tid]:
+                if dep_tid in remaining:
+                    remaining[dep_tid] -= 1
+
+    return waves

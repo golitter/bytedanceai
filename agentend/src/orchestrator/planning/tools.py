@@ -131,4 +131,14 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
             return f"Error: unknown skill '{skill_name}'"
         return load_skill_resource(skill_name, resource_path, skills_dir)
 
-    return [read_file, write_file, list_dir, run_skill, load_resource]
+    @tool
+    def plan_and_dispatch(overview: str, tasks: list[dict]) -> str:
+        """Signal orchestration intent. Call this when the user's request requires multi-agent collaboration.
+
+        Args:
+            overview: Overall plan summary describing how the request is decomposed.
+            tasks: List of task dicts, each with task_id, session_id, title, content.
+        """
+        return "plan_generated"
+
+    return [read_file, write_file, list_dir, run_skill, load_resource, plan_and_dispatch]
