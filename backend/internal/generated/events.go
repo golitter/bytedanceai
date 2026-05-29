@@ -14,6 +14,7 @@ const (
 	EventTypeDone EventType = "done"
 	EventTypeError EventType = "error"
 	EventTypeRuntimeExecuting EventType = "runtime_executing"
+	EventTypeRuntimeText EventType = "runtime_text"
 	EventTypeRuntimeCompleted EventType = "runtime_completed"
 	EventTypeCoordinationStart EventType = "coordination_start"
 	EventTypeCoordinationMessage EventType = "coordination_message"

@@ -14,6 +14,7 @@ import (
 	"agenthub/backend/pkg/db"
 	pkgredis "agenthub/backend/pkg/redis"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -36,15 +37,21 @@ func IsActive(messageID string) bool {
 
 // StreamWriter consumes an agentend SSE stream, publishes events to Redis Stream,
 // and batch-flushes text content to MySQL.
+// When agent_type changes in SSE events, it finalizes the current Message and creates
+// a new one under the same session, keeping the original Message in streaming status
+// until the entire round finishes.
 type StreamWriter struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	messageID string
+	messageID string // current (latest) message ID — updated on agent switch
 	sessionID string
 	taskID    string
-	agentType string
 	streamKey string
+
+	originalMessageID string // first message ID — never changes, used for registry and Redis stream
+	currentAgentType  string // tracks the current agent type from SSE events
+	currentAgentName  string // tracks the current agent name from SSE events
 
 	buf        strings.Builder
 	bufLen     int
@@ -59,13 +66,15 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 	childCtx, cancel := context.WithTimeout(ctx, goroutineTimeout)
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sw := &StreamWriter{
-		ctx:       childCtx,
-		cancel:    cancel,
-		messageID: messageID,
-		sessionID: sessionID,
-		taskID:    taskID,
-		agentType: agentType,
-		streamKey: key,
+		ctx:               childCtx,
+		cancel:            cancel,
+		messageID:         messageID,
+		sessionID:         sessionID,
+		taskID:            taskID,
+		streamKey:         key,
+		originalMessageID: messageID,
+		currentAgentType:  agentType,
+		currentAgentName:  "",
 	}
 	registry.Store(messageID, sw)
 	return sw
@@ -96,6 +105,11 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
+						// Check for agent switch
+						if newAgentType, ok := event.Content["agent_type"].(string); ok && newAgentType != "" && newAgentType != sw.currentAgentType {
+							newAgentName, _ := event.Content["agent"].(string)
+							sw.switchAgent(newAgentType, newAgentName)
+						}
 						sw.appendText(text)
 					}
 				case generated.EventTypeDone:
@@ -113,11 +127,63 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 	// Final flush
 	sw.doFlush()
 
+	status := "completed"
 	if sawError {
-		sw.updateStatus("failed")
-	} else {
-		sw.updateStatus("completed")
+		status = "failed"
 	}
+	// Finalize the current (last) sub-message
+	sw.updateMessageStatus(sw.messageID, status)
+	// Finalize the original message (may be the same if no agent switch happened)
+	if sw.messageID != sw.originalMessageID {
+		sw.updateMessageStatus(sw.originalMessageID, status)
+	}
+}
+
+// switchAgent handles agent type transition: flushes buffer, finalizes current Message,
+// and creates a new Message under the same session with the new agent_type.
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
+	sw.mu.Lock()
+	hasContent := sw.bufLen > 0
+	sw.mu.Unlock()
+
+	if hasContent {
+		// Flush current buffer to the current Message
+		sw.doFlush()
+
+		// Finalize current Message (not the original — it stays streaming)
+		sw.updateMessageStatus(sw.messageID, "completed")
+
+		// Create new Message in MySQL
+		newMsgID := uuid.New().String()
+		newMsg := model.Message{
+			MessageID: newMsgID,
+			TaskID:    sw.taskID,
+			SessionID: sw.sessionID,
+			Role:      "agent",
+			Content:   "",
+			Status:    "streaming",
+			AgentType: newAgentType,
+			AgentName: newAgentName,
+		}
+		if err := db.GetDB().Create(&newMsg).Error; err != nil {
+			slog.Error("create sub-message failed", "error", err)
+			return
+		}
+
+		// Switch internal state to new Message
+		sw.mu.Lock()
+		sw.messageID = newMsgID
+		sw.buf.Reset()
+		sw.bufLen = 0
+		sw.flushedLen = 0
+		sw.mu.Unlock()
+	}
+
+	// Always update agent tracking
+	sw.mu.Lock()
+	sw.currentAgentType = newAgentType
+	sw.currentAgentName = newAgentName
+	sw.mu.Unlock()
 }
 
 func (sw *StreamWriter) publishToRedis(line string) {
@@ -196,14 +262,14 @@ func (sw *StreamWriter) doFlush() {
 	}
 }
 
-func (sw *StreamWriter) updateStatus(status string) error {
+func (sw *StreamWriter) updateMessageStatus(messageID, status string) error {
 	err := db.GetDB().Model(&model.Message{}).
-		Where("message_id = ?", sw.messageID).
+		Where("message_id = ?", messageID).
 		Updates(map[string]interface{}{
 			"status": status,
 		}).Error
 	if err != nil {
-		slog.Error("update message status failed", "message_id", sw.messageID, "error", err)
+		slog.Error("update message status failed", "message_id", messageID, "error", err)
 	}
 	return err
 }
@@ -220,13 +286,16 @@ func (sw *StreamWriter) finish() {
 		}
 	}
 
-	registry.Delete(sw.messageID)
+	registry.Delete(sw.originalMessageID)
 }
 
 // Fail marks a StreamWriter's message as failed (e.g., on context cancellation).
 func (sw *StreamWriter) Fail() {
 	sw.doFlush()
-	sw.updateStatus("failed")
+	sw.updateMessageStatus(sw.messageID, "failed")
+	if sw.messageID != sw.originalMessageID {
+		sw.updateMessageStatus(sw.originalMessageID, "failed")
+	}
 }
 
 // PublishErrorAndFail writes an error event to Redis Stream, then marks the message as failed.
@@ -265,13 +334,32 @@ func CleanupStaleMessages() {
 	}
 }
 
-// formatSSE formats a text chunk as an SSE data line matching the StreamEvent contract.
+// FormatSSE formats a text chunk as an SSE data line matching the StreamEvent contract.
 func FormatSSE(text string) string {
 	event := map[string]interface{}{
 		"type": "text",
 		"content": map[string]string{
 			"text": text,
 		},
+	}
+	data, _ := json.Marshal(event)
+	return fmt.Sprintf("data: %s", string(data))
+}
+
+// FormatSSEWithMeta formats a text chunk as an SSE data line with agent metadata.
+func FormatSSEWithMeta(text, agentType, agentName string) string {
+	content := map[string]string{
+		"text": text,
+	}
+	if agentType != "" {
+		content["agent_type"] = agentType
+	}
+	if agentName != "" {
+		content["agent"] = agentName
+	}
+	event := map[string]interface{}{
+		"type":    "text",
+		"content": content,
 	}
 	data, _ := json.Marshal(event)
 	return fmt.Sprintf("data: %s", string(data))

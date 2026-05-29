@@ -54,7 +54,7 @@ export function ChatArea({
     if (!firstMsg?.dbId) return
     setLoadingMore(sessionId, true)
     try {
-      const res = await getTaskMessages(taskId, { limit: 20, before: firstMsg.dbId })
+      const res = await getTaskMessages(taskId, { limit: 20, before: firstMsg.dbId, sessionId })
       const chatMessages: ChatMessage[] = res.data.map((m) => ({
         id: `${m.role}-${m.id}`,
         dbId: m.id,

@@ -31,11 +31,16 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 
 	limitStr := c.Query("limit")
 	beforeStr := c.Query("before")
+	sessionID := c.Query("session_id")
 
 	// No pagination params: return all messages, has_more=false
 	if limitStr == "" && beforeStr == "" {
+		query := db.GetDB().Where("task_id = ?", taskID)
+		if sessionID != "" {
+			query = query.Where("session_id = ?", sessionID)
+		}
 		var messages []model.Message
-		db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
+		query.Order("created_at ASC").Find(&messages)
 		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
 		return
 	}
@@ -48,6 +53,9 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 	}
 
 	query := db.GetDB().Where("task_id = ?", taskID)
+	if sessionID != "" {
+		query = query.Where("session_id = ?", sessionID)
+	}
 
 	if beforeStr != "" {
 		if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {

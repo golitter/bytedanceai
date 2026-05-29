@@ -15,6 +15,7 @@ class EventType(str, Enum):
     DONE = "done"
     ERROR = "error"
     RUNTIME_EXECUTING = "runtime_executing"
+    RUNTIME_TEXT = "runtime_text"
     RUNTIME_COMPLETED = "runtime_completed"
     COORDINATION_START = "coordination_start"
     COORDINATION_MESSAGE = "coordination_message"

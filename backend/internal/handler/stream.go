@@ -56,11 +56,11 @@ func (h *StreamHandler) ServeStream(c *gin.Context) {
 }
 
 func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
-	// Phase 1: Send MySQL history as text events
+	// Phase 1: Send MySQL history as text events with agent metadata
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSE(chunk))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
 			c.Writer.Flush()
 		}
 	}
@@ -110,7 +110,7 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 						if remaining != "" {
 							chunks := splitContent(remaining, 500)
 							for _, chunk := range chunks {
-								fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSE(chunk))
+								fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
 								c.Writer.Flush()
 							}
 						}
@@ -161,7 +161,7 @@ func (h *StreamHandler) serveCompleted(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSE(chunk))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
 			c.Writer.Flush()
 		}
 	}
@@ -173,7 +173,7 @@ func (h *StreamHandler) serveFailed(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSE(chunk))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
 			c.Writer.Flush()
 		}
 	}

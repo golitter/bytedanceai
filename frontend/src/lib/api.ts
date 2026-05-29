@@ -247,11 +247,12 @@ export interface TaskMessagesResponse {
 
 export async function getTaskMessages(
   taskId: string,
-  params?: { limit?: number; before?: number },
+  params?: { limit?: number; before?: number; sessionId?: string },
 ): Promise<TaskMessagesResponse> {
   const searchParams = new URLSearchParams()
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.before) searchParams.set('before', String(params.before))
+  if (params?.sessionId) searchParams.set('session_id', params.sessionId)
   const qs = searchParams.toString()
   const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
   const res = await fetch(url)

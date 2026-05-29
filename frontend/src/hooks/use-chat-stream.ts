@@ -165,7 +165,7 @@ export function useChatStream(
   useEffect(() => {
     let cancelled = false
 
-    getTaskMessages(taskId, { limit: 20 })
+    getTaskMessages(taskId, { limit: 20, sessionId })
       .then((res) => {
         if (cancelled || res.data.length === 0) return
         const chatMessages: ChatMessage[] = res.data.map((m) => ({
