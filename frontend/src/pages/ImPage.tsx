@@ -1,5 +1,5 @@
 import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
@@ -80,9 +80,9 @@ export function ImPage() {
   const { activeTab } = useActiveTab()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Restore session from URL on page load
   const urlSessionId = searchParams.get('session')
-  useEffect(() => {
+  // Sync-restore from URL before browser paint (layout effect) to avoid flash
+  useLayoutEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
       setCurrentSession(urlSessionId)
     }
