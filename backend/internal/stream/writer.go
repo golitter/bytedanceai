@@ -114,6 +114,13 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 							sw.flushTextBuffer()
 							newAgentName, _ := event.Content["agent"].(string)
 							sw.switchAgent(newAgentType, newAgentName)
+						} else if newName, ok := event.Content["agent"].(string); ok && newName != "" {
+							// Same agentType but name provided — update tracking so
+							// flushTextBuffer emits correct metadata (e.g. first
+							// Orchestrator TEXT after stream starts).
+							sw.mu.Lock()
+							sw.currentAgentName = newName
+							sw.mu.Unlock()
 						}
 						sw.appendText(text)
 						// Buffer TEXT event for batched Redis publish
@@ -272,7 +279,11 @@ func (sw *StreamWriter) flushTextBuffer() {
 	}
 
 	if combined.Len() > 0 {
-		sw.publishToRedis(FormatSSE(combined.String()))
+		sw.mu.Lock()
+		agentType := sw.currentAgentType
+		agentName := sw.currentAgentName
+		sw.mu.Unlock()
+		sw.publishToRedis(FormatSSEWithMeta(combined.String(), agentType, agentName))
 	}
 }
 

@@ -258,6 +258,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const newMessages = [...session.messages]
       if (session.streamingContent.trim()) {
         const blocks = reduceEventToBlocks(session.streamingContent)
+        if (import.meta.env.DEV) {
+          console.group('[streamDone] block parse')
+          console.log('raw content length:', session.streamingContent.length)
+          console.log(
+            'parsed blocks:',
+            blocks.map((b) => b.type),
+          )
+          console.log('contains aka_yhy:', session.streamingContent.includes('aka_yhy'))
+          if (session.streamingContent.includes('aka_yhy')) {
+            console.log(
+              'content around aka_yhy:',
+              session.streamingContent.slice(
+                Math.max(0, session.streamingContent.indexOf('aka_yhy') - 30),
+                session.streamingContent.indexOf('aka_yhy') + 100,
+              ),
+            )
+          }
+          console.groupEnd()
+        }
         newMessages.push({
           id: `agent-${Date.now()}`,
           role: 'agent',
