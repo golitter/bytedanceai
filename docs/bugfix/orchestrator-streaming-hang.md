@@ -90,6 +90,78 @@ async def _iter_adapter_with_timeout(
 
 - `agentend/src/orchestrator/execution/engine.py` — 新增 `_iter_adapter_with_timeout()`，修改 `_execute_task()` 的短路路径分支
 
+---
+
+## 第二轮修复：Orchestrator 重复输出 + Sub-Agent 执行不可见
+
+> 日期: 2026-05-29（续）
+
+### 现象
+
+超时修复后，多 Agent 流式对话仍存在两个问题：
+
+1. **重复输出**：Orchestrator 的规划概述（overview）被输出两次
+2. **Sub-Agent 执行不可见**：实时流中只看到 Orchestrator 的规划和总结，看不到 Sub-Agent 的执行内容；刷新页面后才正常
+
+### 根因分析
+
+#### Bug A: `flushTextBuffer()` 丢失 agent 元数据
+
+`StreamWriter.flushTextBuffer()` 合并多个 TEXT 事件为一条 SSE 后发布到 Redis。原实现使用 `FormatSSE()` 只保留 `{"type":"text","content":{"text":"..."}}` —— **丢失了 `agent` 和 `agent_type` 字段**。
+
+前端 `use-chat-stream.ts` 只在 TEXT 事件同时携带 `agent` 和 `agent_type` 时才调用 `streamAgentUpdate()` 触发 Agent 切换。元数据丢失 → 前端永远检测不到 Agent 切换 → 所有内容（规划 + 执行 + 总结）被合并到一条 streamingContent 中，显示为单一的 Orchestrator 消息。
+
+刷新后正常是因为 `switchAgent()` 在 MySQL 中为每个 Agent 创建了独立消息记录。
+
+> 此 Bug 已通过将 `flushTextBuffer()` 改用 `FormatSSEWithMeta()` 修复。
+
+#### Bug B: `currentAgentName` 未随 TEXT 事件更新
+
+TEXT 事件处理只检查 `agent_type` 变化来触发 `switchAgent()`。当第一个 Orchestrator TEXT 到达时，`agent_type` 与初始值相同（"orchestrator"），不触发 `switchAgent()`，导致 `currentAgentName` 始终为 `""`。即使 `FormatSSEWithMeta` 包含了 `agent_type`，`agent` 字段为空，前端仍不会调用 `streamAgentUpdate()`。
+
+#### Bug C: 无 Sub-Agent 时 overview 被输出两次
+
+`OrchestratorAdapter.stream_chat()` 中：
+- Phase 1: `yield TEXT(text=overview)` —— 输出规划概述
+- Phase 4: `yield TEXT(text=aggregated or overview)` —— 聚合报告
+
+当 `Aggregator.aggregate([], overview)` 返回空字符串（无 Sub-Agent 结果），`aggregated or overview` 回退到 `overview`，**同一文本被 yield 两次**。
+
+### 修复方案
+
+#### 1. `currentAgentName` 同步更新（writer.go）
+
+在 TEXT 事件处理中，即使 `agent_type` 未变，也更新 `currentAgentName`：
+
+```go
+// agent_type 未变但携带 agent 名称 — 同步更新
+if newName, ok := event.Content["agent"].(string); ok && newName != "" {
+    sw.mu.Lock()
+    sw.currentAgentName = newName
+    sw.mu.Unlock()
+}
+```
+
+#### 2. 跳过空聚合的 Phase 4 TEXT（orchestrator.py）
+
+当 `aggregated` 为空（无 Sub-Agent 结果）时，不 yield Phase 4 TEXT 事件：
+
+```python
+aggregated = await aggregator.aggregate(task_results, overview)
+if aggregated:
+    yield StreamEvent.create(EventType.TEXT, text=aggregated, ...)
+```
+
+### 影响范围（第二轮）
+
+- `backend/internal/stream/writer.go` — TEXT 事件处理中增加 `currentAgentName` 同步更新
+- `agentend/src/adapters/orchestrator.py` — Phase 4 聚合结果为空时跳过 TEXT 事件
+
+### 经验教训
+
+1. SSE 事件合并（batch/merge）时必须保留完整的业务元数据，不能只保留 payload
+2. Agent 追踪（type + name）必须在每个 TEXT 事件上保持同步，不能只在 switchAgent 时更新
+
 ## 经验教训
 
 异步生成器（`async for ... yield`）中直接调用可能无限等待的外部进程时，必须加超时保护。Python 3.10 没有 `asyncio.timeout()` 上下文管理器，需要手动用 Queue + Task 实现。

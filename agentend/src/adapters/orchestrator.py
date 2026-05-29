@@ -177,12 +177,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
         aggregator = Aggregator()
         aggregated = await aggregator.aggregate(task_results, overview)
 
-        yield StreamEvent.create(
-            EventType.TEXT,
-            text=aggregated or overview,
-            agent="Orchestrator",
-            agent_type="orchestrator",
-        )
+        if aggregated:
+            yield StreamEvent.create(
+                EventType.TEXT,
+                text=aggregated,
+                agent="Orchestrator",
+                agent_type="orchestrator",
+            )
 
         # --- Phase 5: Record experience ---
         evolution = EvolutionStore(shared_dir)
