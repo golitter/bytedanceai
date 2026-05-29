@@ -19,11 +19,13 @@ import (
 )
 
 const (
-	flushInterval    = 2 * time.Second
-	flushThreshold   = 500
+	flushInterval    = 500 * time.Millisecond
+	flushThreshold   = 2048
 	maxStreamLen     = 10000
 	streamExpireTTL  = 600 * time.Second
 	goroutineTimeout = 30 * time.Minute
+	textBatchSize    = 2048
+	textBatchAge     = 500 * time.Millisecond
 )
 
 // Registry tracks active StreamWriter goroutines by messageID.
@@ -59,6 +61,10 @@ type StreamWriter struct {
 	lastSeq    string
 	lastFlush  time.Time
 	mu         sync.Mutex
+
+	textBuf      []string // buffered "data: ..." lines for TEXT events awaiting merge
+	textBufSize  int      // total byte size of textBuf
+	textBufStart time.Time
 }
 
 // NewStreamWriter creates a new StreamWriter and registers it.
@@ -94,10 +100,8 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 		if sw.ctx.Err() != nil {
 			return
 		}
-		// Publish every SSE line to Redis Stream
-		sw.publishToRedis(line)
 
-		// Detect error/done events to set final status correctly
+		// Parse SSE data lines for event-type routing
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
 			var event generated.StreamEvent
@@ -105,26 +109,40 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
-						// Check for agent switch
+						// Check for agent switch (orchestrator TEXT events carry agent_type)
 						if newAgentType, ok := event.Content["agent_type"].(string); ok && newAgentType != "" && newAgentType != sw.currentAgentType {
+							sw.flushTextBuffer()
 							newAgentName, _ := event.Content["agent"].(string)
 							sw.switchAgent(newAgentType, newAgentName)
 						}
 						sw.appendText(text)
+						// Buffer TEXT event for batched Redis publish
+						sw.bufferTextLine(line)
+						return
 					}
 				case generated.EventTypeDone:
-					// normal end
+					sw.flushTextBuffer()
 				case generated.EventTypeError:
+					sw.flushTextBuffer()
 					sawError = true
 					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
+				default:
+					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
+					sw.flushTextBuffer()
 				}
 			}
+		} else {
+			// Non-data lines (e.g. "event: ..." lines) — flush text buffer
+			sw.flushTextBuffer()
 		}
+		// Publish non-TEXT lines immediately
+		sw.publishToRedis(line)
 	})
 
 	// Final flush
+	sw.flushTextBuffer()
 	sw.doFlush()
 
 	status := "completed"
@@ -208,6 +226,56 @@ func (sw *StreamWriter) publishToRedis(line string) {
 	sw.mu.Unlock()
 }
 
+// bufferTextLine adds a TEXT SSE line to the batch buffer for deferred merged publish.
+func (sw *StreamWriter) bufferTextLine(line string) {
+	sw.mu.Lock()
+	if len(sw.textBuf) == 0 {
+		sw.textBufStart = time.Now()
+	}
+	sw.textBuf = append(sw.textBuf, line)
+	sw.textBufSize += len(line)
+	shouldFlush := sw.textBufSize >= textBatchSize || time.Since(sw.textBufStart) >= textBatchAge
+	sw.mu.Unlock()
+
+	if shouldFlush {
+		sw.flushTextBuffer()
+	}
+}
+
+// flushTextBuffer merges buffered TEXT events into a single SSE line and publishes to Redis.
+func (sw *StreamWriter) flushTextBuffer() {
+	sw.mu.Lock()
+	buf := sw.textBuf
+	sw.textBuf = nil
+	sw.textBufSize = 0
+	sw.mu.Unlock()
+
+	if len(buf) == 0 {
+		return
+	}
+
+	// Extract text from each buffered line and merge
+	var combined strings.Builder
+	for _, line := range buf {
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		var event struct {
+			Content map[string]interface{} `json:"content"`
+		}
+		if json.Unmarshal([]byte(data), &event) == nil {
+			if text, ok := event.Content["text"].(string); ok {
+				combined.WriteString(text)
+			}
+		}
+	}
+
+	if combined.Len() > 0 {
+		sw.publishToRedis(FormatSSE(combined.String()))
+	}
+}
+
 func (sw *StreamWriter) appendText(text string) {
 	sw.mu.Lock()
 	sw.buf.WriteString(text)
@@ -227,6 +295,7 @@ func (sw *StreamWriter) flushLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			sw.flushTextBuffer()
 			sw.mu.Lock()
 			hasContent := sw.bufLen > 0
 			sw.mu.Unlock()

@@ -89,10 +89,10 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 		for _, xmsg := range results[0].Messages {
 			if data, ok := xmsg.Values["data"].(string); ok {
 				fmt.Fprintf(c.Writer, "%s\n\n", data)
-				c.Writer.Flush()
 			}
 			lastID = xmsg.ID
 		}
+		c.Writer.Flush()
 	}
 
 	// Then block for real-time events until stream ends
@@ -135,8 +135,8 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 
 		results, err := rdb.XRead(ctx, &redis.XReadArgs{
 			Streams: []string{streamKey, lastID},
-			Count:   1,
-			Block:   5 * time.Second,
+			Count:   100,
+			Block:   200 * time.Millisecond,
 		}).Result()
 		if err != nil {
 			if err == context.Canceled || err == context.DeadlineExceeded {
@@ -150,10 +150,10 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 		for _, xmsg := range results[0].Messages {
 			if data, ok := xmsg.Values["data"].(string); ok {
 				fmt.Fprintf(c.Writer, "%s\n\n", data)
-				c.Writer.Flush()
 			}
 			lastID = xmsg.ID
 		}
+		c.Writer.Flush()
 	}
 }
 

@@ -77,6 +77,14 @@ export function useChatStream(
               })
               break
             }
+            case EventTypeValues.RuntimeText: {
+              store.streamRuntimeText(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                agent: (event.content?.agent as string) ?? '',
+                text: (event.content?.text as string) ?? '',
+              })
+              break
+            }
             case EventTypeValues.Planning: {
               const node = event.content?.node as string
               if (node === 'dispatch') {

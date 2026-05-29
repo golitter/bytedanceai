@@ -20,7 +20,14 @@ export type MessageBlock =
   | { type: 'diff'; id: string; snapshotId: string }
   | { type: 'preview'; id: string; url: string }
   | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
-  | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string }
+  | {
+      type: 'runtime_status'
+      id: string
+      task_id: string
+      agent: string
+      status: string
+      streamingText?: string
+    }
   | {
       type: 'coordination'
       id: string

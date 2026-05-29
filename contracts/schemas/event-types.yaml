@@ -19,6 +19,7 @@ definitions:
       - done                  # 流结束
       - error                 # 错误事件
       - runtime_executing     # Agent 开始执行任务
+      - runtime_text          # Orchestrator 透传子 Agent 增量文本
       - runtime_completed     # Agent 完成任务
       - coordination_start    # 协调通道开启
       - coordination_message  # 协调消息（项目经理 ↔ Agent）

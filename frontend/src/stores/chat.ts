@@ -73,6 +73,10 @@ interface ChatStoreState {
     sessionId: string,
     event: { task_id: string; agent: string; status: string },
   ) => void
+  streamRuntimeText: (
+    sessionId: string,
+    event: { task_id: string; agent: string; text: string },
+  ) => void
   streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
   streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
   streamCoordinationDone: (sessionId: string, summary: string) => void
@@ -307,6 +311,34 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         blocks[idx] = newBlock
       } else {
         blocks.push(newBlock)
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamRuntimeText: (sessionId, event) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = session.runtimeBlocks.map((b) => {
+        if (b.type === 'runtime_status' && b.task_id === event.task_id) {
+          return { ...b, streamingText: (b.streamingText ?? '') + event.text }
+        }
+        return b
+      })
+      // If no runtime_status block exists yet, create one
+      if (!blocks.some((b) => b.type === 'runtime_status' && b.task_id === event.task_id)) {
+        blocks.push({
+          type: 'runtime_status',
+          id: nextRuntimeBlockId(),
+          task_id: event.task_id,
+          agent: event.agent,
+          status: 'running',
+          streamingText: event.text,
+        })
       }
       return {
         sessions: {

@@ -35,7 +35,14 @@ function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: 
     case 'plan':
       return <PlanCard overview={block.overview} tasks={block.tasks} />
     case 'runtime_status':
-      return <RuntimeStatus task_id={block.task_id} agent={block.agent} status={block.status} />
+      return (
+        <RuntimeStatus
+          task_id={block.task_id}
+          agent={block.agent}
+          status={block.status}
+          streamingText={block.streamingText}
+        />
+      )
     case 'coordination':
       return (
         <CoordChannel messages={block.messages} closed={block.closed} summary={block.summary} />

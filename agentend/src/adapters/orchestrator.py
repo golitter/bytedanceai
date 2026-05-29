@@ -121,6 +121,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 task_id=task_id,
                 shared_dir=shared_dir,
                 cwd=cwd,
+                adapter_registry=self._registry,
             )
             async for event, result in engine.execute(dispatch_results):
                 yield event
