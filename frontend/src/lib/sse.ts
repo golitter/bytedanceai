@@ -7,6 +7,8 @@ interface SSEOptions {
   onError?: (error: Error) => void
   /** Enable auto-reconnect (EventSource reconnects natively) */
   reconnect?: boolean
+  /** Max ms without any event before treating the stream as dead (default 60s) */
+  staleTimeoutMs?: number
 }
 
 export function connectSSE({
@@ -15,6 +17,7 @@ export function connectSSE({
   onEvent,
   onError,
   reconnect = false,
+  staleTimeoutMs = 60_000,
 }: SSEOptions): AbortController {
   const controller = new AbortController()
 
@@ -25,7 +28,21 @@ export function connectSSE({
 
   const es = new EventSource(fullUrl)
 
+  let lastEventTime = Date.now()
+
+  // Staleness check: close connection if no events received for staleTimeoutMs
+  const staleCheck = setInterval(() => {
+    if (Date.now() - lastEventTime > staleTimeoutMs) {
+      clearInterval(staleCheck)
+      es.close()
+      if (!controller.signal.aborted) {
+        onError?.(new Error('Stream timed out: no events received'))
+      }
+    }
+  }, 10_000)
+
   es.onmessage = (e: MessageEvent) => {
+    lastEventTime = Date.now()
     const data = typeof e.data === 'string' ? e.data : ''
     if (!data.trim()) return
     try {
@@ -38,12 +55,14 @@ export function connectSSE({
 
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) {
+      clearInterval(staleCheck)
       if (!controller.signal.aborted) {
         onError?.(new Error('SSE connection closed'))
       }
       return
     }
     if (!reconnect) {
+      clearInterval(staleCheck)
       es.close()
       if (!controller.signal.aborted) {
         onError?.(new Error('SSE connection error'))
@@ -53,6 +72,7 @@ export function connectSSE({
   }
 
   controller.signal.addEventListener('abort', () => {
+    clearInterval(staleCheck)
     es.close()
   })
 

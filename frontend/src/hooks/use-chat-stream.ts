@@ -50,6 +50,9 @@ export function useChatStream(
               break
             case EventTypeValues.Done:
               store.streamDone(sessionId)
+              // Close SSE connection to prevent auto-reconnect after stream ended
+              abortRef.current?.abort()
+              abortRef.current = null
               break
             case EventTypeValues.Error:
               store.streamError(
@@ -60,6 +63,8 @@ export function useChatStream(
                     'Unknown error',
                 ),
               )
+              abortRef.current?.abort()
+              abortRef.current = null
               break
             case EventTypeValues.RuntimeExecuting:
               store.streamRuntimeEvent(sessionId, {
@@ -129,6 +134,9 @@ export function useChatStream(
           }
         },
         onError: (error) => {
+          // Don't overwrite done/idle state from connection close after stream ended
+          const s = store.getSession(sessionId)
+          if (s.status === 'done' || s.status === 'idle' || s.status === 'error') return
           store.streamError(sessionId, error)
         },
       })
