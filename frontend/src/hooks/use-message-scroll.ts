@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 const SCROLL_BOTTOM_THRESHOLD = 60
 
@@ -18,25 +18,35 @@ export function useMessageScroll(
   const [autoScroll, setAutoScroll] = useState(true)
   const loadingRef = useRef(false)
   const scrollRafRef = useRef<number | null>(null)
+  const prevMsgLenRef = useRef(messagesLength)
 
   const scrollToBottom = useCallback(() => {
     if (!parentRef.current) return
     parentRef.current.scrollTop = parentRef.current.scrollHeight
   }, [parentRef])
 
-  const scheduleScrollToBottom = useCallback(() => {
+  // Initial load or history loaded: scroll to bottom synchronously after DOM layout
+  useLayoutEffect(() => {
+    if (autoScroll) {
+      scrollToBottom()
+    }
+    prevMsgLenRef.current = messagesLength
+  }, [autoScroll, scrollToBottom, messagesLength])
+
+  // Streaming content updates: throttle with rAF for smooth rendering
+  useEffect(() => {
+    if (!autoScroll || !streamingContent) return
+    // Skip if this is an initial load (message count changed), already handled above
+    if (messagesLength !== prevMsgLenRef.current) return
     if (scrollRafRef.current !== null) return
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null
-      scrollToBottom()
+      // Double-rAF to ensure browser has completed layout after streaming content change
+      requestAnimationFrame(() => {
+        scrollToBottom()
+      })
     })
-  }, [scrollToBottom])
-
-  useEffect(() => {
-    if (autoScroll) {
-      scheduleScrollToBottom()
-    }
-  }, [autoScroll, scheduleScrollToBottom, streamingContent, messagesLength])
+  }, [autoScroll, streamingContent, messagesLength, scrollToBottom])
 
   useEffect(() => {
     return () => {
