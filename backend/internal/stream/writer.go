@@ -212,6 +212,18 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
 }
 
 func (sw *StreamWriter) publishToRedis(line string) {
+	// Hot path: immediate push to in-memory hub for low-latency SSE delivery
+	if strings.HasPrefix(line, "data: ") {
+		Hub.Publish(sw.streamKey, line)
+	}
+
+	// Cold path: durable Redis Stream for replay/reconnect
+	sw.publishToRedisOnly(line)
+}
+
+// publishToRedisOnly writes to Redis Stream without hub (for merged batch events
+// that were already individually pushed to hub via bufferTextLine).
+func (sw *StreamWriter) publishToRedisOnly(line string) {
 	rdb := pkgredis.GetClient()
 	if rdb == nil {
 		return
@@ -233,8 +245,13 @@ func (sw *StreamWriter) publishToRedis(line string) {
 	sw.mu.Unlock()
 }
 
-// bufferTextLine adds a TEXT SSE line to the batch buffer for deferred merged publish.
+// bufferTextLine adds a TEXT SSE line to the batch buffer for deferred merged Redis publish.
+// The hot path (hub) is published immediately — each token reaches SSE subscribers without batching.
 func (sw *StreamWriter) bufferTextLine(line string) {
+	// Hot path: immediate push to hub (no batching)
+	Hub.Publish(sw.streamKey, line)
+
+	// Cold path: buffer for batched Redis publish
 	sw.mu.Lock()
 	if len(sw.textBuf) == 0 {
 		sw.textBufStart = time.Now()
@@ -283,7 +300,8 @@ func (sw *StreamWriter) flushTextBuffer() {
 		agentType := sw.currentAgentType
 		agentName := sw.currentAgentName
 		sw.mu.Unlock()
-		sw.publishToRedis(FormatSSEWithMeta(combined.String(), agentType, agentName))
+		// Cold path only: merged batch to Redis (hub already got individual events)
+		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName))
 	}
 }
 
@@ -358,6 +376,9 @@ func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
 
+	// Close hub stream — notifies SSE subscribers
+	Hub.Close(sw.streamKey)
+
 	// Set Redis EXPIRE on the stream
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
@@ -378,25 +399,31 @@ func (sw *StreamWriter) Fail() {
 	}
 }
 
-// PublishErrorAndFail writes an error event to Redis Stream, then marks the message as failed.
+// PublishErrorAndFail writes an error event to Redis Stream and hub, then marks the message as failed.
 // Used when agentend fails before/during streaming so the frontend can see the error.
 func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
+	event := map[string]interface{}{
+		"type": "error",
+		"content": map[string]string{
+			"message": errMsg,
+		},
+	}
+	data, _ := json.Marshal(event)
+	sseLine := fmt.Sprintf("data: %s", string(data))
+
+	// Hot path: push error to hub immediately
+	Hub.Publish(key, sseLine)
+
+	// Cold path: durable Redis
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		event := map[string]interface{}{
-			"type": "error",
-			"content": map[string]string{
-				"message": errMsg,
-			},
-		}
-		data, _ := json.Marshal(event)
 		rdb.XAdd(context.Background(), &redis.XAddArgs{
 			Stream: key,
 			MaxLen: maxStreamLen,
 			Approx: true,
 			Values: map[string]interface{}{
-				"data": fmt.Sprintf("data: %s", string(data)),
+				"data": sseLine,
 			},
 		}).Result()
 		rdb.Expire(context.Background(), key, streamExpireTTL)

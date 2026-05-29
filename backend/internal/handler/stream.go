@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -56,6 +55,9 @@ func (h *StreamHandler) ServeStream(c *gin.Context) {
 }
 
 func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
+	streamKey := pkgredis.StreamKey(msg.SessionID, msg.MessageID)
+	ctx := c.Request.Context()
+
 	// Phase 1: Send MySQL history as text events with agent metadata
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
@@ -65,95 +67,93 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 		}
 	}
 
-	// Phase 2: Continue from Redis Stream
+	// Phase 2: Subscribe hub and replay Redis gap
+	ch, _ := stream.Hub.Subscribe(streamKey)
+
+	// Replay Redis gap: events between last_seq and hub's currentSeq
 	rdb := pkgredis.GetClient()
-	streamKey := pkgredis.StreamKey(msg.SessionID, msg.MessageID)
-	ctx := c.Request.Context()
-
-	// Start after last_seq
-	lastID := msg.LastSeq
-	if lastID == "" {
-		lastID = "0"
-	}
-
-	// First drain any pending messages (non-blocking)
-	for {
-		results, err := rdb.XRead(ctx, &redis.XReadArgs{
-			Streams: []string{streamKey, lastID},
-			Count:   100,
-			Block:   0,
-		}).Result()
-		if err != nil || len(results) == 0 || len(results[0].Messages) == 0 {
-			break
+	if rdb != nil {
+		lastID := msg.LastSeq
+		if lastID == "" {
+			lastID = "0"
 		}
-		for _, xmsg := range results[0].Messages {
-			if data, ok := xmsg.Values["data"].(string); ok {
-				fmt.Fprintf(c.Writer, "%s\n\n", data)
+		// Non-blocking drain of any Redis events since last_seq
+		for {
+			results, err := rdb.XRead(ctx, &redis.XReadArgs{
+				Streams: []string{streamKey, lastID},
+				Count:   100,
+				Block:   0,
+			}).Result()
+			if err != nil || len(results) == 0 || len(results[0].Messages) == 0 {
+				break
 			}
-			lastID = xmsg.ID
+			for _, xmsg := range results[0].Messages {
+				if data, ok := xmsg.Values["data"].(string); ok {
+					fmt.Fprintf(c.Writer, "%s\n\n", data)
+				}
+				lastID = xmsg.ID
+			}
+			c.Writer.Flush()
 		}
-		c.Writer.Flush()
 	}
 
-	// Then block for real-time events until stream ends
+	// Phase 3: Consume realtime events from hub channel
 	for {
-		// Check if the goroutine is still running
-		if !stream.IsActive(msg.MessageID) {
-			// Re-fetch message status
-			var fresh model.Message
-			if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
-				switch fresh.Status {
-				case "completed":
-					// Send any remaining content diff
+		select {
+		case evt, ok := <-ch:
+			if !ok || evt.Done {
+				// Stream closed — send remaining MySQL content diff + done
+				var fresh model.Message
+				if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
 					if fresh.Content != "" && fresh.Content != msg.Content {
 						remaining := fresh.Content[len(msg.Content):]
 						if remaining != "" {
 							chunks := splitContent(remaining, 500)
 							for _, chunk := range chunks {
-								fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
+								fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName))
 								c.Writer.Flush()
 							}
 						}
 					}
-					fmt.Fprintf(c.Writer, "data: {\"type\":\"done\"}\n\n")
-					c.Writer.Flush()
-					return
-				case "failed":
-					fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"content\":{\"message\":\"stream failed\"}}\n\n")
-					c.Writer.Flush()
-					return
-				default:
-					// Status is "streaming" but writer not registered yet —
-					// the goroutine is still connecting to the agent service.
-					// Fall through to the XRead block and wait.
 				}
-			} else {
+				fmt.Fprintf(c.Writer, "data: {\"type\":\"done\"}\n\n")
 				c.Writer.Flush()
 				return
 			}
-		}
+			fmt.Fprintf(c.Writer, "%s\n\n", evt.Data)
+			c.Writer.Flush()
 
-		results, err := rdb.XRead(ctx, &redis.XReadArgs{
-			Streams: []string{streamKey, lastID},
-			Count:   100,
-			Block:   200 * time.Millisecond,
-		}).Result()
-		if err != nil {
-			if err == context.Canceled || err == context.DeadlineExceeded {
-				return
+		case <-ctx.Done():
+			return
+
+		case <-time.After(30 * time.Second):
+			// Staleness check: if hub channel is empty for 30s, verify stream is still alive
+			if !stream.IsActive(msg.MessageID) {
+				var fresh model.Message
+				if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
+					switch fresh.Status {
+					case "completed":
+						if fresh.Content != "" && fresh.Content != msg.Content {
+							remaining := fresh.Content[len(msg.Content):]
+							if remaining != "" {
+								chunks := splitContent(remaining, 500)
+								for _, chunk := range chunks {
+									fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName))
+									c.Writer.Flush()
+								}
+							}
+						}
+						fmt.Fprintf(c.Writer, "data: {\"type\":\"done\"}\n\n")
+						c.Writer.Flush()
+						return
+					case "failed":
+						fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"content\":{\"message\":\"stream failed\"}}\n\n")
+						c.Writer.Flush()
+						return
+					}
+				}
 			}
-			continue
 		}
-		if len(results) == 0 || len(results[0].Messages) == 0 {
-			continue
-		}
-		for _, xmsg := range results[0].Messages {
-			if data, ok := xmsg.Values["data"].(string); ok {
-				fmt.Fprintf(c.Writer, "%s\n\n", data)
-			}
-			lastID = xmsg.ID
-		}
-		c.Writer.Flush()
 	}
 }
 
