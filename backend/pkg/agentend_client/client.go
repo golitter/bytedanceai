@@ -12,8 +12,9 @@ import (
 )
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL      string
+	httpClient   *http.Client
+	streamClient *http.Client
 }
 
 func New(host string, port int) *Client {
@@ -21,8 +22,9 @@ func New(host string, port int) *Client {
 		host = "http://" + host
 	}
 	return &Client{
-		baseURL:    fmt.Sprintf("%s:%d", host, port),
-		httpClient: &http.Client{Timeout: 60 * time.Second},
+		baseURL:      fmt.Sprintf("%s:%d", host, port),
+		httpClient:   &http.Client{Timeout: 60 * time.Second},
+		streamClient: &http.Client{},
 	}
 }
 
@@ -41,7 +43,7 @@ func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
-	return c.httpClient.Do(httpReq)
+	return c.streamClient.Do(httpReq)
 }
 
 type ValidateRepoPathResult struct {
