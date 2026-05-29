@@ -423,19 +423,15 @@ Phase 1 — Go 胶水层          ✅ 完成
 Phase 2 — 最小聊天界面        ✅ 完成
 Phase 3 — IM 体验补全         ✅ 完成
 Phase 4 — 产物与打磨          ✅ 完成
-Phase 5 — Runtime System      🔧 进行中
-  ├─ Orchestrator Planner     ✅ 完成
-  ├─ 统一 RuntimeEvent        ❌ 未开始
-  ├─ Runtime State            ❌ 未开始
-  ├─ ExecutionEngine          ❌ 未开始
-  ├─ Scheduler                ❌ 未开始
-  ├─ AgentRegistry            ❌ 未开始
-  ├─ Profile System (SOUL)    ❌ 未开始
-  ├─ Permission System        ❌ 未开始
-  ├─ Workspace Isolation      ❌ 未开始（per RuntimeAgent）
-  ├─ MergeManager             ❌ 未开始
-  ├─ 前端 Runtime Timeline    ❌ 未开始
-  └─ Go Backend               🔧 需少量改动（SSE 透传新事件 + Orchestrator config 构建）
+Phase 5 — Agent 模式重构      🔧 进行中
+  ├─ REASON 节点 (Agent 核心)   ✏️ 重构中
+  ├─ plan_and_dispatch 工具     🆕 待实现
+  ├─ Memory (LangGraph)         🆕 待实现
+  ├─ 生命周期图 (Dispatch→Execute→Review→Evolve)  🆕 待实现
+  ├─ Wave Executor 子图         🆕 待实现
+  ├─ OrchestratorAdapter 重构   ✏️ 待实现
+  ├─ 前端群聊 UI                ❌ 未开始
+  └─ Go Backend                 🔧 需少量改动（SSE 透传新事件）
 Phase 6 — 预览 + 部署         📋 待开始
 Phase 7 — 演示 + 交付         📋 待开始
 ```
@@ -444,349 +440,134 @@ Phase 7 — 演示 + 交付         📋 待开始
 
 ## 八、Phase 5 核心架构
 
-### 8.1 RuntimeCoordinator = Runtime Kernel
+### 8.1 Orchestrator = 有记忆的 Agent
 
-Orchestrator 升级为 RuntimeCoordinator：
+Orchestrator 不是一个 Pipeline，而是一个有记忆的对话 Agent。
+- 闲聊 → LLM 直接回复文本
+- 任务 → 调用 `plan_and_dispatch` 工具触发编排
+- Memory 跨轮次持久化（LangGraph MemorySaver）
 
-```python
-class RuntimeCoordinator:
-    runtime: OrchestratorRuntime          # Runtime 状态
-    scheduler: Scheduler                  # 执行调度
-    merge_manager: MergeManager           # 分支合并
-    replanner: Replanner                  # 动态重规划（Phase 6）
-    workspace_manager: WorkspaceManager   # 工作区管理
-    registry: AgentRegistry               # Agent 注册中心
+```
+REASON 节点内部:
+  messages = [System(prompt)] + memory_messages + [Human(user_input)]
+
+  LLM tool-calling 循环:
+    if response.tool_calls:
+      if tc.name == "plan_and_dispatch":
+        → 编排信号，提取 PlanOutput，走 DISPATCH
+      else:
+        → 普通工具（read_file 等），继续循环
+    else:
+      → 纯文本回复（闲聊/直接回答），走 SAVE_MEM
 ```
 
-### 8.2 执行流
+### 8.2 执行流（LangGraph 状态图）
 
 ```
 POST /v1/agent/stream
     ↓
-OrchestratorAdapter
+OrchestratorAdapter (config={"thread_id": session_id})
     ↓
-Planner（LangGraph）              ← 只做规划
-    ↓
-ExecutionPlan                    ← Source of Truth（内存）
-    ↓
-Scheduler                        ← 串行/并行调度
-    ↓ spawn RuntimeAgent
-RuntimeAgent                     ← 独立 worktree + branch
-    ↓
-ExecutionEngine                  ← normalize event
-    ↓
-AgentAdapter                     ← Claude/OpenCode/Codex
-    ↓
-统一 RuntimeEvent Stream
-    ↓
-MergeManager                     ← 合并分支（Phase 6）
-    ↓
-Go Backend 透传
-    ↓
-Frontend Runtime Coordination Timeline
+LangGraph Agent Graph:
+    REASON (LLM + Memory + Skills)
+      ├── 文本回复 → SAVE_MEM → END
+      └── plan_and_dispatch → DISPATCH → EXECUTE → REVIEW
+                                                    ├── ok → EVOLVE → SAVE_MEM → END
+                                                    └── replan → REASON (带失败上下文)
 ```
 
-### 8.3 Runtime State（独立于文件系统）
-
-`shared/` 是 persistence projection，不是 Source of Truth。
+### 8.3 GraphState
 
 ```python
-@dataclass
-class OrchestratorRuntime:
-    runtime_id: str
-    state: RuntimeState
-    plan: ExecutionPlan                       # Source of Truth
-    current_step: int
-    task_states: dict[str, TaskRuntime]
-    shared_context: SharedContext
+class GraphState(TypedDict):
+    # 输入层
+    message: str
+    agents: list[dict]
+    task_id: str
+    shared_dir: str
+    allowed_read_dirs: list[str]
+
+    # REASON 产出
+    output_type: str                            # "text" | "plan"
+    text: str
+    plan: PlanOutput | None
+
+    # DISPATCH 产出
+    dispatch_results: list[DispatchResult]
+    execution_waves: list[list[DispatchResult]] # 拓扑分波
+
+    # EXECUTE 产出（累积）
+    task_results: Annotated[list[TaskResult], add]
+    task_status: dict[str, str]
+
+    # REVIEW 决策
+    needs_replan: bool
+    replan_reason: str
+
+    # 元信息
+    iteration: Annotated[int, add_one]
+    max_iterations: int                         # 默认 3
+
+    # Memory
+    memory_messages: Annotated[list, add]
 ```
 
-```python
-@dataclass
-class TaskRuntime:
-    id: str
-    profile: str                              # 身份
-    adapter: str                              # 后端
-    prompt: str
-    dependencies: list[str]                   # DAG-ready
-    state: TaskState                          # PENDING / RUNNING / COMPLETED / FAILED
-    result: Optional[str]
-    permissions: Permissions
-    workspace_path: str                       # 绑定到 RuntimeAgent 实例
-    branch: str                               # 独立 branch
-```
+### 8.4 Execute 子图 (Wave Executor)
 
-```python
-@dataclass
-class RuntimeAgent:
-    session_agent_id: str                     # Runtime 实例 ID
-    profile_id: str                           # Profile 身份
-    adapter: str                              # Adapter 后端
-    permissions: Permissions
-    workspace_path: str                       # workspaces/{task_id}/{session_agent_id}/
-    branch: str                               # feature/{task_id}-{profile}
-    state: AgentState
-    context: AgentContext
-```
-
-### 8.4 ExecutionPlan：DAG-ready
-
-```python
-ExecutionTask(
-    id="task-001",
-    profile="frontend-engineer",
-    adapter="claude-code",
-    prompt="实现登录页",
-    depends_on=[]                             # Phase 5: 串行
-)
-
-ExecutionTask(
-    id="task-002",
-    profile="reviewer",
-    adapter="opencode",
-    prompt="Review 登录页代码",
-    depends_on=["task-001"]                   # Phase 6: 并行就绪
-)
-```
-
-### 8.5 统一 RuntimeEvent
-
-```python
-class RuntimeEvent(BaseModel):
-    type: str
-    runtime_id: str
-    task_id: Optional[str]
-    agent: Optional[str]                      # Profile 名称
-    timestamp: datetime
-    payload: dict
-```
-
-**事件类型体系：**
+按依赖关系拓扑排序，分波次执行：
 
 ```
-# Runtime 级别
-runtime.started
-runtime.planning
-runtime.plan.completed
-runtime.completed
-runtime.failed
-runtime.agent.spawned                        # 🆕 RuntimeAgent 创建
-runtime.agent.completed                      # 🆕 RuntimeAgent 完成
-
-# Task 级别
-task.queued
-task.started
-task.completed
-task.failed
-
-# Agent 级别（normalize 后）
-agent.delta                                  # 流式文本
-agent.tool_call                              # 工具调用
-agent.tool_result                            # 工具结果
-
-# Workspace 级别                              # 🆕 Workspace 生命周期
-workspace.branch.created
-workspace.merge.started
-workspace.merge.conflict
-workspace.merge.completed
-
-# Artifact 级别
-artifact.created
-
-# Runtime 协调                                 # Phase 6
-runtime.replanned                            # 动态重规划
+Wave 0: [Task-A]           ← 无依赖，立即执行
+Wave 1: [Task-B, Task-C]   ← 依赖 A，A 完成后并行
+Wave 2: [Task-D]           ← 依赖 B+C
 ```
 
-**ExecutionEngine 的核心：normalize(event)**
-
-```python
-class ExecutionEngine:
-    async def execute(self, task: ExecutionTask, agent: RuntimeAgent):
-        adapter = registry.get_adapter(agent.adapter)
-        async for event in adapter.stream():
-            yield normalize(event, agent)     # → 统一 RuntimeEvent
-```
-
-### 8.6 Scheduler
-
-```python
-class Scheduler:
-    async def run(self, plan: ExecutionPlan, runtime: OrchestratorRuntime) -> AsyncIterator[RuntimeEvent]:
-        for task in plan.tasks:               # Phase 5: 串行
-            agent = self.registry.spawn(task.profile, task.adapter)
-            self.workspace_manager.create_agent_workspace(agent)
-
-            yield RuntimeEvent(type="runtime.agent.spawned", ...)
-            yield RuntimeEvent(type="workspace.branch.created", ...)
-            yield RuntimeEvent(type="task.started", task_id=task.id)
-
-            async for event in self.engine.execute(task, agent):
-                yield event
-
-            yield RuntimeEvent(type="task.completed", task_id=task.id)
-```
-
-### 8.7 MergeManager
-
-```python
-class MergeManager:
-    async def merge_agent_branch(
-        self,
-        source_agent_id: str,
-        target_branch: str = "main",
-    ) -> MergeResult:
-        ...
-
-    async def handle_conflict(
-        self,
-        conflict: MergeConflict,
-    ) -> ExecutionTask:
-        """冲突时生成新的 conflict-resolution Task"""
-        return ExecutionTask(
-            profile="reviewer",
-            adapter="opencode",
-            prompt=f"Resolve merge conflict: {conflict.files}",
-        )
-```
-
-### 8.8 Frontend：Runtime Coordination Timeline
-
-渲染的不是 `assistant message`，而是 **Runtime Coordination Timeline**：
+### 8.5 Memory 设计
 
 ```
-[Orchestrator]
-Planning execution...
-Generated 2 tasks
-
-[Frontend Engineer]                ← Profile 名称
-Creating worktree...               ← workspace.branch.created
-Implementing Login.tsx...          ← agent.delta
-
-[Reviewer]                         ← 不同 Profile 不同颜色/头像
-Creating worktree...
-Reviewing accessibility...
-
-[Runtime] Merging branches...      ← workspace.merge.started
-[Runtime] Completed                ← runtime.completed
+Orchestrator Memory (per session, LangGraph MemorySaver)
+├── messages: 累积对话 + 工具调用 + 结果
+├── evolution: 规划经验（evolution.yaml，已有）
+└── pins: 共享约束（_pins.yaml，已有）
 ```
+
+REASON 节点从 checkpointer 加载历史 messages，注入 pin + evolution context。
 
 ---
 
 ## 九、Phase 5 实施计划
 
-### 9.1 AgentEnd 新增/修改文件
+> 详细实施步骤见 [phase5-orchestrator.md](../phase5-orchestrator.md)
 
-```
-agentend/src/
-├── profiles/                        # 🆕 Agent Profile System
-│   ├── frontend-engineer/
-│   │   ├── soul.yaml
-│   │   ├── system.md
-│   │   └── rules.yaml
-│   └── reviewer/
-│       ├── soul.yaml
-│       ├── system.md
-│       └── rules.yaml
-│
-├── runtime/                         # 🆕 Runtime 核心
-│   ├── registry.py                  #   AgentRegistry
-│   ├── events.py                    #   统一 RuntimeEvent
-│   ├── models.py                    #   RuntimeAgent, Permissions
-│   └── context.py                   #   PromptRenderer
-│
-├── orchestrator/
-│   ├── coordinator.py               # 🆕 RuntimeCoordinator（Runtime Kernel）
-│   ├── runtime.py                   # 🆕 OrchestratorRuntime + TaskRuntime
-│   ├── scheduler.py                 # 🆕 Scheduler
-│   ├── execution.py                 # 🆕 ExecutionEngine + normalize
-│   ├── merge.py                     # 🆕 MergeManager
-│   ├── graph.py                     # ✏️ 保留，只做 Planner
-│   ├── models.py                    # ✏️ 扩展 ExecutionPlan + ExecutionTask
-│   ├── prompts.py                   # ✏️ 保留
-│   ├── dispatcher.py                # ✏️ 保留
-│   ├── aggregator.py                # ✏️ 保留
-│   ├── evolution.py                 # ✏️ 保留
-│   └── pin_memory.py               # ✏️ 保留
-│
-├── adapters/
-│   ├── orchestrator.py              # ✏️ 重构：串联新流程
-│   └── ...
-│
-└── workspace/
-    └── manager.py                   # ✏️ 扩展 per-RuntimeAgent 工作区创建
-```
+### 9.1 实施步骤概要
 
-### 9.2 实施步骤
+1. **新增 `plan_and_dispatch` 工具** — LLM 编排信号
+2. **重构 REASON 节点** — 合并 skill 加载 + LLM tool-calling 循环
+3. **生命周期节点** — Dispatch / Execute / Review / Evolve / SaveMem
+4. **构建新 Graph** — LangGraph StateGraph + MemorySaver
+5. **Memory 集成** — LangGraph checkpointer
+6. **Execute 子图** — Wave executor
+7. **重构 OrchestratorAdapter** — 适配新图结构
+8. **Go Backend 适配** — SSE 透传新事件
+9. **前端群聊 UI** — PlanningCard + Agent 标签
 
-#### Step 1: Profile System (SOUL)
-
-新建 `profiles/` 目录 + 初始 Profile（frontend-engineer, reviewer）。
-新建 `runtime/models.py` — RuntimeAgent、Permissions。
-新建 `runtime/registry.py` — AgentRegistry。
-
-#### Step 2: 统一事件模型
-
-新建 `runtime/events.py` — RuntimeEvent + 事件类型枚举（含 workspace.* 事件）。
-
-#### Step 3: Runtime 数据结构
-
-新建 `orchestrator/runtime.py` — OrchestratorRuntime、TaskRuntime。
-扩展 `orchestrator/models.py` — ExecutionPlan、ExecutionTask（profile + adapter + depends_on）。
-
-#### Step 4: Workspace Isolation 升级
-
-扩展 `workspace/manager.py` — per-RuntimeAgent 工作区创建：
-- `workspaces/{task_id}/{session_agent_id}/repo/`（独立 worktree）
-- `workspaces/{task_id}/{session_agent_id}/state.json`
-- `workspaces/{task_id}/shared/`（共享上下文）
-- `workspaces/{task_id}/orchestrator/`（Orchestrator 专属）
-
-#### Step 5: ExecutionEngine
-
-新建 `orchestrator/execution.py` — normalize 各 Agent 原生事件为统一 RuntimeEvent。
-
-#### Step 6: Scheduler
-
-新建 `orchestrator/scheduler.py` — 串行遍历 ExecutionPlan，spawn RuntimeAgent 并执行。
-
-#### Step 7: MergeManager
-
-新建 `orchestrator/merge.py` — merge RuntimeAgent 分支到 main。
-
-#### Step 8: Context Rendering Pipeline
-
-新建 `runtime/context.py` — PromptRenderer（render_soul → render_rules → render_workspace → render_task → render_memory）。
-
-#### Step 9: RuntimeCoordinator + 重构 OrchestratorAdapter
-
-新建 `orchestrator/coordinator.py` — 串联所有模块。
-重构 `adapters/orchestrator.py` — 使用 RuntimeCoordinator。
-
-#### Step 10: 前端 Runtime Timeline
-
-修改 `stores/chat.ts`：识别 runtime.*/task.*/agent.*/workspace.* 事件。
-修改 `MessageBubble.tsx`：Agent Presence + Workspace 状态。
-新建 `PlanningCard.tsx`：规划进度卡片。
-
-### 9.3 Phase 5 MVP 范围
+### 9.2 Phase 5 MVP 范围
 
 **支持：**
-- Profile System（2 个初始 Profile）
-- Capability-Based Permission（spawn_agent）
-- Planner（已有）
-- Sequential Scheduler
-- Unified RuntimeEvent Stream
-- Per-RuntimeAgent Workspace Isolation（独立 worktree + branch）
-- MergeManager（基础版：merge 成功后清理）
-- Agent Presence（Profile 名称 + 颜色标签）
-- Task Dependencies（仅数据结构）
-- Context Rendering Pipeline
+- REASON 节点（闲聊直接回复 + 任务编排）
+- 跨轮次 Memory（LangGraph MemorySaver）
+- 渐进式 Skill 加载
+- `plan_and_dispatch` 工具信号
+- Execute 子图（Wave Executor，支持依赖分波）
+- REVIEW 重规划（失败时带回上下文）
+- Evolution + Pin 知识管理
+- 群聊 UI（Agent 标签 + 规划卡片）
 
 **不支持（Phase 6+）：**
-- Parallel Execution
-- Conflict-Resolution Task（自动 spawn reviewer 解冲突）
+- Parallel Execution（Wave Executor 已预留）
+- Conflict-Resolution Task
 - Retry / Cancellation
-- Dynamic Replanning
+- Profile System (SOUL)（留 Phase 6）
 - Durable Resume
 
 ### 9.4 验证方式
