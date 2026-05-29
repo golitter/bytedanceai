@@ -17,6 +17,7 @@ def get_rule_engine(request) -> RuleEngine
 def get_session_store(request) -> SessionMappingStore
 def get_workspace_manager(request) -> WorkspaceManager
 def get_preview_manager(request) -> PreviewManager
+def get_backend_client(request) -> BackendClient
 # 注：resources.py 不通过 DI，直接调用 shutil/platform 获取系统信息
 ```
 

@@ -186,8 +186,13 @@ cmd = [cli_path, "-p", message, "--output-format", "stream-json", "--verbose", "
 
 **组件**：
 - `models.py` — `TaskDef`（task_id, session_id, title, content）、`PlanOutput`（overview + tasks）
-- `prompts.py` — `PLAN_PROMPT` 引导 LLM 拆解为最多 5 个结构化任务
-- `graph.py` — LangGraph 状态图：`plan`（LLM 生成）→ `write_shared`（写入共享文件）
+- `planning/prompts.py` — `PLAN_PROMPT` 引导 LLM 拆解为最多 5 个结构化任务
+- `planning/graph.py` — LangGraph 状态图：`plan`（LLM 生成）→ `write_shared`（写入共享文件）
+- `execution/engine.py` — `ExecutionEngine` 执行引擎
+- `execution/dispatcher.py` — `Dispatcher` 调度器
+- `memory/pin_memory.py` — `PinMemory` 约束钉住
+- `memory/evolution.py` — `EvolutionStore` 编排经验
+- `reporting/aggregator.py` — `Aggregator` LLM 汇总
 
 **输出文件结构**：
 ```

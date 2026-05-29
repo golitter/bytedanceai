@@ -58,7 +58,9 @@ contracts/
 - `agentend/src/adapters/`
 - `backend/internal/model/`
 - `backend/internal/handler/`
-- `frontend/src/lib/`
+- `backend/internal/types/`
+- `frontend/src/types/`
+- `frontend/src/api/`
 - `contracts/`
 
 ### Secret 配置

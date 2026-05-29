@@ -71,9 +71,9 @@ func AdminAuth(jwtSecret string) gin.HandlerFunc {
 
 ### 系统资源 (`internal/handler/admin_resource.go`)
 
-`GetResources` 聚合三路数据源：
+`GetResources` 聚合两路数据源：
 - **磁盘/内存**：代理到 AgentEnd 的 `/v1/admin/resources` 接口
-- **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`
+- **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`（默认 512MB）
 
 ```go
 type ResourceInfo struct {

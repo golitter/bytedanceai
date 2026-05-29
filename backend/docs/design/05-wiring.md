@@ -71,16 +71,19 @@ adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 ```go
 r := gin.New()
 r.Use(middleware.Logger())
-r.Use(middleware.CORS())
+r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 r.Use(gin.Recovery())
 ```
 
-CORS 配置允许 `http://localhost:5173`（前端开发服务器）跨域访问：
+CORS 配置从 `config.yaml` 的 `cors.allow_origins` 字段加载，默认允许 `http://localhost:5173`：
 
 ```go
-func CORS() gin.HandlerFunc {
+func CORS(origins []string) gin.HandlerFunc {
+	if len(origins) == 0 {
+		origins = []string{"http://localhost:5173"}
+	}
 	return cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -152,6 +155,10 @@ api := r.Group("/api")
 ```go
 r.GET("/ping", func(c *gin.Context) {
 	vo.OK(c, gin.H{"message": "pong"})
+})
+
+r.GET("/health", func(c *gin.Context) {
+	vo.OK(c, gin.H{"status": "ok"})
 })
 ```
 

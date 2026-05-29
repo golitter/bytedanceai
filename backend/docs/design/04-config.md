@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Redis、Admin 六个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
+通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Redis、Admin、CORS 七个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
 
 ## 怎么实现的
 
@@ -16,6 +16,7 @@ type Config struct {
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
+	CORS     CORSConfig     `yaml:"cors"`
 }
 ```
 
@@ -78,6 +79,10 @@ type QiniuConfig struct {
 type AdminConfig struct {
 	Password string `yaml:"password"`
 }
+
+type CORSConfig struct {
+	AllowOrigins []string `yaml:"allow_origins"`
+}
 ```
 
 ### 加载逻辑
@@ -129,10 +134,17 @@ redis:
   password: ""
   db: 0
 
+admin:
+  password: "123456"
+
 qiniu:
   bucket: "agenthub"
   domain: "http://tfj4mvkda.hd-bkt.clouddn.com"
   region: z0    # z0=华东 z1=华北 z2=华南 na0=北美
+
+cors:
+  allow_origins:
+    - "http://localhost:5173"
 ```
 
 七牛云 `access_key` / `secret_key` 不在 YAML 中配置，通过 `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` 环境变量注入。

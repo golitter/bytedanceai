@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 `MessageBlock` 类型的五种渲染卡片，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览）以独立 UI 卡片呈现。所有卡片从 `components/cards/index.ts` 统一导出。
+基于 `MessageBlock` 类型的九种渲染卡片，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、工具调用）以独立 UI 卡片呈现。所有卡片从 `components/cards/index.ts` 统一导出。
 
 ## 怎么实现的
 
@@ -48,3 +48,19 @@ export function HtmlCard({ content }: HtmlCardProps) {
 ### PreviewCard (`src/components/cards/PreviewCard.tsx`)
 
 外部页面预览卡片，Header 含"在新标签页打开"链接，主体为 iframe 嵌入。
+
+### PlanCard (`src/components/cards/PlanCard.tsx`)
+
+多 Agent 任务计划卡片，展示 Orchestrator 分派的子任务列表。每个子任务显示任务标题、负责 Agent 和执行状态（pending/running/completed/failed）。
+
+### RuntimeStatus (`src/components/cards/RuntimeStatus.tsx`)
+
+Agent 运行时状态卡片，实时展示 Agent 执行状态（running/completed/failed），支持 streaming 文本输出。用于多 Agent 场景下跟踪各 Agent 的执行进度。
+
+### CoordChannel (`src/components/cards/CoordChannel.tsx`)
+
+多 Agent 协调通道卡片，展示 Agent 间的协作消息流（from/to/text/round）。支持显示协调摘要，通道关闭后展示最终决策结果。
+
+### ToolCard (`src/components/cards/ToolCard.tsx`)
+
+工具调用卡片，展示 `tool_call` 和 `tool_result` 类型的 MessageBlock，显示工具名称、输入参数和执行结果。

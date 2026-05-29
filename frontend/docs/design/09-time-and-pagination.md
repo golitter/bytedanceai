@@ -82,7 +82,7 @@ interface TaskMessagesResponse {
   has_more: boolean
 }
 
-getTaskMessages(taskId, params?: { limit?: number; before?: number })
+getTaskMessages(taskId, params?: { limit?: number; before?: number; sessionId?: string })
 ```
 
 `before` 参数为消息的自增 ID（cursor），后端返回 `id < before` 的消息。
@@ -99,4 +99,4 @@ getTaskMessages(taskId, params?: { limit?: number; before?: number })
 
 ### 首次加载 (`src/hooks/use-chat-stream.ts`)
 
-挂载时调用 `getTaskMessages(taskId, { limit: 20 })`，传入 `has_more` 给 `loadHistory`。若响应中有 `status=streaming` 的 agent 消息，自动重连 SSE 流。
+挂载时调用 `getTaskMessages(taskId, { limit: 20, sessionId })`，传入 `has_more` 给 `loadHistory`。若响应中有 `status=streaming` 的 agent 消息，自动重连 SSE 流。

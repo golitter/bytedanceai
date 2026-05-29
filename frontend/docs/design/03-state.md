@@ -18,6 +18,9 @@ export interface ChatMessage {
   content: string
   blocks?: MessageBlock[]
   agentType?: AgentType
+  agentName?: string
+  sessionId?: string
+  avatarUrl?: string
   timestamp: number
   messageId?: string
   status?: string
@@ -36,12 +39,14 @@ interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
   streamingAgentType?: AgentType
+  streamingAgentName?: string
   status: ChatStatus
   error: Error | null
   toolName?: string
   activeStream: ActiveStream | null
   hasMore: boolean
   isLoadingMore: boolean
+  runtimeBlocks: MessageBlock[]
 }
 
 interface ChatStoreState {
@@ -63,6 +68,19 @@ interface ChatStoreState {
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   resetSession: (sessionId: string) => void
+  // Runtime event actions
+  streamRuntimeEvent: (
+    sessionId: string,
+    event: { task_id: string; agent: string; status: string },
+  ) => void
+  streamRuntimeText: (
+    sessionId: string,
+    event: { task_id: string; agent: string; text: string },
+  ) => void
+  streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
+  streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
+  streamCoordinationDone: (sessionId: string, summary: string) => void
+  streamAgentUpdate: (sessionId: string, agentType: AgentType, agentName: string) => void
   // Pagination actions
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
   setLoadingMore: (sessionId: string, loading: boolean) => void
@@ -253,8 +271,11 @@ export function useConversations() {
 export function useCreateConversation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ agentType, agentName, title, repoPath }: { ... }) =>
-      createConversation(agentType, agentName, title, repoPath),
+    mutationFn: (params: {
+      agents: { type: AgentType; name: string }[]
+      repoPath?: string
+      title?: string
+    }) => createConversation(params.agents, params.repoPath, params.title),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },
@@ -273,7 +294,7 @@ export function useChatStream(taskId: string, sessionId: string) {
 
   const connectToStream = useCallback((messageId: string) => {
     abortRef.current?.abort()
-    store.streamStart(sessionId, 'claude-code')
+    store.streamStart(sessionId, agentType)
 
     const controller = connectSSE({
       url: `/api/tasks/${taskId}/stream`,
@@ -283,9 +304,15 @@ export function useChatStream(taskId: string, sessionId: string) {
         switch (event.type) {
           case EventTypeValues.Init:
             break
-          case EventTypeValues.Text:
+          case EventTypeValues.Text: {
+            const textAgent = event.content?.agent as string | undefined
+            const textAgentType = event.content?.agent_type as AgentType | undefined
+            if (textAgent && textAgentType) {
+              store.streamAgentUpdate(sessionId, textAgentType, textAgent)
+            }
             store.streamText(sessionId, (event.content?.text as string) ?? '')
             break
+          }
           case EventTypeValues.ToolCall:
             store.streamToolCall(sessionId, (event.content?.name as string) ?? 'unknown')
             break
@@ -294,13 +321,58 @@ export function useChatStream(taskId: string, sessionId: string) {
             break
           case EventTypeValues.Done:
             store.streamDone(sessionId)
+            abortRef.current?.abort()
+            abortRef.current = null
             break
           case EventTypeValues.Error:
             store.streamError(sessionId, new Error(...))
+            abortRef.current?.abort()
+            abortRef.current = null
+            break
+          case EventTypeValues.RuntimeExecuting:
+            store.streamRuntimeEvent(sessionId, {
+              task_id: (event.content?.task_id as string) ?? '',
+              agent: (event.content?.agent as string) ?? '',
+              status: 'running',
+            })
+            break
+          case EventTypeValues.RuntimeCompleted: {
+            const success = event.content?.success ?? false
+            store.streamRuntimeEvent(sessionId, {
+              task_id: (event.content?.task_id as string) ?? '',
+              agent: (event.content?.agent as string) ?? '',
+              status: success ? 'completed' : 'failed',
+            })
+            break
+          }
+          case EventTypeValues.RuntimeText:
+            store.streamRuntimeText(sessionId, {
+              task_id: (event.content?.task_id as string) ?? '',
+              agent: (event.content?.agent as string) ?? '',
+              text: (event.content?.text as string) ?? '',
+            })
+            break
+          case EventTypeValues.Planning:
+            // dispatch plan tasks
+            break
+          case EventTypeValues.CoordinationMessage:
+            store.streamCoordinationEvent(sessionId, {
+              from: (event.content?.from as string) ?? '',
+              to: (event.content?.to as string) ?? '',
+              text: (event.content?.text as string) ?? '',
+              round: (event.content?.round as number) ?? 1,
+            })
+            break
+          case EventTypeValues.CoordinationDone:
+            store.streamCoordinationDone(sessionId, ...)
             break
         }
       },
-      onError: (error) => store.streamError(sessionId, error),
+      onError: (error) => {
+        const s = store.getSession(sessionId)
+        if (s.status === 'done' || s.status === 'idle' || s.status === 'error') return
+        store.streamError(sessionId, error)
+      },
     })
     abortRef.current = controller
   }, [taskId, sessionId])
@@ -328,10 +400,21 @@ const sendMessage = useCallback(async (message: string, agentType: AgentType = '
 useEffect(() => {
   let cancelled = false
 
-  getTaskMessages(taskId, { limit: 20 })
+  getTaskMessages(taskId, { limit: 20, sessionId })
     .then((res) => {
       if (cancelled || res.data.length === 0) return
-      const chatMessages = res.data.map((m) => ({ ... }))
+      const chatMessages: ChatMessage[] = res.data.map((m) => ({
+            id: `${m.role}-${m.id}`,
+            dbId: m.id,
+            role: m.role,
+            content: m.content,
+            agentType: m.agent_type as AgentType | undefined,
+            agentName: m.agent_name || undefined,
+            sessionId: m.session_id || undefined,
+            timestamp: new Date(m.created_at).getTime(),
+            messageId: m.message_id,
+            status: m.status,
+          }))
       store.loadHistory(sessionId, chatMessages, res.has_more)
 
       // 自动重连：如果发现 streaming 中的消息

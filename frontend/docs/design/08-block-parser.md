@@ -2,15 +2,29 @@
 
 ## 实现了什么
 
-将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview 六种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。
+将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview、plan、runtime_status、coordination、tool_call、tool_result 十一种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。其中 plan、runtime_status、coordination、tool_call、tool_result 类型由 SSE 事件直接构建（不经由文本解析），存储在 `SessionChatState.runtimeBlocks` 中。
 
 ## 怎么实现的
 
 ### 块类型定义 (`src/lib/block-types.ts`)
 
-TypeScript discriminated union 定义六种块类型：
+TypeScript discriminated union 定义十一种块类型：
 
 ```typescript
+export interface PlanTask {
+  task_id: string
+  agent: string
+  title: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+}
+
+export interface CoordMessage {
+  from: string
+  to: string
+  text: string
+  round: number
+}
+
 export type MessageBlock =
   | { type: 'text'; id: string; content: string }
   | { type: 'html-render'; id: string; content: string }
@@ -18,6 +32,11 @@ export type MessageBlock =
   | { type: 'attachment'; id: string; path: string }
   | { type: 'diff'; id: string; snapshotId: string }
   | { type: 'preview'; id: string; url: string }
+  | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
+  | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string; streamingText?: string }
+  | { type: 'coordination'; id: string; messages: CoordMessage[]; closed: boolean; summary?: string }
+  | { type: 'tool_call'; id: string; name: string; input?: string }
+  | { type: 'tool_result'; id: string; output?: string }
 ```
 
 ### 解析器 (`src/lib/block-reducer.ts`)

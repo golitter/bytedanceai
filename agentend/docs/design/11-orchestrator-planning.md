@@ -50,19 +50,34 @@ POST /v1/agent/execute (agent_type=orchestrator)
 src/
 ├── orchestrator/
 │   ├── __init__.py
-│   ├── models.py       # TaskDef, PlanOutput, TaskResult, DispatchResult
-│   ├── prompts.py      # PLAN_PROMPT + build_planner_prompt()
-│   ├── graph.py        # LangGraph (plan → write_shared)
-│   ├── state.py        # TaskState enum + RuntimeState
-│   ├── dispatcher.py   # Dispatcher (PlanOutput → DispatchResult)
-│   ├── aggregator.py   # Aggregator (LLM 汇总)
-│   ├── pin_memory.py   # PinMemory (common/ + _pins.yaml)
-│   └── evolution.py    # EvolutionStore (evolution.yaml)
+│   ├── models.py            # TaskDef, PlanOutput, TaskResult, DispatchResult
+│   ├── planning/
+│   │   ├── __init__.py
+│   │   ├── graph.py         # LangGraph (plan → write_shared)
+│   │   ├── prompts.py       # PLAN_PROMPT + build_planner_prompt()
+│   │   ├── tools.py         # 规划工具（skill_loader 等）
+│   │   └── skill_loader.py  # 技能加载器
+│   ├── execution/
+│   │   ├── __init__.py
+│   │   ├── engine.py        # ExecutionEngine（Agent 调度执行）
+│   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult)
+│   │   ├── coordination.py  # 协调模块（Agent 间通信）
+│   │   ├── state.py         # TaskState enum + RuntimeState
+│   │   └── wave.py          # Wave 执行（按依赖波次并行）
+│   ├── memory/
+│   │   ├── __init__.py
+│   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
+│   │   └── evolution.py     # EvolutionStore (evolution.yaml)
+│   └── reporting/
+│       ├── __init__.py
+│       └── aggregator.py    # Aggregator (LLM 汇总)
 ├── adapters/
-│   └── orchestrator.py # OrchestratorAdapter (闭环逻辑)
+│   └── orchestrator.py      # OrchestratorAdapter (闭环逻辑)
+├── clients/
+│   └── backend_client.py    # BackendClient（与 Go Backend 通信）
 └── api/v1/
-    ├── agent.py        # _orchestrator_kwargs()
-    └── pin.py          # /v1/pin/* 端点
+    ├── agent.py             # _orchestrator_kwargs()
+    └── pin.py               # /v1/pin/* 端点
 ```
 
 ## 怎么实现的
@@ -90,6 +105,8 @@ class TaskResult(BaseModel):          # 新增
 class DispatchResult(BaseModel):      # 新增
     task_id: str
     agent: str
+    agent_type: str = ""              # 目标 agent 类型（如 claude-code, opencode）
+    real_session_id: str = ""         # DB 分配的真实 session_id
     mention: str                      # "@claude-code"
     content: str
     depends_on: list[str] = []
@@ -129,15 +146,15 @@ async def stream_chat(self, session_id, message, **kwargs):
     yield StreamEvent.create(EventType.DONE, text=aggregated)
 ```
 
-### Dispatcher (`src/orchestrator/dispatcher.py`)
+### Dispatcher (`src/orchestrator/execution/dispatcher.py`)
 
 将 `PlanOutput` 转换为 `@agent` 调度指令。从 agents config 中查找 `workspace_path`。如果 agent 不在 config 中，`workspace_path` 为空字符串。
 
-### Aggregator (`src/orchestrator/aggregator.py`)
+### Aggregator (`src/orchestrator/reporting/aggregator.py`)
 
 LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出人类可读的汇总报告。如果无结果，返回空字符串。
 
-### Planner Prompt 升级 (`src/orchestrator/prompts.py`)
+### Planner Prompt 升级 (`src/orchestrator/planning/prompts.py`)
 
 `build_planner_prompt()` 在 `PLAN_PROMPT` 基础上注入两个可选上下文：
 
@@ -146,7 +163,7 @@ LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出
 
 `graph.py` 的 `plan_node` 已改为调用 `build_planner_prompt()` 而非 `PLAN_PROMPT.format()`。
 
-### Pin Memory (`src/orchestrator/pin_memory.py`)
+### Pin Memory (`src/orchestrator/memory/pin_memory.py`)
 
 复用 `memory/common/` 目录，`_pins.yaml` 作为书签层：
 
@@ -164,14 +181,14 @@ POST /v1/pin/remove   {shared_dir, filename}
 GET  /v1/pin/list     ?shared_dir=...
 ```
 
-### Evolution (`src/orchestrator/evolution.py`)
+### Evolution (`src/orchestrator/memory/evolution.py`)
 
 `shared/.agent/evolution.yaml` 存储最近 20 条编排经验：
 
 - `record(message, plan_summary, results_summary, success, agent_performance)` — 追加条目，超 20 条自动裁剪
 - `get_recent_experience(n=5)` — 返回最近 N 条经验的格式化字符串（✅/❌ 指示器）
 
-### RuntimeState (`src/orchestrator/state.py`)
+### RuntimeState (`src/orchestrator/execution/state.py`)
 
 内存中的任务状态追踪：
 

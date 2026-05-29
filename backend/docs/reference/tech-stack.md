@@ -38,7 +38,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
 | joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
-配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云、Admin 配置段。支持环境变量覆盖（如七牛云 access_key）。
+配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云、Admin、CORS 配置段。支持环境变量覆盖（如七牛云 access_key）。
 
 ## 认证
 
@@ -119,6 +119,6 @@ backend/
 - **分层架构**：handler / stream / model / vo 四层，职责清晰，每层可独立测试（interface/impl 预留目录已创建）
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
-- **SSE 流式**：StreamWriter 发布到 Redis Stream → Handler.ServeStream 消费并分块推送，30min 超时保护
+- **SSE 流式**：StreamWriter 通过双层通道（内存 Hub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **JWT Auth**：中间件预置但 ping 接口不挂，后续业务接口按需启用
 - **请求日志**：使用标准库 slog，按状态码分级（>=500 ERROR, >=400 WARN, 其余 INFO）

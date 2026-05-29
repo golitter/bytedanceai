@@ -106,7 +106,7 @@ class Workspace:
     branch_name: str           # agent 分支名（自动生成）
     session_id: str            # 关联的会话 ID
     container_id: str | None   # 容器 ID（预留，为后续 Docker 隔离用）
-    status: WorkspaceStatus    # 当前状态
+    status: WorkspaceStatus = WorkspaceStatus.ACTIVE    # 当前状态
     created_at: datetime       # 创建时间
 ```
 

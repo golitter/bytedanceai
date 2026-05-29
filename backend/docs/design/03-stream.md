@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-`StreamWriter` 消费 AgentEnd 的 SSE 响应流，将每个事件实时写入 Redis Stream，同时将文本内容定时批量刷写到 MySQL Message 表。实现了 Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
+`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 Hub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
 
 ## 怎么实现的
 
@@ -13,17 +13,25 @@ type StreamWriter struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	messageID string
+	messageID string // current (latest) message ID — updated on agent switch
 	sessionID string
 	taskID    string
-	agentType string
 	streamKey string
 
-	buf       strings.Builder
-	bufLen    int
-	lastSeq   string
-	lastFlush time.Time
-	mu        sync.Mutex
+	originalMessageID string // first message ID — never changes, used for registry and Redis stream
+	currentAgentType  string // tracks the current agent type from SSE events
+	currentAgentName  string // tracks the current agent name from SSE events
+
+	buf        strings.Builder
+	bufLen     int
+	flushedLen int
+	lastSeq    string
+	lastFlush  time.Time
+	mu         sync.Mutex
+
+	textBuf      []string // buffered "data: ..." lines for TEXT events awaiting merge
+	textBufSize  int      // total byte size of textBuf
+	textBufStart time.Time
 }
 ```
 
@@ -31,13 +39,36 @@ type StreamWriter struct {
 
 ```go
 const (
-	flushInterval    = 2 * time.Second   // 定时刷写间隔
-	flushThreshold   = 500               // 缓冲区字节数阈值
-	maxStreamLen     = 10000             // Redis Stream 最大长度
-	streamExpireTTL  = 600 * time.Second // 流结束后 Redis key TTL
-	goroutineTimeout = 30 * time.Minute  // 单次 goroutine 超时
+	flushInterval    = 500 * time.Millisecond // 定时刷写间隔
+	flushThreshold   = 2048                   // 缓冲区字节数阈值
+	maxStreamLen     = 10000                  // Redis Stream 最大长度
+	streamExpireTTL  = 600 * time.Second      // 流结束后 Redis key TTL
+	goroutineTimeout = 30 * time.Minute       // 单次 goroutine 超时
+	textBatchSize    = 2048                   // TEXT 事件批量合并大小
+	textBatchAge     = 500 * time.Millisecond // TEXT 事件批量合并等待时间
 )
 ```
+
+### 双层通道：RuntimeHub + Redis Stream
+
+`RuntimeHub`（`internal/stream/hub.go`）是一个内存发布/订阅中心，用于低延迟 SSE 推送：
+
+```go
+// Hub is the global RuntimeHub instance.
+var Hub = &RuntimeHub{streams: make(map[string]*RuntimeStream)}
+
+// Publish sends an event to all subscribers of the given stream key.
+func (h *RuntimeHub) Publish(key, data string)
+
+// Subscribe returns a channel for consuming events and the current sequence number.
+func (h *RuntimeHub) Subscribe(key string) (<-chan HubEvent, uint64)
+
+// Close marks the stream as done and removes it from the hub.
+func (h *RuntimeHub) Close(key string)
+```
+
+- **Hot path**：`Hub.Publish()` 立即推送到 SSE 订阅者（内存 channel，无网络延迟）
+- **Cold path**：Redis Stream `XADD` 持久化存储，用于断线重连和数据恢复
 
 ### 创建与注册
 
@@ -57,7 +88,9 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 	sw := &StreamWriter{
 		ctx: childCtx, cancel: cancel,
 		messageID: messageID, sessionID: sessionID,
-		taskID: taskID, agentType: agentType, streamKey: key,
+		taskID: taskID, streamKey: key,
+		originalMessageID: messageID,
+		currentAgentType:  agentType,
 	}
 	registry.Store(messageID, sw)
 	return sw
@@ -74,7 +107,7 @@ func StreamKey(sessionID, messageID string) string {
 
 ### Run — 主消费循环
 
-`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Redis 和本地缓冲区：
+`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换：
 
 ```go
 func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
@@ -85,7 +118,6 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 	sawError := false
 	scanFunc(func(line string) {
 		if sw.ctx.Err() != nil { return }
-		sw.publishToRedis(line)
 
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
@@ -94,60 +126,96 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
+						// Check for agent switch (orchestrator TEXT events carry agent_type)
+						if newAgentType, ok := event.Content["agent_type"].(string); ok && newAgentType != "" && newAgentType != sw.currentAgentType {
+							sw.flushTextBuffer()
+							sw.switchAgent(newAgentType, newAgentName)
+						}
 						sw.appendText(text)
+						sw.bufferTextLine(line) // batched Redis publish
+						return
 					}
 				case generated.EventTypeDone:
-					// normal end
+					sw.flushTextBuffer()
 				case generated.EventTypeError:
+					sw.flushTextBuffer()
 					sawError = true
 					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
+				default:
+					sw.flushTextBuffer()
 				}
 			}
+		} else {
+			sw.flushTextBuffer()
 		}
+		// Non-TEXT lines published immediately
+		sw.publishToRedis(line)
 	})
 
+	sw.flushTextBuffer()
 	sw.doFlush()
-	if sawError {
-		sw.updateStatus("failed")
-	} else {
-		sw.updateStatus("completed")
+
+	status := "completed"
+	if sawError { status = "failed" }
+	sw.updateMessageStatus(sw.messageID, status)
+	if sw.messageID != sw.originalMessageID {
+		sw.updateMessageStatus(sw.originalMessageID, status)
 	}
 }
 ```
 
-### Redis Stream 写入
+### Agent 类型切换（switchAgent）
 
-每行 SSE 数据通过 `XADD` 写入 Redis Stream，自动截断到 `maxStreamLen` 条：
+当 Orchestrator 场景下 SSE 事件携带不同的 `agent_type` 时，自动拆分子消息：
+
+```go
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
+	// Flush current buffer to the current Message
+	sw.doFlush()
+	// Finalize current Message (not the original — it stays streaming)
+	sw.updateMessageStatus(sw.messageID, "completed")
+	// Create new Message in MySQL
+	newMsgID := uuid.New().String()
+	db.GetDB().Create(&model.Message{MessageID: newMsgID, ...Status: "streaming"})
+	// Switch internal state to new Message
+	sw.messageID = newMsgID
+	sw.currentAgentType = newAgentType
+}
+```
+
+### 双层 Redis 写入
+
+每行 SSE 数据通过双层通道发布：
 
 ```go
 func (sw *StreamWriter) publishToRedis(line string) {
-	rdb := pkgredis.GetClient()
-	if rdb == nil {
-		return
+	// Hot path: immediate push to in-memory hub for low-latency SSE delivery
+	if strings.HasPrefix(line, "data: ") {
+		Hub.Publish(sw.streamKey, line)
 	}
-	seq, err := rdb.XAdd(sw.ctx, &redis.XAddArgs{
-		Stream: sw.streamKey,
-		MaxLen: maxStreamLen,
-		Approx: true,
-		Values: map[string]interface{}{
-			"data": line,
-		},
-	}).Result()
-	if err != nil {
-		slog.Error("redis XADD failed", "key", sw.streamKey, "error", err)
-		return
+	// Cold path: durable Redis Stream for replay/reconnect
+	sw.publishToRedisOnly(line)
+}
+```
+
+TEXT 事件通过 `bufferTextLine` 批量合并后写入 Redis（冷路径），但每个 token 已经通过 Hub 立即推送到 SSE 订阅者（热路径）：
+
+```go
+func (sw *StreamWriter) bufferTextLine(line string) {
+	Hub.Publish(sw.streamKey, line) // Hot path: immediate
+	// Cold path: buffer for batched Redis publish
+	sw.textBuf = append(sw.textBuf, line)
+	if sw.textBufSize >= textBatchSize || time.Since(sw.textBufStart) >= textBatchAge {
+		sw.flushTextBuffer()
 	}
-	sw.mu.Lock()
-	sw.lastSeq = seq
-	sw.mu.Unlock()
 }
 ```
 
 ### MySQL 批量刷写
 
-双触发机制：缓冲区满 500 字节或 2 秒定时器到期。
+双触发机制：缓冲区增量满 2048 字节或 500ms 定时器到期。
 
 定时刷写 goroutine：
 
@@ -159,6 +227,7 @@ func (sw *StreamWriter) flushLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			sw.flushTextBuffer()
 			sw.mu.Lock()
 			hasContent := sw.bufLen > 0
 			sw.mu.Unlock()
@@ -172,7 +241,7 @@ func (sw *StreamWriter) flushLoop() {
 }
 ```
 
-刷写逻辑 — 替换式写入（每次刷写写入完整内容，非追加）：
+刷写逻辑 — 替换式写入（每次刷写写入完整内容，非追加），使用 `flushedLen` 追踪已刷写字节数避免无变化时重复写入：
 
 ```go
 func (sw *StreamWriter) doFlush() {
@@ -183,8 +252,8 @@ func (sw *StreamWriter) doFlush() {
 		sw.mu.Unlock()
 		return
 	}
-	sw.buf.Reset()
-	sw.bufLen = 0
+	sw.flushedLen = sw.bufLen
+	sw.lastFlush = time.Now()
 	sw.mu.Unlock()
 
 	db.GetDB().Model(&model.Message{}).
@@ -198,20 +267,24 @@ func (sw *StreamWriter) doFlush() {
 
 ### 结束与清理
 
-流结束后设置 Redis key 600 秒 TTL，从注册表移除：
+流结束后发送 DONE 事件到 Hub，关闭 Hub stream，设置 Redis key 600 秒 TTL，从注册表移除：
 
 ```go
 func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
 
+	// Guarantee a DONE event reaches SSE subscribers
+	Hub.Publish(sw.streamKey, "data: {\"type\":\"done\"}")
+	// Close hub stream — notifies SSE subscribers
+	Hub.Close(sw.streamKey)
+
+	// Set Redis EXPIRE on the stream
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
-			slog.Warn("redis EXPIRE failed", "key", sw.streamKey, "error", err)
-		}
+		rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL)
 	}
-	registry.Delete(sw.messageID)
+	registry.Delete(sw.originalMessageID)
 }
 ```
 
@@ -222,30 +295,25 @@ func (sw *StreamWriter) finish() {
 ```go
 func (sw *StreamWriter) Fail() {
 	sw.doFlush()
-	sw.updateStatus("failed")
+	sw.updateMessageStatus(sw.messageID, "failed")
+	if sw.messageID != sw.originalMessageID {
+		sw.updateMessageStatus(sw.originalMessageID, "failed")
+	}
 }
 ```
 
-**PublishErrorAndFail** — 当 AgentEnd 在流式之前或中途失败时，向 Redis Stream 写入 error 事件并标记 Message 为 failed：
+**PublishErrorAndFail** — 当 AgentEnd 在流式之前或中途失败时，向 Hub 和 Redis Stream 写入 error 事件并标记 Message 为 failed：
 
 ```go
 func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
+	sseLine := fmt.Sprintf("data: %s", ...)
+	// Hot path: push error to hub immediately
+	Hub.Publish(key, sseLine)
+	// Cold path: durable Redis
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		event := map[string]interface{}{
-			"type": "error",
-			"content": map[string]string{"message": errMsg},
-		}
-		data, _ := json.Marshal(event)
-		rdb.XAdd(context.Background(), &redis.XAddArgs{
-			Stream: key,
-			MaxLen: maxStreamLen,
-			Approx: true,
-			Values: map[string]interface{}{
-				"data": fmt.Sprintf("data: %s", string(data)),
-			},
-		}).Result()
+		rdb.XAdd(context.Background(), &redis.XAddArgs{...}).Result()
 		rdb.Expire(context.Background(), key, streamExpireTTL)
 	}
 	db.GetDB().Model(&model.Message{}).Where("message_id = ?", messageID).Update("status", "failed")
@@ -265,14 +333,16 @@ func CleanupStaleMessages() {
 }
 ```
 
-**FormatSSE** — 将文本块格式化为 SSE data 行，供 StreamHandler 回放历史内容：
+**FormatSSE** / **FormatSSEWithMeta** — 将文本块格式化为 SSE data 行：
 
 ```go
-func FormatSSE(text string) string {
-	event := map[string]interface{}{
-		"type": "text",
-		"content": map[string]string{"text": text},
-	}
+func FormatSSE(text string) string { ... }
+
+func FormatSSEWithMeta(text, agentType, agentName string) string {
+	content := map[string]string{"text": text}
+	if agentType != "" { content["agent_type"] = agentType }
+	if agentName != "" { content["agent"] = agentName }
+	event := map[string]interface{}{"type": "text", "content": content}
 	data, _ := json.Marshal(event)
 	return fmt.Sprintf("data: %s", string(data))
 }
@@ -286,17 +356,18 @@ AgentEnd (FastAPI :8001)
     ▼
 RunTask handler goroutine
     │ bufio.Scanner 逐行读取
-    ├──────────────────────┐
-    ▼                      ▼
-publishToRedis()       appendText()
-    │ XADD                │ 缓冲区 >= 500B?
-    ▼                     ▼
-Redis Stream          doFlush()
-agent:{sid}:{mid}         │ UPDATE content, last_seq
-    │                      ▼
-    ▼                  MySQL messages 表
+    ├──────────────────────────────────┐
+    ▼                                  ▼
+publishToRedis()                  appendText()
+    │ Hub.Publish() (hot)              │ 增量 >= 2048B?
+    │ publishToRedisOnly() (cold)      ▼
+    ▼                              doFlush()
+RuntimeHub (内存)                     │ UPDATE content, last_seq
+    │ 256-buffered channel             ▼
+    ▼                          MySQL messages 表
 StreamHandler.serveStreaming()
-    │ XREAD (阻塞 5s)
+    │ Hub.Subscribe() (实时)
+    │ XREAD (Redis 缺口重放)
     ▼
 前端 EventSource
 ```

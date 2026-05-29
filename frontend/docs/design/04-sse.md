@@ -16,11 +16,14 @@ interface SSEOptions {
   params?: Record<string, string>
   onEvent: (event: StreamEvent) => void
   onError?: (error: Error) => void
+  /** Enable auto-reconnect (EventSource reconnects natively) */
   reconnect?: boolean
+  /** Max ms without any event before treating the stream as dead (default 5min) */
+  staleTimeoutMs?: number
 }
 
 export function connectSSE({
-  url, params, onEvent, onError, reconnect = false,
+  url, params, onEvent, onError, reconnect = false, staleTimeoutMs = 300_000,
 }: SSEOptions): AbortController {
   const controller = new AbortController()
 
@@ -31,7 +34,21 @@ export function connectSSE({
 
   const es = new EventSource(fullUrl)
 
+  let lastEventTime = Date.now()
+
+  // Staleness check: close connection if no events received for staleTimeoutMs
+  const staleCheck = setInterval(() => {
+    if (Date.now() - lastEventTime > staleTimeoutMs) {
+      clearInterval(staleCheck)
+      es.close()
+      if (!controller.signal.aborted) {
+        onError?.(new Error('Stream timed out: no events received'))
+      }
+    }
+  }, 10_000)
+
   es.onmessage = (e: MessageEvent) => {
+    lastEventTime = Date.now()
     const data = typeof e.data === 'string' ? e.data : ''
     if (!data.trim()) return
     try {
@@ -44,12 +61,14 @@ export function connectSSE({
 
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) {
+      clearInterval(staleCheck)
       if (!controller.signal.aborted) {
         onError?.(new Error('SSE connection closed'))
       }
       return
     }
     if (!reconnect) {
+      clearInterval(staleCheck)
       es.close()
       if (!controller.signal.aborted) {
         onError?.(new Error('SSE connection error'))
@@ -59,6 +78,7 @@ export function connectSSE({
   }
 
   controller.signal.addEventListener('abort', () => {
+    clearInterval(staleCheck)
     es.close()
   })
 
@@ -133,7 +153,7 @@ export interface TaskMessagesResponse {
 
 export async function getTaskMessages(
   taskId: string,
-  params?: { limit?: number; before?: number },
+  params?: { limit?: number; before?: number; sessionId?: string },
 ): Promise<TaskMessagesResponse> {
   const searchParams = new URLSearchParams()
   if (params?.limit) searchParams.set('limit', String(params.limit))
@@ -156,7 +176,38 @@ export async function fetchConversations(): Promise<Conversation[]> {
   const details = await Promise.all(tasks.map((t) => fetchTask(t.task_id)))
   const convos: Conversation[] = []
   for (const detail of details) {
-    for (const s of detail.sessions) {
+    const sessions = detail.sessions
+    if (sessions.length === 0) continue
+
+    // Group chat: task has multiple sessions → show as one conversation using orchestrator
+    if (sessions.length > 1) {
+      const orchestrator = sessions.find((s) => s.agent_type === 'orchestrator')
+      const primary = orchestrator ?? sessions[0]
+      convos.push({
+        taskId: detail.task.task_id,
+        sessionId: primary.session_id,
+        agentType: primary.agent_type,
+        agentName: primary.agent_name ?? '',
+        title: detail.task.title,
+        lastActiveAt: primary.updated_at,
+        taskTitle: detail.task.title,
+        status: primary.status,
+        avatarUrl: primary.avatar_url || undefined,
+        repoPath: detail.task.repo_path || undefined,
+        isGroupChat: true,
+        memberCount: sessions.length,
+        groupAgentTypes: sessions.map((s) => s.agent_type),
+        groupAgentNames: sessions.map((s) => s.agent_name || s.agent_type),
+        groupSessions: sessions.map((s) => ({
+          sessionId: s.session_id,
+          agentType: s.agent_type,
+          agentName: s.agent_name || s.agent_type,
+          avatarUrl: s.avatar_url || undefined,
+        })),
+      })
+    } else {
+      // Single agent: show as individual conversation
+      const s = sessions[0]
       convos.push({
         taskId: s.task_id,
         sessionId: s.session_id,
@@ -176,7 +227,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 }
 ```
 
-`createConversation()` 创建 Task -> 取首个 Session -> 返回 Conversation。
+`createConversation()` 接收 agents 数组（支持多 Agent），自动注入 orchestrator 创建群聊 Task -> 取首个 Session -> 返回 Conversation。
 
 ### API 接口总览
 
@@ -197,9 +248,11 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |
 | `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |
 | `getAdminResources` | GET | `/api/admin/resources` | 获取系统资源（磁盘/内存/Redis 用量） |
-| `deleteAdminSessions` | POST | `/api/admin/sessions/delete` | 批量删除会话 |
+| `deleteAdminSessions` | DELETE | `/api/admin/sessions` | 批量删除会话 |
 | `getAdminWorkspaces` | GET | `/api/admin/workspaces` | 获取工作区列表 |
 | `deleteAdminWorkspace` | DELETE | `/api/admin/workspaces/:id` | 删除工作区 |
 | `getAdminAgents` | GET | `/api/admin/agents` | 获取 Agent 列表 |
 | `getAdminServices` | GET | `/api/admin/services` | 获取服务健康状态 |
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 获取统计数据 |
+| `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
+| `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |

@@ -21,10 +21,10 @@ class BaseAgentAdapter(ABC):
 
 ### AdapterRegistry (`src/adapters/registry.py`)
 
-通过 AgentType 枚举注册和查找 Adapter 类：
+通过 AgentType 枚举值（str）注册和查找 Adapter 类：
 
 ```python
-registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)
+registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)  # key 实际存储为 str
 registry.register(AgentType.OPENCODE, OpenCodeAdapter)
 registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
 registry.register(AgentType.CODEX, CodexAdapter)
@@ -84,7 +84,7 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
     # 进程退出后清理
     await process.wait()
     if process.returncode != 0:
-        yield StreamEvent.create(EventType.ERROR, error=stderr)
+        yield StreamEvent.create(EventType.ERROR, error=stderr, returncode=process.returncode)
     self._processes.pop(session_id, None)
 ```
 

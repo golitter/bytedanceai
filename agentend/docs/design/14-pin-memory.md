@@ -6,7 +6,7 @@ Pin Memory 系统允许用户将关键约束"钉住"，持久化为 Markdown 文
 
 ## 怎么实现的
 
-### PinMemory (`src/orchestrator/pin_memory.py`)
+### PinMemory (`src/orchestrator/memory/pin_memory.py`)
 
 管理 `common/` 目录下的 pin 文件和 `_pins.yaml` 索引：
 

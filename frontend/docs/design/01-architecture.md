@@ -111,14 +111,18 @@ src/
 │   ├── im/                           # 对话列表侧栏
 │   │   ├── ConversationList.tsx      # 侧栏容器：Header + 搜索 + 列表 + 新建弹窗
 │   │   ├── ConversationItem.tsx      # 单条对话：头像 + 名称 + 时间
-│   │   └── NewChatDialog.tsx         # 新建对话弹窗：仓库路径校验 + 选择 Agent 类型
+│   │   ├── NewChatDialog.tsx         # 新建对话弹窗：仓库路径校验 + 选择 Agent 类型
+│   │   ├── AgentSelectList.tsx       # Agent 选择列表（多选 + 搜索过滤）
+│   │   └── RepoPathInput.tsx         # 仓库路径输入（校验 + 状态管理）
 │   │
 │   ├── chat/                         # 聊天区
 │   │   ├── ChatArea.tsx              # 聊天容器：Header + 消息列表 + 输入框
 │   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动 + 向上翻页加载）
 │   │   ├── MessageBubble.tsx         # 消息气泡（user / agent / system 三种变体）
+│   │   ├── MessageRenderer.tsx       # 消息渲染器（消息气泡 + Markdown + 卡片编排）
 │   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送）
 │   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯 + DiceBear initials）
+│   │   ├── GroupAvatar.tsx           # 群聊头像（多 Agent 头像叠加）
 │   │   ├── AgentHoverCard.tsx        # Agent 悬停卡片（Popover + 技能预览 + 跳转详情页）
 │   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
 │   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
@@ -131,6 +135,10 @@ src/
 │   │   ├── ImageCard.tsx             # 图片卡片（代理下载 + 错误降级）
 │   │   ├── AttachmentCard.tsx        # 附件卡片（文件图标 + 下载链接）
 │   │   ├── PreviewCard.tsx           # 预览卡片（外部链接 + iframe）
+│   │   ├── PlanCard.tsx              # 计划卡片（多 Agent 任务计划展示）
+│   │   ├── RuntimeStatus.tsx         # 运行时状态卡片（Agent 执行状态 + streaming 文本）
+│   │   ├── CoordChannel.tsx          # 协调通道卡片（多 Agent 协作消息流）
+│   │   ├── ToolCard.tsx              # 工具调用卡片（tool_call / tool_result 展示）
 │   │   └── index.ts                  # 统一导出
 │   │
 │   ├── diff/                         # Diff 查看器（可编辑多文件）
@@ -157,14 +165,15 @@ src/
 ├── hooks/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
-│   └── use-hover-style.ts            # 悬停样式工具 hook
+│   ├── use-hover-style.ts            # 悬停样式工具 hook
+│   └── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
 │
 ├── lib/
 │   ├── api.ts                        # REST API 封装（含 cursor 分页 getTaskMessages）
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
-│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview）
+│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/runtime_status/coordination/tool_call/tool_result）
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
 │   └── __tests__/                    # lib 单元测试

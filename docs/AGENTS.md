@@ -26,6 +26,7 @@ docs/
 ### design/
 
 - [three-tier-design.md](design/three-tier-design.md) — 三层架构设计（React + Go + Python），冻结边界与状态迁移 authority
+- [planning-context-module.md](design/planning-context-module.md) — Orchestrator Planning ToolMessage 结构化设计
 
 ### reference/
 
@@ -44,6 +45,12 @@ docs/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能的手动测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
 
+### bugfix/
+
+- [multi-agent-message-split.md](bugfix/multi-agent-message-split.md) — 多 Agent 消息拆分修复（页面刷新后消息混淆 + 重复消息）
+- [orchestrator-streaming-hang.md](bugfix/orchestrator-streaming-hang.md) — Orchestrator 流式挂起修复（短路路径超时 + 重复输出）
+- [sub-agent-message-persistence-bugs.md](bugfix/sub-agent-message-persistence-bugs.md) — 子 Agent 消息持久化修复（SSE 挂起 + 回复错乱 + 消息不分离）
+
 ### dev-plan/（独立保留）
 
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7，串行叠代）
@@ -58,7 +65,6 @@ docs/
 
 ## 新增文档规则
 
-1. 按内容语义放入对应分类，不要新建子目录（平铺）
-2. 文件名使用 kebab-case（如 `session-persistence.md`）
-3. 子项目专属文档放子项目 `docs/`，跨端文档放根 `docs/`
-4. 添加后在本文件索引中补充条目
+1. 按内容语义放入对应分类，不要新建子目录（平铺），文件名 kebab-case
+2. 子项目专属文档放子项目 `docs/`，跨端文档放根 `docs/`
+3. 添加后在本文件索引中补充条目

@@ -20,11 +20,11 @@ src/
 │   ├── ImPage.tsx          # 主页面（三栏布局 + NavTab 路由）
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   └── admin/              # 管理面板（6 模块页面）
-├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style）
+├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style, use-message-scroll）
 ├── stores/
 │   ├── chat.ts             # 聊天状态 Store
 │   └── admin.ts            # 管理面板认证 Store
-├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, diff-parser）
+├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser）
 ├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```

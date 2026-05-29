@@ -75,7 +75,7 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 |------|------|------|------|
 | `adminAuth` | POST | `/api/admin/auth` | 密码验证，返回 JWT token |
 | `getAdminResources` | GET | `/api/admin/resources` | 磁盘/内存/Redis 用量 |
-| `deleteAdminSessions` | POST | `/api/admin/sessions/delete` | 批量删除会话 |
+| `deleteAdminSessions` | DELETE | `/api/admin/sessions` | 批量删除会话 |
 | `getAdminWorkspaces` | GET | `/api/admin/workspaces` | 工作区列表 |
 | `deleteAdminWorkspace` | DELETE | `/api/admin/workspaces/:id` | 删除工作区 |
 | `getAdminAgents` | GET | `/api/admin/agents` | Agent 列表 |

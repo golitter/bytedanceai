@@ -39,8 +39,13 @@ agentend/
 │   ├── api/            # FastAPI HTTP 端点
 │   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin, resources）
 │   ├── app/            # 应用入口、配置、DI
+│   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
-│   ├── orchestrator/   # Orchestrator 规划模块（LangGraph + LLM 任务拆解）
+│   ├── orchestrator/   # Orchestrator 规划模块
+│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
+│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
+│   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
 │   ├── schemas/        # 数据模型
@@ -61,7 +66,8 @@ agentend/
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
 - **会话状态机**：`IDLE → RUNNING → COMPLETED / INTERRUPTED / ERROR`，另含 `INACTIVE` 状态用于标记不活跃会话
 - **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
-- **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费
+- **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
+- **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费。模块分为 planning（规划）、execution（执行调度）、memory（持久记忆）、reporting（汇总报告）四个子模块
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
 - **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
@@ -79,6 +85,7 @@ agentend/
 - **execution** — 最大轮次、执行超时、进程终止超时
 - **skills** — 内置技能目录与分发清单
 - **llm** — Orchestrator LLM 配置（优先从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
+- **backend** — Go Backend 连接地址（默认 `http://localhost:8080`）
 
 详见 [config.yaml](../../config.yaml) 中的注释。
 

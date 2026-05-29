@@ -80,7 +80,15 @@ const handleValidate = async () => {
 }
 ```
 
-可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex']`。选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
+可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex']`。支持多选 Agent（多选时自动注入 orchestrator 创建群聊），选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
+
+### AgentSelectList (`src/components/im/AgentSelectList.tsx`)
+
+Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，用户可同时选择多个 Agent 创建群聊。每个选项显示 Agent 头像 + 名称 + 描述，已选项显示勾选标记。
+
+### RepoPathInput (`src/components/im/RepoPathInput.tsx`)
+
+仓库路径输入组件，带实时校验功能。在 `NewChatDialog` 中使用，输入仓库路径后调用 `validateRepoPath` API 校验有效性，校验状态通过 `onValidationChange` 回调通知父组件。
 
 ---
 
@@ -161,6 +169,42 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 - **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），`bg-card` 背景 + 左侧 3px Agent 色竖线，流式输出时显示闪烁光标 `▌`
 - **system**：居中，小字 `text-muted-foreground`
 
+### MessageRenderer (`src/components/chat/MessageRenderer.tsx`)
+
+消息渲染编排组件，根据消息 `role` 选择渲染方式，统一管理 Agent 类型解析、头像查找和 Markdown 渲染：
+
+```tsx
+export function MessageRenderer({
+  msg, isStreaming, avatarUrl, agentName, sessionId,
+  sessionAgentType, agentSessionLookup, streamingAgentName,
+}: MessageRendererProps) {
+  if (msg.role === 'user') {
+    return <MessageBubble variant="user">{msg.content}</MessageBubble>
+  }
+  if (msg.role === 'agent') {
+    // 解析 agentType、agentSession、avatarUrl 等
+    return (
+      <MessageBubble variant="agent" agentType={resolvedAgentType} ...>
+        <MarkdownRenderer content={msg.content} />
+      </MessageBubble>
+    )
+  }
+  return <MessageBubble variant="system">{msg.content}</MessageBubble>
+}
+```
+
+在 `MessageList` 中替代了直接使用 `MessageBubble` + `MarkdownRenderer` 的组合，集中处理多 Agent 群聊场景下的 Agent 身份解析逻辑。
+
+### GroupAvatar (`src/components/chat/GroupAvatar.tsx`)
+
+群聊头像组件，当 Task 有多个 Session（多 Agent 协作）时，显示叠加的多 Agent 头像。接收 `agentTypes` 和 `agentNames` 数组，渲染为堆叠的 `AgentAvatar`：
+
+```tsx
+export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarProps) {
+  // 多头像叠加渲染
+}
+```
+
 ### MessageInput (`src/components/chat/MessageInput.tsx`)
 
 输入框组件，textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行：
@@ -178,15 +222,12 @@ const adjustHeight = useCallback(() => {
 
 ### AgentAvatar (`src/components/chat/AgentAvatar.tsx`)
 
-Agent 头像组件，圆角方块显示首字母或上传的头像图片。颜色映射通过 CSS 变量：
+Agent 头像组件，圆角方块显示首字母或上传的头像图片。颜色映射通过 `AGENT_COLORS` 常量（来自 `lib/constants.ts`）和 CSS 变量：
 
 ```tsx
-const AGENT_COLORS: Record<AgentType, string> = {
-  'claude-code': 'var(--agent-claude)',
-  opencode: 'var(--agent-opencode)',
-  orchestrator: 'var(--agent-orchestrator)',
-  codex: 'var(--agent-codex)',
-}
+import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
+// AGENT_COLORS 在 lib/constants.ts 中定义：
+// { 'claude-code': 'var(--agent-claude)', opencode: 'var(--agent-opencode)', ... }
 ```
 
 状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射，`ready` 脉冲动画 `status-ready-pulse`，`running` 旋转动画 `status-running-spin`。支持自定义头像 URL，无自定义头像时若有 `agentName` 则通过 DiceBear API 生成 initials 头像。

@@ -12,13 +12,14 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 
 核心模块：
 - **adapters/** — Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
-- **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin）
+- **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin, resources）
 - **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
-- **orchestrator/** — Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
+- **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
+- **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/reporting 子模块）
 - **preview/** — 工作区预览服务（aiohttp 静态文件服务器）
 - **rules/** — 规则引擎（Safety / Scope / Taskctl）
 - **session/** — 会话管理（状态机 + 持久化）
-- **skills/** — 技能供给系统（内置 taskctl）
+- **skills/** — 技能供给系统（内置 taskctl + render）
 - **workspace/** — 工作区管理（Git Worktree 隔离）
 
 ## 怎么实现的
@@ -66,8 +67,13 @@ agentend/
 │   ├── api/            # FastAPI HTTP 端点
 │   │   └── v1/         # v1 版本 API
 │   ├── app/            # 应用入口、配置、DI
+│   ├── clients/        # 外部服务客户端（BackendClient）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
-│   ├── orchestrator/   # Orchestrator 规划模块（LangGraph + LLM 任务拆解）
+│   ├── orchestrator/   # Orchestrator 规划模块
+│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
+│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
+│   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
 │   ├── schemas/        # 数据模型

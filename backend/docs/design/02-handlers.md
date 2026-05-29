@@ -28,7 +28,7 @@ type CreateTaskReq struct {
 }
 ```
 
-**CreateTask** — 创建 Task 并可选地同时创建 Session 和 SessionAgent：
+**CreateTask** — 在事务中创建 Task 并可选地同时创建 Session 和 SessionAgent：
 
 ```go
 func (h *TaskHandler) CreateTask(c *gin.Context) {
@@ -37,32 +37,43 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		vo.BadRequest(c, "title is required")
 		return
 	}
-	t := model.Task{
-		TaskID:   uuid.New().String(),
-		Title:    req.Title,
-		RepoPath: req.RepoPath,
-		Status:   "active",
-	}
-	if err := db.GetDB().Create(&t).Error; err != nil {
-		vo.InternalError(c, err.Error())
+	var t model.Task
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		t = model.Task{
+			TaskID:   uuid.New().String(),
+			Title:    req.Title,
+			RepoPath: req.RepoPath,
+			Status:   "active",
+		}
+		if err := tx.Create(&t).Error; err != nil {
+			return err
+		}
+		for _, agent := range req.Agents {
+			sid := uuid.New().String()
+			s := model.Session{
+				SessionID: sid,
+				TaskID:    t.TaskID,
+				AgentType: agent.Type,
+				AgentName: agent.Name,
+				Status:    "active",
+			}
+			sa := model.SessionAgent{
+				SessionID: sid,
+				AgentType: agent.Type,
+				AgentName: agent.Name,
+			}
+			if err := tx.Create(&s).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&sa).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		vo.InternalError(c, "failed to create task")
 		return
-	}
-	for _, agent := range req.Agents {
-		sid := uuid.New().String()
-		s := model.Session{
-			SessionID: sid,
-			TaskID:    t.TaskID,
-			AgentType: agent.Type,
-			AgentName: agent.Name,
-			Status:    "active",
-		}
-		sa := model.SessionAgent{
-			SessionID: sid,
-			AgentType: agent.Type,
-			AgentName: agent.Name,
-		}
-		db.GetDB().Create(&s)
-		db.GetDB().Create(&sa)
 	}
 	vo.Created(c, t)
 }
@@ -72,13 +83,15 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 
 ```go
 type RunTaskReq struct {
-	Message   string `json:"message" binding:"required"`
-	AgentType string `json:"agent_type"`
-	SessionID string `json:"session_id" binding:"required"`
+	Message         string `json:"message" binding:"required"`
+	AgentType       string `json:"agent_type"`
+	SessionID       string `json:"session_id" binding:"required"`
+	Cwd             string `json:"cwd"`
+	SkipUserMessage bool   `json:"skip_user_message"`
 }
 ```
 
-流程：验证 Task 存在 -> 保存用户消息 -> 查找或创建 Session -> 创建 agent Message（status: streaming）-> 启动后台 goroutine 调用 AgentEnd SSE -> 返回 `202 Accepted` + `message_id`。
+流程：验证 Task 存在 -> （可选）保存用户消息（`skip_user_message` 时跳过）-> 查找或创建 Session -> 创建 agent Message（status: streaming）-> 启动后台 goroutine 调用 AgentEnd SSE -> 返回 `202 Accepted` + `message_id`。
 
 后台 goroutine 核心逻辑：
 
@@ -91,8 +104,16 @@ go func() {
 		AgentType: generated.AgentType(agentType),
 		Stream:    true,
 	}
-	if task.RepoPath != "" {
+	if req.Cwd != "" {
+		agentReq.WorkspacePath = &req.Cwd
+	} else if task.RepoPath != "" {
 		agentReq.RepoPath = &task.RepoPath
+	}
+	// Orchestrator: inject agents config from sibling sessions
+	if agentType == "orchestrator" {
+		var siblings []model.Session
+		db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
+		// ... build agents config and inject into agentReq.Config
 	}
 	resp, err := h.agentClient.StreamAgent(agentReq)
 	// ...
@@ -101,7 +122,11 @@ go func() {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	sw.Run(func(fn func(string)) {
 		for scanner.Scan() {
-			fn(scanner.Text())
+			line := scanner.Text()
+			if line == "" || strings.HasPrefix(line, "event:") {
+				continue
+			}
+			fn(line)
 		}
 	})
 }()
@@ -223,10 +248,8 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 ```go
 type AgentProfileHandler struct{}
 
-var mockSkills = []AgentSkill{
-    {Name: "taskctl", Description: "任务管理技能...", Builtin: true, Source: "agentend/skills/taskctl"},
-    {Name: "render", Description: "内容渲染技能...", Builtin: true, Source: "agentend/skills/render"},
-}
+// TODO: fetch skills from agentend when a skills API is available
+var noSkills = []AgentSkill{}
 ```
 
 **GetProfile** — 按 session_id 返回 Agent 档案摘要（名称、类型、头像、状态、技能列表）：
@@ -254,7 +277,7 @@ func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
 }
 ```
 
-当前 Skills 为硬编码 mock 数据，后续将由契约层统一供给。
+当前 Skills 为空切片（`noSkills`），后续将由 AgentEnd API 统一供给。
 
 ### 头像上传 (`internal/handler/avatar.go`)
 
@@ -285,7 +308,7 @@ func (h *AvatarHandler) UploadAvatar(c *gin.Context) {
 }
 ```
 
-**UpdateSession** — 更新 SessionAgent 的 `agent_name` 和 `avatar_url`（Upsert 到 session_agents 表）：
+**UpdateSession** — 更新 Session 的 `agent_name` 和 `avatar_url`（直接更新 sessions 表）：
 
 ```go
 type UpdateSessionReq struct {
@@ -299,19 +322,12 @@ func (h *AvatarHandler) UpdateSession(c *gin.Context) {
 	if req.AgentName != "" { updates["agent_name"] = req.AgentName }
 	if req.AvatarURL != "" { updates["avatar_url"] = req.AvatarURL }
 
-	var sa model.SessionAgent
-	result := db.GetDB().Where("session_id = ?", sessionID).First(&sa)
-	if result.Error != nil {
-		// No existing record — create one
-		sa = model.SessionAgent{
-			SessionID: sessionID,
-			AgentName: req.AgentName,
-			AvatarURL: req.AvatarURL,
-		}
-		db.GetDB().Create(&sa)
-	} else {
-		db.GetDB().Model(&sa).Updates(updates)
+	var session model.Session
+	if err := db.GetDB().Where("session_id = ?", sessionID).First(&session).Error; err != nil {
+		vo.NotFound(c, "session not found")
+		return
 	}
+	db.GetDB().Model(&session).Updates(updates)
 }
 ```
 
@@ -330,6 +346,8 @@ func (h *StreamHandler) ServeStream(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Flush()
 
 	switch msg.Status {
 	case "streaming":
@@ -338,11 +356,13 @@ func (h *StreamHandler) ServeStream(c *gin.Context) {
 		h.serveCompleted(c, &msg)
 	case "failed":
 		h.serveFailed(c, &msg)
+	default:
+		h.serveCompleted(c, &msg)
 	}
 }
 ```
 
-**serveStreaming** 的两阶段分发：
+**serveStreaming** 的三阶段分发：
 
 ```go
 func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
@@ -350,11 +370,11 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSE(chunk))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
 		}
 	}
-	// Phase 2: 从 Redis Stream 阻塞读取实时事件
-	// 先非阻塞排空存量消息，再 5s 超时阻塞等待新消息
+	// Phase 2: 订阅 Hub 并重放 Redis 缺口（last_seq → Hub currentSeq）
+	// Phase 3: 从 Hub channel 实时消费事件，附带 15s 心跳和 10s 停滞检测
 	// 当 StreamWriter goroutine 结束后发送 done/error 事件并退出
 }
 ```

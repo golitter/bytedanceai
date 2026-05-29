@@ -142,7 +142,7 @@ Codex 独有 `item.started` 事件，可以在工具执行**过程中**通知前
 
 | Adapter | 思考事件 | 处理方式 |
 |---------|----------|----------|
-| Claude | `stream_event → thinking` delta | 直接作为 TEXT 输出 |
+| Claude | `stream_event → thinking` delta | 忽略（不输出） |
 | OpenCode | `type: reasoning` | 加 `[thinking]` 前缀 |
 | Codex | `item.completed → reasoning` | 加 `[thinking]` 前缀 |
 

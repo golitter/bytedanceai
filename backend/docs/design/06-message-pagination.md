@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-`GET /api/tasks/:taskId/messages` 接口支持 **cursor 分页**，前端通过自增 ID 向前翻页加载历史消息。
+`GET /api/tasks/:taskId/messages` 接口支持 **cursor 分页** 和 **session_id 过滤**，前端通过自增 ID 向前翻页加载历史消息，可选按会话过滤。
 
 ## 怎么实现的
 
@@ -30,11 +30,16 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 
     limitStr := c.Query("limit")
     beforeStr := c.Query("before")
+    sessionID := c.Query("session_id")
 
     // 2. 无分页参数：返回全部消息，has_more=false
     if limitStr == "" && beforeStr == "" {
+        query := db.GetDB().Where("task_id = ?", taskID)
+        if sessionID != "" {
+            query = query.Where("session_id = ?", sessionID)
+        }
         var messages []model.Message
-        db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
+        query.Order("created_at ASC").Find(&messages)
         vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
         return
     }
@@ -48,6 +53,9 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
     }
 
     query := db.GetDB().Where("task_id = ?", taskID)
+    if sessionID != "" {
+        query = query.Where("session_id = ?", sessionID)
+    }
 
     if beforeStr != "" {
         if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
@@ -73,6 +81,7 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 | 参数 | 行为 |
 |------|------|
 | 无 `limit`/`before` | 返回全部消息，`has_more=false` |
+| `session_id=xxx` | 按 session 过滤（可与分页组合使用） |
 | `limit=20` | 返回最近 20 条，多查一条判断 `has_more` |
 | `limit=20&before=100` | 返回 `id < 100` 的最近 20 条 |
 | `before=100` | 默认 `limit=20`，返回 `id < 100` 的最近 20 条 |

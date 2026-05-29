@@ -56,11 +56,17 @@ class EventType(str, Enum):
     PLANNING = "planning"      # Orchestrator 规划阶段
     DONE = "done"              # 执行完成
     ERROR = "error"            # 错误
+    RUNTIME_EXECUTING = "runtime_executing"   # Runtime 正在执行 Agent
+    RUNTIME_TEXT = "runtime_text"             # Runtime 产生的文本事件
+    RUNTIME_COMPLETED = "runtime_completed"   # Runtime 执行完成
+    COORDINATION_START = "coordination_start"   # 协调开始
+    COORDINATION_MESSAGE = "coordination_message" # 协调消息
+    COORDINATION_DONE = "coordination_done"     # 协调完成
 
 class StreamEvent(_StreamEvent):   # generated 基类中 type: EventType，schemas 层覆盖为 str
     type: str                  # EventType 枚举值（字符串形式）
-    content: dict = {}         # 事件内容
-    timestamp: float           # 时间戳
+    content: dict = Field(default_factory=dict)  # 事件内容
+    timestamp: float = Field(default_factory=time.time)  # 时间戳
 
     @staticmethod
     def create(event_type, agent_type=None, **kwargs) -> StreamEvent  # 工厂方法
