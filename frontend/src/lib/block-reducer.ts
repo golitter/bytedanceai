@@ -1,4 +1,4 @@
-import type { MessageBlock } from './block-types'
+import type { MessageBlock, PlanTask } from './block-types'
 
 const BLOCK_MARKER = 'aka_yhy'
 
@@ -17,7 +17,7 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
     const matchStart = match.index!
     if (matchStart > lastIndex) {
       const text = fullText.slice(lastIndex, matchStart)
-      if (text) blocks.push({ type: 'text', id: nextBlockId(), content: text })
+      appendTextSegment(blocks, text)
     }
 
     const inner = match[1].trim()
@@ -32,7 +32,7 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   }
 
   if (lastIndex < fullText.length) {
-    blocks.push({ type: 'text', id: nextBlockId(), content: fullText.slice(lastIndex) })
+    appendTextSegment(blocks, fullText.slice(lastIndex))
   }
 
   if (blocks.length === 0) {
@@ -40,6 +40,232 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   }
 
   return blocks
+}
+
+function appendTextSegment(blocks: MessageBlock[], text: string) {
+  if (!text) return
+
+  const lines = text.split('\n')
+  const textLines: string[] = []
+  let parsedAny = false
+
+  const flushText = () => {
+    if (textLines.length === 0) return
+    const content = textLines.join('\n')
+    if (content.trim()) {
+      blocks.push({ type: 'text', id: nextBlockId(), content })
+    }
+    textLines.length = 0
+  }
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const fence = parseLegacyFence(lines, i)
+    if (fence) {
+      const legacyBlocks = parseLegacyBlocks(fence.innerLines)
+      if (legacyBlocks) {
+        flushText()
+        for (const block of legacyBlocks) {
+          pushRuntimeBlock(blocks, block)
+        }
+        parsedAny = true
+        i = fence.endIndex
+        continue
+      }
+    }
+
+    const type = parseLegacyTypeLine(lines[i])
+    const json = i + 1 < lines.length ? parseLegacyJsonLine(lines[i + 1]) : null
+
+    if (type && json) {
+      const block = legacyRuntimeBlock(type, json)
+      if (block) {
+        flushText()
+        pushRuntimeBlock(blocks, block)
+        parsedAny = true
+        i += 1
+        continue
+      }
+    }
+
+    textLines.push(lines[i])
+  }
+
+  flushText()
+
+  if (!parsedAny && blocks.length === 0 && text === '') {
+    blocks.push({ type: 'text', id: nextBlockId(), content: text })
+  }
+}
+
+function parseLegacyFence(
+  lines: string[],
+  startIndex: number,
+): { innerLines: string[]; endIndex: number } | null {
+  if (!lines[startIndex].trim().startsWith('```')) return null
+
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    if (lines[i].trim() === '```') {
+      return {
+        innerLines: lines.slice(startIndex + 1, i),
+        endIndex: i,
+      }
+    }
+  }
+
+  return null
+}
+
+function parseLegacyBlocks(lines: string[]): MessageBlock[] | null {
+  const blocks: MessageBlock[] = []
+  let parsedAny = false
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i].trim()) continue
+
+    const type = parseLegacyTypeLine(lines[i])
+    const json = i + 1 < lines.length ? parseLegacyJsonLine(lines[i + 1]) : null
+    if (!type || !json) return null
+
+    const block = legacyRuntimeBlock(type, json)
+    if (!block) return null
+
+    pushRuntimeBlock(blocks, block)
+    parsedAny = true
+    i += 1
+  }
+
+  return parsedAny ? blocks : null
+}
+
+function parseLegacyTypeLine(line: string): string | null {
+  const trimmed = line.trim()
+  return trimmed.startsWith('type:') ? trimmed.slice('type:'.length).trim() : null
+}
+
+function parseLegacyJsonLine(line: string): Record<string, unknown> | null {
+  const trimmed = line.trim()
+  if (!trimmed.startsWith('json:')) return null
+  try {
+    const parsed = JSON.parse(trimmed.slice('json:'.length).trim())
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): MessageBlock | null {
+  switch (type) {
+    case 'plan':
+      return {
+        type: 'plan',
+        id: nextBlockId(),
+        overview: stringField(payload, 'overview'),
+        tasks: arrayField(payload, 'tasks')
+          .map(planTask)
+          .filter((task): task is PlanTask => task !== null),
+      }
+    case 'runtime_status':
+      return {
+        type: 'runtime_status',
+        id: nextBlockId(),
+        task_id: stringField(payload, 'task_id'),
+        agent: stringField(payload, 'agent'),
+        status: stringField(payload, 'status') || 'running',
+        streamingText: optionalStringField(payload, 'streamingText'),
+      }
+    case 'coordination':
+      return {
+        type: 'coordination',
+        id: nextBlockId(),
+        messages: arrayField(payload, 'messages').map((msg) => ({
+          from: stringField(msg, 'from'),
+          to: stringField(msg, 'to'),
+          text: stringField(msg, 'text'),
+          round: numberField(msg, 'round', 1),
+        })),
+        closed: Boolean(payload.closed),
+        summary: optionalStringField(payload, 'summary'),
+      }
+    default:
+      return null
+  }
+}
+
+function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
+  if (block.type === 'plan') {
+    const existing = blocks.find((item) => item.type === 'plan')
+    if (existing?.type === 'plan') {
+      const taskMap = new Map(existing.tasks.map((task) => [task.task_id, task]))
+      for (const task of block.tasks) {
+        taskMap.set(task.task_id, task)
+      }
+      existing.tasks = [...taskMap.values()]
+      if (!existing.overview && block.overview) existing.overview = block.overview
+      return
+    }
+  }
+
+  if (block.type === 'runtime_status') {
+    for (let i = blocks.length - 1; i >= 0; i -= 1) {
+      const existing = blocks[i]
+      if (existing.type === 'runtime_status' && existing.task_id === block.task_id) {
+        existing.agent = block.agent || existing.agent
+        existing.status = block.status || existing.status
+        existing.streamingText = `${existing.streamingText ?? ''}${block.streamingText ?? ''}`
+        return
+      }
+    }
+  }
+
+  if (block.type === 'coordination') {
+    const existing = blocks.find((item) => item.type === 'coordination')
+    if (existing?.type === 'coordination') {
+      existing.messages = [...existing.messages, ...block.messages]
+      existing.closed = existing.closed || block.closed
+      existing.summary = block.summary || existing.summary
+      return
+    }
+  }
+
+  blocks.push(block)
+}
+
+function planTask(value: Record<string, unknown>): PlanTask | null {
+  const status = stringField(value, 'status')
+  if (!['pending', 'running', 'completed', 'failed'].includes(status)) return null
+  return {
+    task_id: stringField(value, 'task_id'),
+    agent: stringField(value, 'agent'),
+    title: stringField(value, 'title'),
+    status: status as PlanTask['status'],
+  }
+}
+
+function stringField(value: Record<string, unknown>, key: string): string {
+  const raw = value[key]
+  return typeof raw === 'string' ? raw : ''
+}
+
+function optionalStringField(value: Record<string, unknown>, key: string): string | undefined {
+  const raw = stringField(value, key)
+  return raw || undefined
+}
+
+function numberField(value: Record<string, unknown>, key: string, fallback: number): number {
+  const raw = value[key]
+  return typeof raw === 'number' ? raw : fallback
+}
+
+function arrayField(value: Record<string, unknown>, key: string): Record<string, unknown>[] {
+  const raw = value[key]
+  return Array.isArray(raw)
+    ? raw.filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === 'object' && !Array.isArray(item),
+      )
+    : []
 }
 
 function parseBlockContent(inner: string): MessageBlock | null {

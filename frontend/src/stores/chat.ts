@@ -87,6 +87,10 @@ interface ChatStoreState {
   setLoadingMore: (sessionId: string, loading: boolean) => void
 }
 
+type ChatSet = (
+  partial: Partial<ChatStoreState> | ((state: ChatStoreState) => Partial<ChatStoreState>),
+) => void
+
 const initialSessionState: SessionChatState = {
   messages: [],
   streamingContent: '',
@@ -127,41 +131,14 @@ function _ensureBuf(sessionId: string): string[] {
   return buf
 }
 
-function _scheduleFlush(set: Parameters<typeof useChatStore.setState>[0]) {
+function _scheduleFlush(set: ChatSet) {
   if (_flushRafId !== null) return
   _flushRafId = requestAnimationFrame(() => {
     _flushRafId = null
     if (!_textBufs || _textBufs.size === 0) return
     const snapshot = new Map(_textBufs)
     _textBufs.clear()
-    ;(set as (updater: (s: ChatStoreState) => Partial<ChatStoreState>) => void)(
-      (s: ChatStoreState) => {
-        const nextSessions = { ...s.sessions }
-        for (const [sid, pieces] of snapshot) {
-          if (pieces.length === 0) continue
-          const session = ensureSession(s, sid)
-          nextSessions[sid] = {
-            ...session,
-            status: session.status === 'tool_running' ? 'streaming' : session.status,
-            streamingContent: session.streamingContent + pieces.join(''),
-          }
-        }
-        return { sessions: nextSessions }
-      },
-    )
-  })
-}
-
-function _flushTextBuf(set: Parameters<typeof useChatStore.setState>[0]) {
-  if (_flushRafId !== null) {
-    cancelAnimationFrame(_flushRafId)
-    _flushRafId = null
-  }
-  if (!_textBufs || _textBufs.size === 0) return
-  const snapshot = new Map(_textBufs)
-  _textBufs.clear()
-  ;(set as (updater: (s: ChatStoreState) => Partial<ChatStoreState>) => void)(
-    (s: ChatStoreState) => {
+    set((s) => {
       const nextSessions = { ...s.sessions }
       for (const [sid, pieces] of snapshot) {
         if (pieces.length === 0) continue
@@ -173,8 +150,31 @@ function _flushTextBuf(set: Parameters<typeof useChatStore.setState>[0]) {
         }
       }
       return { sessions: nextSessions }
-    },
-  )
+    })
+  })
+}
+
+function _flushTextBuf(set: ChatSet) {
+  if (_flushRafId !== null) {
+    cancelAnimationFrame(_flushRafId)
+    _flushRafId = null
+  }
+  if (!_textBufs || _textBufs.size === 0) return
+  const snapshot = new Map(_textBufs)
+  _textBufs.clear()
+  set((s) => {
+    const nextSessions = { ...s.sessions }
+    for (const [sid, pieces] of snapshot) {
+      if (pieces.length === 0) continue
+      const session = ensureSession(s, sid)
+      nextSessions[sid] = {
+        ...session,
+        status: session.status === 'tool_running' ? 'streaming' : session.status,
+        streamingContent: session.streamingContent + pieces.join(''),
+      }
+    }
+    return { sessions: nextSessions }
+  })
 }
 
 export const useChatStore = create<ChatStoreState>((set, get) => ({
@@ -215,6 +215,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           status: 'loading',
           messages: [...(s.sessions[sessionId]?.messages ?? []), message],
           streamingContent: '',
+          runtimeBlocks: [],
           error: null,
           activeStream,
         },
@@ -363,6 +364,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             streamingAgentType: undefined,
             streamingAgentName: undefined,
             activeStream: null,
+            runtimeBlocks: [],
           },
         },
       }
@@ -379,6 +381,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           status: 'error',
           error,
           streamingContent: '',
+          runtimeBlocks: [],
           activeStream: null,
         },
       },
@@ -394,7 +397,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       )
       const newBlock: MessageBlock = { type: 'runtime_status', id: nextRuntimeBlockId(), ...event }
       if (idx >= 0) {
-        blocks[idx] = newBlock
+        const existing = blocks[idx]
+        blocks[idx] =
+          existing.type === 'runtime_status'
+            ? {
+                ...existing,
+                ...event,
+                id: existing.id,
+                streamingText: existing.streamingText,
+              }
+            : newBlock
       } else {
         blocks.push(newBlock)
       }
@@ -440,7 +452,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const blocks = [...session.runtimeBlocks]
       const existing = blocks.find((b) => b.type === 'plan')
       if (existing && existing.type === 'plan') {
-        existing.tasks = tasks
+        const taskMap = new Map(existing.tasks.map((task) => [task.task_id, task]))
+        for (const task of tasks) {
+          taskMap.set(task.task_id, task)
+        }
+        existing.tasks = [...taskMap.values()]
       } else {
         blocks.push({ type: 'plan', id: nextRuntimeBlockId(), overview, tasks })
       }

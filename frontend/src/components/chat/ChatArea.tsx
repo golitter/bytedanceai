@@ -165,6 +165,7 @@ export function ChatArea({
           streamingContent={state.streamingContent}
           streamingAgentType={state.streamingAgentType}
           streamingAgentName={state.streamingAgentName}
+          runtimeBlocks={state.runtimeBlocks}
           isStreaming={isStreaming}
           avatarUrl={avatarUrl}
           agentName={agentName}

@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import type { AgentType } from '@/generated/request'
 import type { AgentProfile } from '@/lib/api'
 import { fetchAgentProfile } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
@@ -47,7 +48,7 @@ function HoverCardContent({
     staleTime: 60_000,
   })
 
-  const name = profile?.agent_name ?? agentName ?? AGENT_NAMES[agentType] ?? agentType
+  const name = profile?.agent_name ?? agentName ?? AGENT_NAMES[agentType as AgentType] ?? agentType
   const skills = profile?.skills ?? []
   const displaySkills = skills.slice(0, MAX_VISIBLE_SKILLS)
   const remaining = skills.length - MAX_VISIBLE_SKILLS

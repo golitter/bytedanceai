@@ -5,6 +5,8 @@ import { useMemo, useRef } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useMessageScroll } from '@/hooks/use-message-scroll'
 import type { AgentSessionInfo } from '@/lib/api'
+import { reduceEventToBlocks } from '@/lib/block-reducer'
+import type { MessageBlock } from '@/lib/block-types'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
@@ -16,6 +18,7 @@ interface MessageListProps {
   streamingContent: string
   streamingAgentType?: string
   streamingAgentName?: string
+  runtimeBlocks: MessageBlock[]
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
@@ -38,6 +41,7 @@ export function MessageList({
   streamingContent,
   streamingAgentType,
   streamingAgentName,
+  runtimeBlocks,
   isStreaming,
   avatarUrl,
   agentName,
@@ -62,14 +66,19 @@ export function MessageList({
   )
 
   const displayItems = useMemo<DisplayItem[]>(() => {
+    const streamingBlocks = [
+      ...runtimeBlocks,
+      ...(streamingContent ? reduceEventToBlocks(streamingContent) : []),
+    ]
     const allMsgs =
-      isStreaming && streamingContent
+      isStreaming && (streamingContent || runtimeBlocks.length > 0)
         ? [
             ...messages,
             {
               id: 'streaming',
               role: 'agent' as const,
               content: streamingContent,
+              blocks: streamingBlocks,
               agentType: streamingAgentType as AgentType | undefined,
               timestamp: Date.now(),
             },
@@ -89,7 +98,7 @@ export function MessageList({
       })
     }
     return items
-  }, [messages, isStreaming, streamingContent, streamingAgentType])
+  }, [messages, isStreaming, streamingContent, runtimeBlocks, streamingAgentType])
 
   const useVirtual = displayItems.length > VIRTUALIZE_THRESHOLD
 

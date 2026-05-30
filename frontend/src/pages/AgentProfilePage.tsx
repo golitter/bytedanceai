@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router'
 
 import { AgentMeta } from '@/components/chat/AgentMeta'
 import { SkillCard } from '@/components/chat/SkillCard'
+import type { AgentType } from '@/generated/request'
 import type { AgentDetail } from '@/lib/api'
 import { fetchAgentDetail, updateSession, uploadAvatar } from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
@@ -59,10 +60,11 @@ export function AgentProfilePage() {
     )
   }
 
-  const name = detail.agent_name || AGENT_NAMES[detail.agent_type] || detail.agent_type
+  const agentType = detail.agent_type as AgentType
+  const name = detail.agent_name || AGENT_NAMES[agentType] || detail.agent_type
   const status = detail.status as Status
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.offline
-  const color = AGENT_COLORS[detail.agent_type] ?? 'var(--primary)'
+  const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

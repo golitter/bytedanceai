@@ -78,4 +78,55 @@ describe('reduceEventToBlocks', () => {
     const ids = result.map((b) => b.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
+
+  it('folds legacy bare runtime status lines', () => {
+    const input =
+      'type: runtime_status\n' +
+      'json: {"agent":"执行者","status":"running","streamingText":"你好","task_id":"task-001"}\n' +
+      'type: runtime_status\n' +
+      'json: {"agent":"执行者","status":"running","streamingText":"！","task_id":"task-001"}\n' +
+      'type: runtime_status\n' +
+      'json: {"agent":"执行者","status":"completed","task_id":"task-001"}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('runtime_status')
+    if (result[0].type === 'runtime_status') {
+      expect(result[0].status).toBe('completed')
+      expect(result[0].streamingText).toBe('你好！')
+    }
+  })
+
+  it('folds legacy bare plan lines', () => {
+    const input =
+      '说明\n' +
+      'type: plan\n' +
+      'json: {"overview":"","tasks":[{"agent":"执行者","status":"pending","task_id":"task-001","title":"介绍自己"}]}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result.map((block) => block.type)).toEqual(['text', 'plan'])
+    expect(result[1].type).toBe('plan')
+    if (result[1].type === 'plan') {
+      expect(result[1].tasks[0].title).toBe('介绍自己')
+    }
+  })
+
+  it('folds legacy fenced runtime status lines', () => {
+    const input =
+      '```yaml\n' +
+      'type: runtime_status\n' +
+      'json: {"agent":"执行者","status":"running","streamingText":"Cla","task_id":"task-001"}\n' +
+      '```\n' +
+      '```yaml\n' +
+      'type: runtime_status\n' +
+      'json: {"agent":"执行者","status":"running","streamingText":"ude","task_id":"task-001"}\n' +
+      '```'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('runtime_status')
+    if (result[0].type === 'runtime_status') {
+      expect(result[0].streamingText).toBe('Claude')
+    }
+  })
 })

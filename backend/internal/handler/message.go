@@ -64,12 +64,19 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 	}
 
 	var messages []model.Message
-	query.Order("created_at ASC").Limit(limit + 1).Find(&messages)
+	query.Order("id DESC").Limit(limit + 1).Find(&messages)
 
 	hasMore := len(messages) > limit
 	if hasMore {
 		messages = messages[:limit]
 	}
+	reverseMessages(messages)
 
 	vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
+}
+
+func reverseMessages(messages []model.Message) {
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
 }

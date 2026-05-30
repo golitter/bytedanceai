@@ -48,6 +48,7 @@ docs/
 ### bugfix/
 
 - [multi-agent-message-split.md](bugfix/multi-agent-message-split.md) — 多 Agent 消息拆分修复（页面刷新后消息混淆 + 重复消息）
+- [message-history-latest-page.md](bugfix/message-history-latest-page.md) — 消息刷新后最新输出丢失与运行态不渲染修复
 - [orchestrator-streaming-hang.md](bugfix/orchestrator-streaming-hang.md) — Orchestrator 流式挂起修复（短路路径超时 + 重复输出）
 - [sub-agent-message-persistence-bugs.md](bugfix/sub-agent-message-persistence-bugs.md) — 子 Agent 消息持久化修复（SSE 挂起 + 回复错乱 + 消息不分离）
 
