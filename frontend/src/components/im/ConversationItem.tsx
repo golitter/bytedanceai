@@ -50,6 +50,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
           status={conversation.status === 'running' ? 'running' : 'ready'}
           avatarUrl={conversation.avatarUrl}
           agentName={conversation.agentName || undefined}
+          sessionId={conversation.sessionId}
         />
       )}
       <div className="min-w-0 flex-1">
