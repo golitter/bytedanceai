@@ -19,7 +19,8 @@ function isTreeLikeLine(line: string): boolean {
 
 function fenceTreeBlocks(content: string): string {
   const lines = content.split('\n')
-  if (!lines.some(isTreeLikeLine)) {
+  const hasTree = lines.some(isTreeLikeLine)
+  if (!hasTree) {
     return content
   }
 
@@ -86,6 +87,10 @@ const components: Components = {
 
     if (match) {
       return <CodeBlock code={code} language={match[1]} />
+    }
+
+    if (code.includes('\n')) {
+      return <CodeBlock code={code} />
     }
 
     return (
