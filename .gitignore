@@ -22,3 +22,6 @@ __pycache__/
 # 内部资料
 /docs/internal
 /docs/tmpdemo/
+
+# 运行日志
+logs/*.log

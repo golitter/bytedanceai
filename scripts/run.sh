@@ -5,6 +5,10 @@ set -euo pipefail
 # name:port 格式（均为热重载模式）
 SERVICES=(frontend:5173 backend:8080 agentend:8001)
 
+# ── 日志目录 ──────────────────────────────────────
+LOG_DIR="$(cd "$(dirname "$0")/.." && pwd)/logs"
+mkdir -p "$LOG_DIR"
+
 # ── 颜色 ──────────────────────────────────────────
 GREEN='\033[32m'
 RED='\033[31m'
@@ -37,16 +41,25 @@ start_service() {
     return
   fi
 
+  # 写入启动分隔线
+  local log_file="$LOG_DIR/${name}.log"
+  {
+    echo ""
+    echo "═══════════════════════════════════════════════════════"
+    echo "  $name 启动 @ $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "═══════════════════════════════════════════════════════"
+  } >> "$log_file"
+
   echo "启动 $name (port $port) ..."
   case "$name" in
     frontend)
-      (cd frontend && exec pnpm dev) &
+      (cd frontend && exec pnpm dev) >> "$log_file" 2>&1 &
       ;;
     backend)
-      (cd backend && exec ~/go/bin/air -c .air.toml) &
+      (cd backend && exec ~/go/bin/air -c .air.toml) >> "$log_file" 2>&1 &
       ;;
     agentend)
-      (cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port") &
+      (cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port") >> "$log_file" 2>&1 &
       ;;
   esac
 
