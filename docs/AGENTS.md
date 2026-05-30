@@ -19,6 +19,7 @@ docs/
 
 - [three-tier-design.md](design/three-tier-design.md) — 三层架构设计（React + Go + Python）
 - [planning-context-module.md](design/planning-context-module.md) — Orchestrator Planning ToolMessage 结构化设计
+- [soul-md-identity-document.md](design/soul-md-identity-document.md) — SOUL.md Agent 身份文档设计与实现
 
 ### reference/
 

@@ -48,6 +48,21 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
+	// Validate: orchestrator must not be the only agent
+	hasOrchestrator := false
+	hasNonOrchestrator := false
+	for _, a := range req.Agents {
+		if a.Type == "orchestrator" {
+			hasOrchestrator = true
+		} else {
+			hasNonOrchestrator = true
+		}
+	}
+	if hasOrchestrator && !hasNonOrchestrator {
+		vo.BadRequest(c, "orchestrator cannot be the only agent in a task")
+		return
+	}
+
 	var t model.Task
 	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
 		t = model.Task{
@@ -290,6 +305,15 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			agentReq.RepoPath = &task.RepoPath
 		}
 
+		// Inject soul_md for non-orchestrator agents into config
+		if agentType != "orchestrator" {
+			soulMD := ""
+			db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &soulMD)
+			soulConfig := map[string]interface{}{"soul_md": soulMD}
+			soulConfigIface := interface{}(soulConfig)
+			agentReq.Config = &soulConfigIface
+		}
+
 		// For orchestrator, inject agents config from sibling sessions
 		if agentType == "orchestrator" {
 			var siblings []model.Session
@@ -298,6 +322,8 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			if orchestratorID == "" {
 				orchestratorID = "orchestrator"
 			}
+			orchestratorSoul := ""
+			db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &orchestratorSoul)
 			var agents []map[string]interface{}
 			for _, s := range siblings {
 				agentID := s.AgentName
@@ -314,6 +340,7 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			config := map[string]interface{}{
 				"agents":  agents,
 				"task_id": taskID,
+				"soul_md": orchestratorSoul,
 				"orchestrator": map[string]interface{}{
 					"id":         orchestratorID,
 					"type":       agentType,

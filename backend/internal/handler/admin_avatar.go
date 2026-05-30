@@ -1,32 +1,30 @@
 package handler
 
 import (
-	"sync"
-
+	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
+	"agenthub/backend/pkg/db"
 
 	"github.com/gin-gonic/gin"
 )
 
-var (
-	adminAvatarURL string
-	avatarMu       sync.RWMutex
-)
+const adminAvatarKey = "admin_avatar_url"
 
 type AvatarRequest struct {
 	URL string `json:"url" binding:"required"`
 }
 
 func (h *AdminHandler) GetAvatar(c *gin.Context) {
-	avatarMu.RLock()
-	url := adminAvatarURL
-	avatarMu.RUnlock()
-
-	if url == "" {
-		url = "https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
+	var setting model.AdminSetting
+	if err := db.GetDB().Where("`key` = ?", adminAvatarKey).First(&setting).Error; err != nil {
+		vo.OK(c, gin.H{"url": "https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"})
+		return
 	}
-
-	vo.OK(c, gin.H{"url": url})
+	if setting.Value == "" {
+		vo.OK(c, gin.H{"url": "https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"})
+		return
+	}
+	vo.OK(c, gin.H{"url": setting.Value})
 }
 
 func (h *AdminHandler) UpdateAvatar(c *gin.Context) {
@@ -36,9 +34,8 @@ func (h *AdminHandler) UpdateAvatar(c *gin.Context) {
 		return
 	}
 
-	avatarMu.Lock()
-	adminAvatarURL = req.URL
-	avatarMu.Unlock()
+	db.GetDB().Where("`key` = ?", adminAvatarKey).Delete(&model.AdminSetting{})
+	db.GetDB().Create(&model.AdminSetting{Key: adminAvatarKey, Value: req.URL})
 
 	vo.OK(c, gin.H{"success": true})
 }

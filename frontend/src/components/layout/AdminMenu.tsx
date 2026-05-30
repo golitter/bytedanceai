@@ -1,6 +1,8 @@
-import { BarChart3, Bot, FolderOpen, Heart, LayoutDashboard, Trash2 } from 'lucide-react'
+import { BarChart3, Bot, FolderOpen, Heart, LayoutDashboard, Trash2, UserCog } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { type AdminMenuKey, useAdminMenu } from '@/stores/admin'
+import { getAdminAvatar } from '@/lib/api'
+import { type AdminMenuKey, useAdminMenu, useAdminStore } from '@/stores/admin'
 
 interface MenuItemProps {
   icon: React.ReactNode
@@ -27,6 +29,7 @@ const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] 
     label: '数据统计',
     key: 'statistics',
   },
+  { icon: <UserCog className="h-4 w-4" strokeWidth={1.25} />, label: '用户管理', key: 'users' },
 ]
 
 function MenuItem({ icon, label, menuKey }: MenuItemProps) {
@@ -55,6 +58,19 @@ function MenuItem({ icon, label, menuKey }: MenuItemProps) {
 }
 
 export function AdminMenu() {
+  const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
+  const setAdminAvatarUrl = useAdminStore((s) => s.setAdminAvatarUrl)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    getAdminAvatar()
+      .then((data) => {
+        setAdminAvatarUrl(data.url)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [setAdminAvatarUrl])
+
   return (
     <div
       className="flex h-full w-[180px] shrink-0 flex-col"
@@ -62,7 +78,11 @@ export function AdminMenu() {
     >
       <div className="flex flex-col items-center gap-2 px-4 py-4">
         <img
-          src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
+          src={
+            loaded
+              ? adminAvatarUrl
+              : 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
+          }
           alt="Admin"
           className="h-12 w-12 rounded-[10px] object-cover"
         />

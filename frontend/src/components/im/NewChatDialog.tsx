@@ -49,11 +49,19 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         description: AGENT_DESCRIPTIONS[t] ?? '',
       }))
 
-  const canSubmit = agents.length > 0 && repoPathValidated && !createMutation.isPending
+  const hasOrchestrator = agents.some((a) => a.type === 'orchestrator')
+  const hasNonOrchestrator = agents.some((a) => a.type !== 'orchestrator')
+  const orchestratorAlone = hasOrchestrator && !hasNonOrchestrator
+
+  const canSubmit =
+    agents.length > 0 && repoPathValidated && !createMutation.isPending && !orchestratorAlone
 
   const handleSubmit = () => {
     if (agents.length >= 2 && !groupTitle.trim()) {
       setGroupTitleError(true)
+      return
+    }
+    if (orchestratorAlone) {
       return
     }
     createMutation.mutate(
@@ -116,6 +124,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
             />
             {groupTitleError && <p className="mt-1 text-xs text-destructive">群聊必须填写名称</p>}
           </div>
+        )}
+
+        {orchestratorAlone && (
+          <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+            Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent
+          </p>
         )}
 
         <button

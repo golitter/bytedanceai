@@ -10,6 +10,8 @@ REASON_PROMPT = """\
 
 {agents_desc}
 
+{soul_section}
+
 {skills_section}
 
 {tools_section}
@@ -63,8 +65,11 @@ def build_reason_prompt(
     l2_content: dict[str, str] | None = None,
     replan_reason: str | None = None,
 ) -> str:
+    from pathlib import Path
+
     pin_context = ""
     evolution_context = ""
+    soul_section = ""
 
     try:
         pm = PinMemory(common_dir=f"{shared_dir}/memory/common")
@@ -75,6 +80,17 @@ def build_reason_prompt(
     try:
         evo = EvolutionStore(shared_dir)
         evolution_context = evo.get_recent_experience(5)
+    except Exception:
+        pass
+
+    # Load orchestrator's own SOUL.md from shared directory
+    try:
+        shared_path = Path(shared_dir)
+        orchestrator_soul = shared_path / "SOUL.md"
+        if orchestrator_soul.is_file():
+            content = orchestrator_soul.read_text(encoding="utf-8").strip()
+            if content:
+                soul_section = f"## 我的身份 (SOUL.md)\n\n{content}"
     except Exception:
         pass
 
@@ -108,6 +124,7 @@ def build_reason_prompt(
         message=message,
         pin_context=pin_context,
         evolution_context=evolution_context,
+        soul_section=soul_section,
         skills_section=skills_section,
         tools_section=tools_section,
         replan_section=replan_section,

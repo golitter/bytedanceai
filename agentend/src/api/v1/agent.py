@@ -61,6 +61,7 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
         "task_id": task_id,
         "shared_dir": shared_dir,
         "repo_path": repo_path,
+        "soul_md": config.get("soul_md", ""),
     }
 
 
@@ -169,6 +170,19 @@ async def agent_stream(
     backend_client: BackendClient = Depends(get_backend_client),
 ) -> EventSourceResponse:
     workspace_path = await _resolve_workspace(request, workspace_mgr)
+
+    # Write SOUL.md for non-orchestrator agents into their worktree
+    if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
+        from src.app.agent_config import get_agent_config_dir
+
+        config = request.config or {}
+        soul_md = config.get("soul_md", "")
+        if soul_md:
+            config_dir = get_agent_config_dir(request.agent_type.value)
+            if config_dir:
+                soul_path = Path(workspace_path) / config_dir / "SOUL.md"
+                soul_path.parent.mkdir(parents=True, exist_ok=True)
+                soul_path.write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
     rule_ctx = {
         "message": request.message,

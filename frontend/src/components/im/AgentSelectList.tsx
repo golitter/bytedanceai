@@ -25,11 +25,18 @@ export function AgentSelectList({
   const [addingType, setAddingType] = useState<AgentType | null>(null)
   const [inputName, setInputName] = useState('')
   const [nameError, setNameError] = useState(false)
+  const [ruleError, setRuleError] = useState('')
 
   const handleAddAgent = () => {
     const trimmed = inputName.trim()
     if (!trimmed || agents.some((a) => a.name === trimmed)) {
       setNameError(true)
+      setRuleError('')
+      return
+    }
+    if (addingType === 'orchestrator' && agents.some((a) => a.type === 'orchestrator')) {
+      setRuleError('只能添加一个 Orchestrator')
+      setNameError(false)
       return
     }
     const next = [...agents, { type: addingType!, name: trimmed }]
@@ -38,6 +45,7 @@ export function AgentSelectList({
     setInputName('')
     setAddingType(null)
     setNameError(false)
+    setRuleError('')
   }
 
   const handleRemoveAgent = (index: number) => {
@@ -135,6 +143,7 @@ export function AgentSelectList({
             </div>
           )}
           {nameError && <p className="mt-1 text-xs text-destructive">请输入不重复的 Agent 名称</p>}
+          {ruleError && <p className="mt-1 text-xs text-destructive">{ruleError}</p>}
         </div>
       )}
     </>

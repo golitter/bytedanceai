@@ -25,6 +25,7 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	{
 		admin.POST("/auth", h.Auth)
 		admin.GET("/health", h.HealthCheck)
+		admin.GET("/avatar", h.GetAvatar)
 
 		protected := admin.Group("")
 		protected.Use(middleware.AdminAuth(h.cfg.JWT.Secret))
@@ -36,7 +37,6 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
 			protected.GET("/agents", h.GetAgents)
 			protected.GET("/services", h.GetServices)
 			protected.GET("/statistics", h.GetStatistics)
-			protected.GET("/avatar", h.GetAvatar)
 			protected.PUT("/avatar", h.UpdateAvatar)
 		}
 	}

@@ -9,6 +9,7 @@ export type AdminMenuKey =
   | 'agents'
   | 'services'
   | 'statistics'
+  | 'users'
 
 interface AdminStore {
   activeMenuKey: AdminMenuKey
@@ -16,6 +17,7 @@ interface AdminStore {
   isAuthenticated: boolean
   showPasswordDialog: boolean
   passwordDialogPurpose: 'login' | 'reauth'
+  adminAvatarUrl: string
 
   setActiveMenuKey: (key: AdminMenuKey) => void
   setAdminToken: (token: string | null) => void
@@ -24,6 +26,7 @@ interface AdminStore {
   showReauthDialog: () => void
   hidePasswordDialog: () => void
   logout: () => void
+  setAdminAvatarUrl: (url: string) => void
 }
 
 export const useAdminStore = create<AdminStore>((set) => ({
@@ -32,6 +35,7 @@ export const useAdminStore = create<AdminStore>((set) => ({
   isAuthenticated: false,
   showPasswordDialog: false,
   passwordDialogPurpose: 'login',
+  adminAvatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede',
 
   setActiveMenuKey: (key) => set({ activeMenuKey: key }),
   setAdminToken: (token) => {
@@ -46,6 +50,7 @@ export const useAdminStore = create<AdminStore>((set) => ({
     setApiToken(null)
     set({ adminToken: null, isAuthenticated: false })
   },
+  setAdminAvatarUrl: (url) => set({ adminAvatarUrl: url }),
 }))
 
 export function useAdminAuth() {

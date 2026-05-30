@@ -6,7 +6,7 @@ from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
 from src.clients.backend_client import BackendClient
 from src.preview.server import PreviewManager
-from src.rules.builtin import SafetyRule, ScopeRule, SkillRule, TaskctlRule
+from src.rules.builtin import SafetyRule, ScopeRule, SkillRule, SoulRule, TaskctlRule
 from src.rules.engine import RuleEngine
 from src.schemas.request import AgentType
 from src.session.manager import SessionManager
@@ -34,7 +34,7 @@ def create_session_store() -> SessionMappingStore:
 
 
 def create_rule_engine() -> RuleEngine:
-    rules = [SafetyRule(), ScopeRule(), TaskctlRule(), SkillRule()]
+    rules = [SafetyRule(), SoulRule(), ScopeRule(), TaskctlRule(), SkillRule()]
     return RuleEngine(rules)
 
 

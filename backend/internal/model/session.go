@@ -12,6 +12,7 @@ type Session struct {
 	Status      string    `gorm:"size:32;default:running" json:"status"`
 	SettledDiff string    `gorm:"type:longtext" json:"settled_diff,omitempty"`
 	DiffStatus  string    `gorm:"size:32" json:"diff_status,omitempty"`
+	SoulMD      string    `gorm:"size:300" json:"soul_md,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

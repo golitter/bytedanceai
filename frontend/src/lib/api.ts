@@ -179,12 +179,18 @@ export async function createConversation(
   repoPath?: string,
   title?: string,
 ): Promise<Conversation> {
-  // Auto-inject orchestrator when multiple agents are selected
+  // Validate: orchestrator alone is not allowed
   const hasOrchestrator = agents.some((a) => a.type === 'orchestrator')
+  const hasNonOrchestrator = agents.some((a) => a.type !== 'orchestrator')
+  if (hasOrchestrator && !hasNonOrchestrator) {
+    throw new Error('Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent')
+  }
+
+  // Auto-inject orchestrator when multiple agents are selected
   const allAgents = hasOrchestrator
     ? agents
     : agents.length >= 2
-      ? [{ type: 'orchestrator' as AgentType, name: '项目经理' }, ...agents]
+      ? [{ type: 'orchestrator' as AgentType, name: '编排器' }, ...agents]
       : agents
 
   const names = agents.map((a) => a.name || a.type).join(' + ')
@@ -339,6 +345,7 @@ export interface AgentProfile {
   avatar_url?: string
   status: string
   session_id: string
+  soul_md?: string
   skills: AgentSkill[]
 }
 
@@ -351,6 +358,7 @@ export interface AgentDetail {
   task_id: string
   repo_path?: string
   workspace_path?: string
+  soul_md?: string
   created_at: string
   message_count: number
   skills: AgentSkill[]
@@ -368,6 +376,27 @@ export async function fetchAgentDetail(sessionId: string): Promise<AgentDetail> 
   if (!res.ok) throw new Error(`Failed to fetch agent detail: ${res.status}`)
   const json = await res.json()
   return json.data
+}
+
+export async function fetchAgentSoul(
+  sessionId: string,
+): Promise<{ soul_md: string; session_id: string }> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/soul`)
+  if (!res.ok) throw new Error(`Failed to fetch soul: ${res.status}`)
+  const json = await res.json()
+  return json.data
+}
+
+export async function updateAgentSoul(sessionId: string, soulMd: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/soul`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ soul_md: soulMd }),
+  })
+  if (!res.ok) {
+    const json = await res.json()
+    throw new Error(json.msg || 'Failed to update soul')
+  }
 }
 
 // =====================
@@ -516,7 +545,9 @@ export function getAdminStatistics(): Promise<StatisticsResponse> {
 }
 
 export function getAdminAvatar(): Promise<{ url: string }> {
-  return adminFetch<{ url: string }>(`${API_BASE}/admin/avatar`)
+  return fetch(`${API_BASE}/admin/avatar`)
+    .then((res) => res.json())
+    .then((json) => json.data)
 }
 
 export function updateAdminAvatar(url: string): Promise<{ success: boolean }> {

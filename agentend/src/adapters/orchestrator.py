@@ -54,12 +54,19 @@ class OrchestratorAdapter(BaseAgentAdapter):
         repo_path = kwargs.get("repo_path", "")
         workspace_mgr = kwargs.get("workspace_mgr")
         backend_client: BackendClient | None = kwargs.get("backend_client")
+        soul_md = kwargs.get("soul_md", "")
 
         # Orchestrator is a coordinator, not a code worker. Keep its planning
         # tools scoped to shared/.agent; sub-agents read/edit code in their own worktrees.
         allowed_read_dirs = [str(Path(shared_dir).resolve())]
 
         SkillProvisioner().provision(shared_dir, "orchestrator")
+
+        # Write orchestrator's own SOUL.md to shared directory
+        shared_path = Path(shared_dir)
+        shared_path.mkdir(parents=True, exist_ok=True)
+        if soul_md:
+            (shared_path / "SOUL.md").write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
         config = {"configurable": {"thread_id": session_id}}
         ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()

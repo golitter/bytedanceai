@@ -1,6 +1,9 @@
 import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { useHoverStyle } from '@/hooks/use-hover-style'
+import { getAdminAvatar } from '@/lib/api'
+import { useAdminStore } from '@/stores/admin'
 import { type NavTab, useActiveTab } from '@/stores/chat'
 
 interface NavItemProps {
@@ -36,11 +39,27 @@ function NavItem({ icon, label, tab, disabled }: NavItemProps) {
 
 function UserAvatarCard() {
   const hoverStyle = useHoverStyle()
+  const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
+  const setAdminAvatarUrl = useAdminStore((s) => s.setAdminAvatarUrl)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    getAdminAvatar()
+      .then((data) => {
+        setAdminAvatarUrl(data.url)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [setAdminAvatarUrl])
+
+  const displayUrl = loaded
+    ? adminAvatarUrl
+    : 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
 
   return (
     <div className="group relative mb-5">
       <img
-        src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
+        src={displayUrl}
         alt="田乐檬"
         className="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity duration-150 group-hover:opacity-85"
         {...hoverStyle}
@@ -56,11 +75,7 @@ function UserAvatarCard() {
         style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
       >
         <div className="flex items-center gap-2.5">
-          <img
-            src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
-            alt="田乐檬"
-            className="h-10 w-10 rounded-full object-cover"
-          />
+          <img src={displayUrl} alt="田乐檬" className="h-10 w-10 rounded-full object-cover" />
           <div>
             <div className="text-[13px] font-semibold text-foreground">田乐檬</div>
             <div className="text-[11px] text-tertiary">tln · 在线</div>

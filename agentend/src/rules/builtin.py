@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.app.agent_config import get_agent_config_dir
 from src.rules.base import BaseRule
 
@@ -99,4 +101,35 @@ class SkillRule(BaseRule):
                 "workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）。\n"
                 "需要时调用 `./render <子命令>`，将 stdout 包含在回复中。详情见 SKILL.md。"
             ),
+        }
+
+
+class SoulRule(BaseRule):
+    name = "soul"
+    description = "Injects SOUL.md identity document as system prompt"
+    phase = "pre"
+    priority = 8
+
+    def check(self, context: dict) -> bool:
+        return True
+
+    def enforce(self, context: dict) -> dict:
+        workspace_path = context.get("workspace_path", "")
+        agent_type = context.get("agent_type")
+        if not workspace_path or not agent_type:
+            return {}
+        config_dir = get_agent_config_dir(agent_type)
+        if not config_dir:
+            return {}
+        soul_path = Path(workspace_path) / config_dir / "SOUL.md"
+        if not soul_path.is_file():
+            return {}
+        try:
+            content = soul_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            return {}
+        if not content:
+            return {}
+        return {
+            "system_prompt_append": (f"## 你的身份文档 (SOUL.md)\n\n{content}"),
         }

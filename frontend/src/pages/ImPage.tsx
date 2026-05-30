@@ -13,6 +13,7 @@ import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { ServiceHealthPage } from '@/pages/admin/ServiceHealthPage'
 import { SessionCleanupPage } from '@/pages/admin/SessionCleanupPage'
 import { StatisticsPage } from '@/pages/admin/StatisticsPage'
+import { UserManagementPage } from '@/pages/admin/UserManagementPage'
 import { WorkspacePage } from '@/pages/admin/WorkspacePage'
 import { useAdminMenu, useAdminStore } from '@/stores/admin'
 import { useActiveTab, useChatNav } from '@/stores/chat'
@@ -48,6 +49,7 @@ const ADMIN_PAGES: Record<string, React.ComponentType> = {
   agents: AgentOverviewPage,
   services: ServiceHealthPage,
   statistics: StatisticsPage,
+  users: UserManagementPage,
 }
 
 function AdminContent() {

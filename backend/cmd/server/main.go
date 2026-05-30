@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -88,6 +88,8 @@ func main() {
 		api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
 		api.GET("/sessions/:sessionId/profile", agentProfileHandler.GetProfile)
 		api.GET("/sessions/:sessionId/detail", agentProfileHandler.GetDetail)
+		api.GET("/sessions/:sessionId/soul", agentProfileHandler.GetSoul)
+		api.PUT("/sessions/:sessionId/soul", agentProfileHandler.UpdateSoul)
 
 		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
