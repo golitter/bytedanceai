@@ -74,10 +74,10 @@ class WorkspaceManager:
             self._provisioner.provision(ws.worktree_path, agent_type)
             self._provisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 
-            # Write git exclude for agent config directory
+            # Configure worktree-local excludes for agent config directory
             config_dir = get_agent_config_dir(agent_type)
             if config_dir:
-                self._git.write_exclude(ws.worktree_path, [f"/{config_dir}"])
+                await self._git.setup_worktree_excludes(ws.worktree_path, [f"/{config_dir}"])
 
             self._workspaces[ws.id] = ws
             await self._store.save(ws)

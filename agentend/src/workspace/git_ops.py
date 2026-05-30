@@ -132,19 +132,14 @@ class GitOps:
                     return git_dir
         return None
 
-    def write_exclude(self, worktree_path: str, entries: list[str]) -> None:
+    async def setup_worktree_excludes(self, worktree_path: str, patterns: list[str]) -> None:
+        """为 worktree 配置独立的 excludesFile，不影响主仓库。"""
+        await self._run_git("config", "extensions.worktreeConfig", "true", cwd=worktree_path)
         git_dir = self.resolve_git_dir(worktree_path)
         if not git_dir:
             logger.warning("Cannot resolve git dir for worktree: %s", worktree_path)
             return
-        exclude_file = git_dir / "info" / "exclude"
-        exclude_file.parent.mkdir(parents=True, exist_ok=True)
-        existing = exclude_file.read_text() if exclude_file.exists() else ""
-        lines = set(existing.splitlines())
-        new_entries = [e for e in entries if e not in lines]
-        if new_entries:
-            with exclude_file.open("a") as f:
-                if existing and not existing.endswith("\n"):
-                    f.write("\n")
-                f.write("\n".join(new_entries) + "\n")
-            logger.info("Added %s to %s", new_entries, exclude_file)
+        exclude_file = git_dir / "excludes"
+        exclude_file.write_text("\n".join(patterns) + "\n")
+        await self._run_git("config", "--worktree", "core.excludesFile", str(exclude_file), cwd=worktree_path)
+        logger.info("Set worktree excludesFile to %s with patterns %s", exclude_file, patterns)
