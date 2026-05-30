@@ -126,6 +126,7 @@ src/
 │   │   ├── AgentHoverCard.tsx        # Agent 悬停卡片（Popover + 技能预览 + 跳转详情页）
 │   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
 │   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
+│   │   ├── AskAgentCard.tsx          # 跨 Agent 提问卡片（源 → 目标 Agent + 问答展示）
 │   │   ├── SkillCard.tsx             # Agent 技能卡片（名称 + 描述 + builtin 标记）
 │   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │
@@ -160,6 +161,7 @@ src/
 │   │
 │   └── ui/                           # shadcn/ui 基础组件
 │       ├── dialog.tsx
+│       ├── error-boundary.tsx
 │       └── popover.tsx
 │
 ├── hooks/

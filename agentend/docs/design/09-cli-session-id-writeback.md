@@ -19,7 +19,7 @@
 
 #### `src/api/v1/agent.py`
 
-1. **`_resolve_session`**：移除 `uuid.uuid4()` 预生成逻辑。mapping 为空时返回 `("", False)`；有值时返回 `(stored_id, True)`
+1. **`_resolve_session`**：mapping 为空时创建新 session 并返回 `(session.id, "", False)`；有值时返回 `(session.id, stored_id, True)`
 2. **`_execute_stream`**：新增 `session_store` 参数。收到 INIT 事件时提取 `cli_session_id` 写回 mapping
 3. **`agent_execute`**：用内联 `_collect()` 替代 `adapter.chat()`，流式收集文本的同时在 INIT 事件时回写 mapping
 4. kwargs key 统一为 `"cli_session_id"`，新增 `from src.schemas.events import EventType`

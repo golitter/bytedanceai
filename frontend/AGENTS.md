@@ -41,6 +41,7 @@ make status                # 查看状态
 ```
 
 - Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
+- 排查问题查看 `../logs/frontend.log`
 
 ## 详细文档
 

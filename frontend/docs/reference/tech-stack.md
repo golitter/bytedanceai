@@ -48,7 +48,7 @@
 | @tanstack/react-query | ^5.100.11 | 服务端状态管理 + 数据缓存 |
 | @tanstack/react-virtual | ^3.13.25 | 虚拟滚动（消息列表性能优化） |
 
-Store 位于 `src/stores/chat.ts`，管理聊天导航（currentSessionId）及各会话独立的消息/流式/分页状态。QueryClient 在 `main.tsx` 中注入。
+Store 位于 `src/stores/chat.ts` 和 `src/stores/admin.ts`，管理聊天导航（currentSessionId）及各会话独立的消息/流式/分页状态。QueryClient 在 `main.tsx` 中注入。
 
 ## Markdown 与代码高亮
 
@@ -97,12 +97,13 @@ frontend/
     │   ├── im/             # 会话列表模块
     │   ├── cards/          # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
     │   ├── diff/           # Diff 查看器（多文件 tab + 可编辑 CodeMirror）
+    │   ├── layout/         # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog）
     │   ├── markdown/       # Markdown 渲染
     │   └── ui/             # shadcn/ui 基础组件
     ├── pages/              # 页面
     ├── hooks/              # 自定义 Hooks
     ├── stores/             # Zustand Store
-    ├── lib/                # 工具库（api, sse, constants, utils, block-reducer, diff-parser）
+    ├── lib/                # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser）
     ├── utils/              # 工具函数（time.ts）
     └── generated/          # 契约生成的 TypeScript 类型
 ```

@@ -42,8 +42,8 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
 │   ├── orchestrator/   # Orchestrator 规划模块
-│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
-│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
+│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
+│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + state + wave）
 │   │   ├── memory/     #   持久记忆（pin_memory + evolution）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）

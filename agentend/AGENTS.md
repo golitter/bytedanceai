@@ -16,7 +16,7 @@ src/
 ├── rules/                   # 规则引擎（Safety / Scope / Taskctl）
 ├── schemas/                 # 数据模型（request, response, events）
 ├── session/                 # 会话管理（状态机 + 持久化）
-├── skills/                  # 技能供给系统（内置 taskctl）
+├── skills/                  # 技能供给系统（内置 taskctl + render）
 ├── workspace/               # 工作区管理（Git Worktree 隔离）
 └── generated/               # 契约生成的 Python 类型（勿手改）
 
@@ -39,6 +39,7 @@ make status                # 查看状态
 ```
 
 - Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
+- 排查问题查看 `../logs/agentend.log`
 
 ## 详细文档
 

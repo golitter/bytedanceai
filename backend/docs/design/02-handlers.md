@@ -212,7 +212,8 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 	}
 
 	var messages []model.Message
-	query.Order("created_at ASC").Limit(limit + 1).Find(&messages)
+	query.Order("id DESC").Limit(limit + 1).Find(&messages)
+	messages = reverseMessages(messages)
 
 	hasMore := len(messages) > limit
 	if hasMore {

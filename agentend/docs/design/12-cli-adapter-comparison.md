@@ -33,7 +33,7 @@
 
 | Adapter | 命令模板 |
 |---------|----------|
-| Claude | `claude -p <MSG> --output-format stream-json --verbose --include-partial-messages` |
+| Claude | `claude -p <MSG> --output-format stream-json --verbose --include-partial-messages --dangerously-skip-permissions` |
 | OpenCode | `opencode run <MSG> --format json` |
 | Codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins -s danger-full-access <MSG>` |
 

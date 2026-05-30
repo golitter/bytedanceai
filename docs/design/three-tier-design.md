@@ -201,7 +201,7 @@ agentend/src/
 │   ├── opencode.py
 │   └── orchestrator.py
 ├── orchestrator/         # 保留 LangGraph，只做 Planner Engine
-│   ├── graph.py          # LangGraph DAG (plan → dispatch → aggregate)
+│   ├── graph.py          # LangGraph 7-node StateGraph (skill_prepare → reason → dispatch → execute → review → evolve → save_mem)
 │   ├── models.py
 │   ├── prompts.py
 │   └── ...
@@ -270,7 +270,7 @@ LangGraph 职责范围：
 ```
 
 演进路线：
-1. 当前：`plan → write_shared` 线性管道
+1. 当前：7 节点状态机 `skill_prepare → reason → dispatch → execute → review → evolve → save_mem`，conditional routing + ask_agent 工具支持
 2. 下一步：加入 `dispatch → collect → aggregate` 节点，形成闭环
 3. 未来：条件分支（task 失败重规划）
 

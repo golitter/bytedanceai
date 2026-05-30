@@ -2,7 +2,7 @@
 
 ## 问题
 
-`plan_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
+`reason_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
 
 ### 根因
 
@@ -22,7 +22,7 @@ LLM 只看到一段文本，不知道：
 
 将工具返回值包裹为 JSON 结构，让 LLM 在后续轮次中拥有完整的工具调用上下文。
 
-**改动范围**：只动 `plan_node` 中 ToolMessage 构造，不改 graph 拓扑。
+**改动范围**：只动 `reason_node` 中 ToolMessage 构造，不改 graph 拓扑。
 
 ### 结构化 ToolMessage
 
@@ -49,7 +49,7 @@ LLM 只看到一段文本，不知道：
 
 | 文件 | 改动 |
 |------|------|
-| `agentend/src/orchestrator/planning/graph.py` | `plan_node` 中 ToolMessage 构造改为 JSON 包裹 |
+| `agentend/src/orchestrator/planning/graph.py` | `reason_node` 中 ToolMessage 构造改为 JSON 包裹 |
 
 ## 验证
 

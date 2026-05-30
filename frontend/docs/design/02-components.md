@@ -100,7 +100,7 @@ Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，
 
 ```tsx
 export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentName, avatarUrl, repoPath }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId, sessionId)
+  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
 ```
 

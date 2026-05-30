@@ -38,6 +38,7 @@ make tidy                   # go mod tidy
 ```
 
 - Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
+- 排查问题查看 `../logs/backend.log`
 
 ## 详细文档
 

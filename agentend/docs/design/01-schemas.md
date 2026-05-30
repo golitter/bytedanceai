@@ -24,7 +24,7 @@ class AgentRequest(BaseModel):         # generated 基类
     agent_type: AgentType = CLAUDE_CODE    # Agent 类型（枚举）
     stream: bool = True                    # 是否流式返回
     system_prompt: str | None = None       # 自定义系统提示词
-    rules: list[str] = []                  # 规则名称列表（schemas 层扩展）
+    rules: list[str] = Field(default_factory=list)   # 规则名称列表（schemas 层扩展）
     workspace_path: str | None = None      # 工作空间路径
     repo_path: str | None = None           # Git 仓库路径（自动创建 worktree）
     config: dict | None = None             # 额外配置（如 allowed_tools）
@@ -38,8 +38,8 @@ class AgentRequest(BaseModel):         # generated 基类
 class AgentResponse(BaseModel):
     session_id: str              # 会话 ID
     content: str                 # Agent 输出的文本内容
-    artifacts: list[dict] = []   # 产物列表（如生成的文件）
-    usage: dict = {}             # Token 使用量
+    artifacts: list[dict] = Field(default_factory=list)   # 产物列表（如生成的文件）
+    usage: dict = Field(default_factory=dict)             # Token 使用量
 ```
 
 ### StreamEvent (`src/schemas/events.py`)
@@ -62,6 +62,8 @@ class EventType(str, Enum):
     COORDINATION_START = "coordination_start"   # 协调开始
     COORDINATION_MESSAGE = "coordination_message" # 协调消息
     COORDINATION_DONE = "coordination_done"     # 协调完成
+    ASK_CARD_START = "ask_card_start"           # 跨 Agent 提问开始
+    ASK_CARD_DONE = "ask_card_done"             # 跨 Agent 提问完成
 
 class StreamEvent(_StreamEvent):   # generated 基类中 type: EventType，schemas 层覆盖为 str
     type: str                  # EventType 枚举值（字符串形式）

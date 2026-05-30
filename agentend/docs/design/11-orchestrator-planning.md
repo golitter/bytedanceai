@@ -2,46 +2,38 @@
 
 ## 实现了什么
 
-Orchestrator 作为任务编排器，从"写文件就结束"的无状态脚本升级为 **plan → dispatch → collect → aggregate** 闭环编排器。
+Orchestrator 作为任务编排器，通过 LangGraph 7 节点状态机实现 **skill_prepare → reason（含 ask_agent 工具调用）→ dispatch → execute → review → evolve → save_mem** 闭环编排。
 
-核心闭环：
-1. **Planner** — LLM 拆解用户需求为子任务（注入 Pin 约束 + 历史经验）
-2. **Dispatcher** — 产出 `@agent` 调度指令（结构化 JSON，由前端/Go Backend 消费）
-3. **Collect** — 收集 Agent 执行结果（通过 `results_callback` 参数）
-4. **Aggregator** — LLM 汇总多 Agent 结果为人类可读报告
-5. **Evolution** — 每次编排后记录成败经验，注入下次 Planner prompt
+核心功能：
+1. **Skill Prepare** — L1→L2 技能发现与加载，构造 REASON_PROMPT
+2. **Reason** — LLM tool-calling 循环：支持 read_file / list_dir / ask_agent / plan_and_dispatch 等工具
+3. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
+4. **Execute** — ExecutionEngine 按波次执行（short-circuit CLI 或 HTTP fallback）
+5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
+6. **Evolve** — 记录编排经验到 EvolutionStore
+7. **Save Mem** — 保存记忆，yield terminal DONE 事件
+
+`ask_agent` 工具允许 Reason 阶段向特定 Agent 提问（通过 BackendClient → Go Backend → agentend 流式获取回答），结果用于 Planner 做决策。
 
 ## 整体架构
 
 ```
-POST /v1/agent/execute (agent_type=orchestrator)
+POST /v1/agent/stream (agent_type=orchestrator)
         │
         ▼
-  OrchestratorAdapter
+  OrchestratorAdapter.stream_chat()
         │
         ▼
-  LangGraph StateGraph
-   ┌────┴────┐
-   │  plan   │ ← LLM (Pin + Evolution 注入 prompt)
-   │  node   │
-   └────┬────┘
-   ┌────▼────┐
-   │ write_  │ ← 文件 IO
-   │ shared  │
-   └────┬────┘
+  LangGraph StateGraph (7 nodes, conditional routing)
         │
-        ▼ plan → dispatch → collect → aggregate
-        │
-   ┌────▼────────┐
-   │ Dispatcher  │ → 产出 @agent 调度 JSON
-   └────┬────────┘
-        │ (results_callback)
-   ┌────▼────────┐
-   │ Aggregator  │ ← LLM 汇总 Agent 结果
-   └────┬────────┘
-   ┌────▼────────┐
-   │ Evolution   │ ← 记录编排经验
-   └─────────────┘
+   skill_prepare ──▶ reason ──▶ dispatch ──▶ execute ──▶ review
+                        │                      ▲          │
+                        │ (ask_agent)          │  (needs_replan=true)
+                        │                      │          │
+                        └── BackendClient ─────┘          │
+                                     │               evolve ──▶ save_mem
+                                     ▼
+                              Go Backend ──▶ agentend
 ```
 
 ## 文件结构
@@ -49,34 +41,29 @@ POST /v1/agent/execute (agent_type=orchestrator)
 ```
 src/
 ├── orchestrator/
-│   ├── __init__.py
 │   ├── models.py            # TaskDef, PlanOutput, TaskResult, DispatchResult
 │   ├── planning/
-│   │   ├── __init__.py
-│   │   ├── graph.py         # LangGraph (plan → write_shared)
-│   │   ├── prompts.py       # PLAN_PROMPT + build_planner_prompt()
-│   │   ├── tools.py         # 规划工具（skill_loader 等）
-│   │   └── skill_loader.py  # 技能加载器
+│   │   ├── graph.py         # LangGraph 7-node StateGraph（含 ask_agent 处理 + conditional routing）
+│   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
+│   │   ├── tools.py         # 规划工具（read_file, list_dir, ask_agent, plan_and_dispatch 等）
+│   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载
 │   ├── execution/
-│   │   ├── __init__.py
-│   │   ├── engine.py        # ExecutionEngine（Agent 调度执行）
-│   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult)
-│   │   ├── coordination.py  # 协调模块（Agent 间通信）
+│   │   ├── engine.py        # ExecutionEngine（short-circuit CLI 或 HTTP fallback）
+│   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult) + topological_sort
+│   │   ├── coordination.py  # CoordinationChannel（Agent 间 Q&A）
 │   │   ├── state.py         # TaskState enum + RuntimeState
-│   │   └── wave.py          # Wave 执行（按依赖波次并行）
+│   │   └── wave.py          # Wave 执行子图（占位）
 │   ├── memory/
-│   │   ├── __init__.py
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
 │   │   └── evolution.py     # EvolutionStore (evolution.yaml)
 │   └── reporting/
-│       ├── __init__.py
 │       └── aggregator.py    # Aggregator (LLM 汇总)
 ├── adapters/
-│   └── orchestrator.py      # OrchestratorAdapter (闭环逻辑)
+│   └── orchestrator.py      # OrchestratorAdapter（LangGraph stream + ask_event_queue）
 ├── clients/
 │   └── backend_client.py    # BackendClient（与 Go Backend 通信）
 └── api/v1/
-    ├── agent.py             # _orchestrator_kwargs()
+    ├── agent.py             # _orchestrator_kwargs() + _resolve_workspace()
     └── pin.py               # /v1/pin/* 端点
 ```
 
@@ -115,35 +102,37 @@ class DispatchResult(BaseModel):      # 新增
 
 ### 闭环流程 (`src/adapters/orchestrator.py`)
 
-`OrchestratorAdapter.stream_chat` 内部串联五个阶段：
+`OrchestratorAdapter.stream_chat` 使用异步事件队列模式驱动 LangGraph 流：
 
-1. **Planning** — 调用 LangGraph graph 执行 plan + write_shared
-2. **Dispatch** — `Dispatcher.dispatch(plan)` 产出 `list[DispatchResult]`，逐个 yield dispatch 事件
-3. **Collect** — 如果调用方传入 `results_callback`，用它获取 Agent 执行结果；否则使用 mock
-4. **Aggregate** — `Aggregator.aggregate(results, overview)` 调用 LLM 汇总，yield DONE 事件
-5. **Evolution** — `EvolutionStore.record()` 记录本次编排成败经验
+1. **Graph 流式执行** — `self._graph.astream()` 产生 node update 频率
+2. **Ask 事件队列** — `asyncio.Queue` 收集 ask_agent 的 ASK_CARD_START/ASK_CARD_DONE 事件，与 graph updates 并行消费
+3. **Execute 节点** — `_handle_execute` 接管 Wave-by-Wave 执行，yield RUNTIME_EXECUTING/TEXT/COMPLETED 事件
+4. **Aggregation** — 执行完毕后 `Aggregator.aggregate()` 汇总，yield terminal DONE
 
 ```python
 async def stream_chat(self, session_id, message, **kwargs):
-    # Phase 1: Planning
-    yield StreamEvent.create(EventType.PLANNING, status="started")
-    result = await self._graph.ainvoke({...})
+    # 构造 GraphState 初始状态
+    initial_state = {
+        "message": message, "agents": agents, "orchestrator": orchestrator,
+        "task_id": task_id, "shared_dir": shared_dir, ...
+    }
 
-    # Phase 2: Dispatch
-    dispatcher = Dispatcher(agents)
-    dispatch_results = dispatcher.dispatch(plan)
-    for dr in dispatch_results:
-        yield StreamEvent.create(EventType.PLANNING, node="dispatch", dispatch=dr.model_dump())
+    # 设置 ContextVar：ask_event_queue, backend_client, cwd
+    tokens = set_reason_runtime_context(
+        ask_event_queue=ask_event_queue,
+        backend_client=backend_client,
+        cwd=cwd,
+    )
 
-    # Phase 3: Collect
-    task_results = await results_callback(dispatch_results) if results_callback else [...]
-
-    # Phase 4: Aggregate
-    aggregated = Aggregator().aggregate(task_results, overview)
-
-    # Phase 5: Record experience
-    EvolutionStore(shared_dir).record(...)
-    yield StreamEvent.create(EventType.DONE, text=aggregated)
+    # async stream graph updates
+    async for chunk in self._graph.astream(initial_state, stream_mode="updates"):
+        node_name = next(iter(chunk))
+        if node_name == "reason":
+            yield from self._handle_reason(node_output)
+        elif node_name == "execute":
+            yield from self._handle_execute(...)
+        elif node_name == "save_mem":
+            yield self._build_done_event(current_state)
 ```
 
 ### Dispatcher (`src/orchestrator/execution/dispatcher.py`)
@@ -154,14 +143,26 @@ async def stream_chat(self, session_id, message, **kwargs):
 
 LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出人类可读的汇总报告。如果无结果，返回空字符串。
 
-### Planner Prompt 升级 (`src/orchestrator/planning/prompts.py`)
+### REASON Prompt (`src/orchestrator/planning/prompts.py`)
 
-`build_planner_prompt()` 在 `PLAN_PROMPT` 基础上注入两个可选上下文：
+`build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入可选上下文：
 
-- **Pin 约束** — `PinMemory.get_context()` 返回 "## 必须遵守的约束（Pin）" 段落
-- **历史经验** — `EvolutionStore.get_recent_experience()` 返回 "## 最近编排经验" 段落
+- **技能描述** — L2 skill 内容作为 "## 可用 Skills" 段落注入
+- **Pin 约束** — `PinMemory.get_context()` 返回约束段落
+- **历史经验** — `EvolutionStore.get_recent_experience()` 返回最近的编排经验
 
-`graph.py` 的 `plan_node` 已改为调用 `build_planner_prompt()` 而非 `PLAN_PROMPT.format()`。
+`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `current_time` 等工具的使用规则。
+
+### Ask Agent (`src/orchestrator/planning/graph.py:_handle_ask_agent_call`)
+
+Reason 阶段 LLM 可调用 `ask_agent(agent, question)` 向特定 Agent 提问，通过 BackendClient → Go Backend → agentend 流式获取回答。实现要点：
+
+- 从 `state["agents"]` 中查找目标 agent 的 `session_id`
+- 调用 `BackendClient.run_task()` 发送任务到 Go Backend
+- 通过 `BackendClient.stream_result()` 订阅 SSE 流
+- 向 `ask_event_queue` 推送 `ASK_CARD_START`/`ASK_CARD_DONE` 事件供前端渲染
+- 设置 180 秒总超时 + 3 次 `run_task` 重试
+- 返回值直接作为 ToolMessage 注入 REASON 的 tool-calling 循环
 
 ### Pin Memory (`src/orchestrator/memory/pin_memory.py`)
 
@@ -208,7 +209,7 @@ class RuntimeState:
 ## 调用示例
 
 ```bash
-curl -X POST http://localhost:8001/v1/agent/execute \
+curl -X POST http://localhost:8001/v1/agent/stream \
   -H 'Content-Type: application/json' \
   -d '{
     "task_id": "orch-test",

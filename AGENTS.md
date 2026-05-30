@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契约层（contracts）统一跨端类型定义。多 Agent 聊天系统，支持 Claude Code、OpenCode CLI、Orchestrator 三类 Agent，具备实时 SSE 流式通信、会话管理、工作区隔离、技能供给等能力。
+Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契约层（contracts）统一跨端类型定义。多 Agent 聊天系统，支持 Claude Code、OpenCode CLI、Codex CLI、Orchestrator 四类 Agent，具备实时 SSE 流式通信、会话管理、工作区隔离、技能供给等能力。
 
 ## 目录结构
 
@@ -13,15 +13,20 @@ bytedanceai/
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md
 ├── contracts/     # 三端共享契约（schemas + logs）→ 参见 contracts/AGENTS.md
 ├── docs/          # 项目文档
-│   ├── design/    #   架构设计（三层架构设计）
-│   ├── reference/ #   参考文档（skills）
-│   ├── guides/    #   操作指南（Git 规范、Makefile 指南、契约层说明）
+│   ├── design/    #   架构设计
+│   ├── reference/ #   参考文档
+│   ├── guides/    #   操作指南
 │   ├── testing/   #   测试手册
+│   ├── bugfix/    #   历史缺陷修复记录
 │   └── common/    #   开发路线图（dev-plan）
 ├── scripts/       # 工程脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
+├── logs/          # 运行日志（run.sh 启动时自动生成）
+│   ├── frontend.log         #   Vite dev server 日志
+│   ├── backend.log          #   Air / Go 后端日志
+│   └── agentend.log         #   uvicorn / Agent 端日志
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）
 ```
@@ -30,7 +35,7 @@ bytedanceai/
 
 ## Makefile
 
-通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)。
+通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)。排查问题时查看 `logs/` 目录下的三端日志（`frontend.log` / `backend.log` / `agentend.log`）。
 
 
 ## 契约优先原则

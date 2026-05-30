@@ -203,7 +203,7 @@ func (sw *StreamWriter) publishToRedis(line string) {
 TEXT 事件通过 `bufferTextLine` 批量合并后写入 Redis（冷路径），但每个 token 已经通过 Hub 立即推送到 SSE 订阅者（热路径）：
 
 ```go
-func (sw *StreamWriter) bufferTextLine(line string) {
+func (sw *StreamWriter) bufferTextLine(line string, text string) {
 	Hub.Publish(sw.streamKey, line) // Hot path: immediate
 	// Cold path: buffer for batched Redis publish
 	sw.textBuf = append(sw.textBuf, line)
@@ -267,22 +267,22 @@ func (sw *StreamWriter) doFlush() {
 
 ### 结束与清理
 
-流结束后发送 DONE 事件到 Hub，关闭 Hub stream，设置 Redis key 600 秒 TTL，从注册表移除：
+流结束后关闭 Hub stream（`ServeStream` 层的 SSE handler 负责向订阅者发送终端 DONE 事件），设置 Redis key 600 秒 TTL，从注册表移除：
 
 ```go
 func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
 
-	// Guarantee a DONE event reaches SSE subscribers
-	Hub.Publish(sw.streamKey, "data: {\"type\":\"done\"}")
-	// Close hub stream — notifies SSE subscribers
+	// Close hub stream — ServeStream emits the terminal DONE to subscribers
 	Hub.Close(sw.streamKey)
 
 	// Set Redis EXPIRE on the stream
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL)
+		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
+			slog.Warn("failed to set stream expire", "key", sw.streamKey, "error", err)
+		}
 	}
 	registry.Delete(sw.originalMessageID)
 }

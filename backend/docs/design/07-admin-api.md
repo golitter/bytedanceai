@@ -46,7 +46,11 @@ func (h *AdminHandler) Auth(c *gin.Context) {
         vo.Unauthorized(c, "密码错误")
         return
     }
-    token, _ := middleware.GenerateAdminToken(h.cfg.JWT.Secret)
+    token, err := middleware.GenerateAdminToken(h.cfg.JWT.Secret)
+    if err != nil {
+        vo.InternalError(c, "generate admin token failed")
+        return
+    }
     vo.OK(c, gin.H{"token": token, "expires_in": 3600})
 }
 ```

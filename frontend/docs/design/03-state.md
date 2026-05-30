@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview）。
+三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview / plan / runtime_status / coordination / ask_agent / tool_call / tool_result）。
 
 ## 怎么实现的
 
@@ -288,7 +288,7 @@ export function useCreateConversation() {
 核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort }`：
 
 ```typescript
-export function useChatStream(taskId: string, sessionId: string) {
+export function useChatStream(taskId: string, sessionId: string, agentType: AgentType = 'claude-code') {
   const store = useChatStore()
   const abortRef = useRef<AbortController | null>(null)
 

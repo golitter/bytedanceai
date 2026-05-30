@@ -441,7 +441,7 @@ Reconcile 规则：
 ```yaml
 workspace:
   base_dir: ...              # worktree 根目录
-  cleanup_interval: 300      # inactive 清理检查间隔（秒）
+  cleanup_interval: 7200     # inactive 清理检查间隔（秒）
   store_path: logs/workspaces.json
   git_default_branch: main
 

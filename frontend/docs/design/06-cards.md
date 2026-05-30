@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 `MessageBlock` 类型的九种渲染卡片，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、工具调用）以独立 UI 卡片呈现。所有卡片从 `components/cards/index.ts` 统一导出。
+基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、工具调用）以独立 UI 卡片呈现。9 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
 
 ## 怎么实现的
 
