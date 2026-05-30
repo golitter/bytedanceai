@@ -213,10 +213,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
         output_type = node_output.get("output_type", "")
 
         if output_type == "text":
+            text = node_output.get("text", "")
+            if not text:
+                return events
             events.append(
                 StreamEvent.create(
                     EventType.TEXT,
-                    text=node_output.get("text", ""),
+                    text=text,
                     agent="Orchestrator",
                     agent_type="orchestrator",
                 )

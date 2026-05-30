@@ -280,9 +280,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         (session.streamingAgentType && session.streamingAgentType !== agentType) ||
         (session.streamingAgentName && session.streamingAgentName !== agentName)
 
-      if (agentChanged && session.streamingContent.trim()) {
-        // Agent switched mid-stream — finalize current content as a separate message
-        const blocks = reduceEventToBlocks(session.streamingContent)
+      if (agentChanged && (session.streamingContent.trim() || session.runtimeBlocks.length > 0)) {
+        // Agent switched mid-stream — finalize the previous agent's message
+        // before routing subsequent chunks to the next speaker.
+        const blocks = [
+          ...session.runtimeBlocks,
+          ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
+        ]
         const prevMessage: ChatMessage = {
           id: `agent-${Date.now()}`,
           role: 'agent',
@@ -302,6 +306,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               streamingContent: '',
               streamingAgentType: agentType,
               streamingAgentName: agentName,
+              runtimeBlocks: [],
             },
           },
         }
