@@ -1,4 +1,6 @@
+import { ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 
 import {
   AttachmentCard,
@@ -12,10 +14,12 @@ import {
   ToolCard,
 } from '@/components/cards'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 import { AGENT_COLORS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 import { AgentHoverCard } from './AgentHoverCard'
 import { AskAgentCard } from './AskAgentCard'
@@ -24,16 +28,18 @@ function BlockRenderer({
   block,
   sessionId,
   agentSessionLookup,
+  expandedPreview,
 }: {
   block: MessageBlock
   sessionId?: string
   agentSessionLookup?: Map<string, AgentSessionInfo>
+  expandedPreview?: boolean
 }) {
   switch (block.type) {
     case 'text':
       return <MarkdownRenderer content={block.content} />
     case 'html-render':
-      return <HtmlCard content={block.content} />
+      return <HtmlCard content={block.content} expanded={expandedPreview} />
     case 'image':
       return <ImageCard path={block.path} sessionId={sessionId} />
     case 'attachment':
@@ -105,6 +111,8 @@ interface AgentBubbleProps extends BaseProps {
   agentName?: string
   status?: 'ready' | 'running' | 'offline' | 'error'
   isStreaming?: boolean
+  isLong?: boolean
+  isStructured?: boolean
 }
 
 interface SystemBubbleProps extends BaseProps {
@@ -112,6 +120,95 @@ interface SystemBubbleProps extends BaseProps {
 }
 
 type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
+
+const AGENT_TEXT_WIDTH = 'max-w-[min(68vw,38rem)]'
+const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(68vw,46rem)]'
+
+function AgentMessageContent({
+  blocks,
+  children,
+  sessionId,
+  agentSessionLookup,
+  isStreaming,
+  isLong,
+}: {
+  blocks?: MessageBlock[]
+  children?: ReactNode
+  sessionId?: string
+  agentSessionLookup?: Map<string, AgentSessionInfo>
+  isStreaming?: boolean
+  isLong?: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
+  const hasBlocks = blocks && blocks.length > 0
+
+  const renderContent = (expandedPreview = false) => (
+    <div className="min-w-0 max-w-full space-y-3">
+      {hasBlocks
+        ? blocks!.map((block) => (
+            <BlockRenderer
+              key={block.id}
+              block={block}
+              sessionId={sessionId}
+              agentSessionLookup={agentSessionLookup}
+              expandedPreview={expandedPreview}
+            />
+          ))
+        : children}
+      {isStreaming && <span className="inline-block animate-pulse text-foreground">▌</span>}
+    </div>
+  )
+
+  if (!isLong) {
+    return renderContent()
+  }
+
+  return (
+    <>
+      <div className="mb-2 flex items-center justify-end gap-1 border-b border-border/70 pb-2">
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={() => setExpanded((value) => !value)}
+          title={expanded ? '收起' : '展开'}
+        >
+          {expanded ? (
+            <ChevronUp className="h-4 w-4" strokeWidth={1.5} />
+          ) : (
+            <ChevronDown className="h-4 w-4" strokeWidth={1.5} />
+          )}
+        </button>
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={() => setZoomed(true)}
+          title="放大"
+        >
+          <Maximize2 className="h-4 w-4" strokeWidth={1.5} />
+        </button>
+      </div>
+
+      <div
+        className={cn(
+          'min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-2',
+          expanded ? 'h-[min(60vh,32rem)]' : 'h-[18rem]',
+        )}
+      >
+        {renderContent()}
+      </div>
+
+      <Dialog open={zoomed} onOpenChange={setZoomed}>
+        <DialogContent className="flex h-[min(86vh,900px)] max-h-[86vh] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0">
+          <DialogTitle className="sr-only">消息详情</DialogTitle>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 pr-8">
+            {renderContent(true)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
 
 export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
@@ -130,7 +227,8 @@ export function MessageBubble(props: MessageBubbleProps) {
   }
 
   if (props.variant === 'agent') {
-    const hasBlocks = props.blocks && props.blocks.length > 0
+    const bubbleWidth =
+      props.isStructured || props.isLong ? AGENT_STRUCTURED_WIDTH : AGENT_TEXT_WIDTH
 
     return (
       <div className="flex max-w-full min-w-0 gap-3">
@@ -143,28 +241,27 @@ export function MessageBubble(props: MessageBubbleProps) {
             status={props.status}
           />
         </div>
-        <div className="relative min-w-0 max-w-[min(80%,56rem)] overflow-hidden rounded-[10px] bg-card px-4 py-3 text-sm [overflow-wrap:anywhere]">
+        <div
+          className={cn(
+            bubbleWidth,
+            'relative min-w-0 overflow-hidden rounded-[10px] bg-card px-4 py-3 text-sm [overflow-wrap:anywhere]',
+          )}
+        >
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
               backgroundColor: AGENT_COLORS[props.agentType] ?? 'var(--primary)',
             }}
           />
-          <div className="min-w-0 max-w-full space-y-3">
-            {hasBlocks
-              ? props.blocks!.map((block) => (
-                  <BlockRenderer
-                    key={block.id}
-                    block={block}
-                    sessionId={props.sessionId}
-                    agentSessionLookup={props.agentSessionLookup}
-                  />
-                ))
-              : props.children}
-            {props.isStreaming && (
-              <span className="inline-block animate-pulse text-foreground">▌</span>
-            )}
-          </div>
+          <AgentMessageContent
+            blocks={props.blocks}
+            sessionId={props.sessionId}
+            agentSessionLookup={props.agentSessionLookup}
+            isStreaming={props.isStreaming}
+            isLong={props.isLong}
+          >
+            {props.children}
+          </AgentMessageContent>
         </div>
       </div>
     )
