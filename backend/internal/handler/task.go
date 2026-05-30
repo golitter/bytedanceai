@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"agenthub/backend/internal/generated"
@@ -293,23 +294,33 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		if agentType == "orchestrator" {
 			var siblings []model.Session
 			db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
-			var agents []map[string]string
+			var agents []map[string]interface{}
 			for _, s := range siblings {
-				agents = append(agents, map[string]string{
-					"id":         s.AgentName,
+				agentID := s.AgentName
+				if agentID == "" {
+					agentID = s.AgentType
+				}
+				agents = append(agents, map[string]interface{}{
+					"id":         agentID,
 					"type":       s.AgentType,
 					"session_id": s.SessionID,
-					"name":       s.AgentName,
+					"name":       agentID,
 				})
 			}
-			if len(agents) > 0 {
-				config := map[string]interface{}{
-					"agents":  agents,
-					"task_id": taskID,
-				}
-				configIface := interface{}(config)
-				agentReq.Config = &configIface
+			config := map[string]interface{}{
+				"agents":  agents,
+				"task_id": taskID,
 			}
+			if task.RepoPath != "" {
+				repoPath := task.RepoPath
+				if absRepoPath, err := filepath.Abs(task.RepoPath); err == nil {
+					repoPath = absRepoPath
+				}
+				config["repo_path"] = repoPath
+				config["shared_dir"] = filepath.Join(filepath.Dir(repoPath), "worktrees", taskID, "shared", ".agent")
+			}
+			configIface := interface{}(config)
+			agentReq.Config = &configIface
 		}
 
 		resp, err := h.agentClient.StreamAgent(agentReq)

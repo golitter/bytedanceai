@@ -50,9 +50,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         workspace_mgr = kwargs.get("workspace_mgr")
         backend_client: BackendClient | None = kwargs.get("backend_client")
 
+        # Orchestrator is a coordinator, not a code worker. Keep its planning
+        # tools scoped to shared/.agent; sub-agents read/edit code in their own worktrees.
         allowed_read_dirs = [str(Path(shared_dir).resolve())]
-        if cwd:
-            allowed_read_dirs.append(str(Path(cwd).resolve()))
 
         SkillProvisioner().provision(shared_dir, "orchestrator")
 

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Annotated, TypedDict
 
+import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -85,6 +86,66 @@ def _clean_ai_message(msg: AIMessage) -> AIMessage:
         return msg
     kw = {k: v for k, v in msg.additional_kwargs.items() if k != "reasoning_content"}
     return AIMessage(content=msg.content, tool_calls=msg.tool_calls, additional_kwargs=kw, id=msg.id)
+
+
+def _write_shared_plan(
+    shared_dir: str,
+    task_id: str,
+    plan: PlanOutput,
+    dispatch_results: list[DispatchResult],
+) -> None:
+    """Write the orchestration plan into shared/.agent for taskctl consumers."""
+    shared = Path(shared_dir).resolve()
+    plans_dir = shared / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    (shared / "memory" / "common").mkdir(parents=True, exist_ok=True)
+
+    (plans_dir / "overview.md").write_text(plan.overview, encoding="utf-8")
+
+    config_tasks: list[dict] = []
+    by_task_id = {dr.task_id: dr for dr in dispatch_results}
+    for task in plan.tasks:
+        plan_file = f"plans/{task.task_id}.md"
+        dr = by_task_id.get(task.task_id)
+        session_id = dr.real_session_id if dr and dr.real_session_id else task.session_id
+        agent_id = dr.agent if dr else task.session_id
+        agent_type = dr.agent_type if dr else ""
+
+        body = "\n".join(
+            [
+                f"# {task.title or task.task_id}",
+                "",
+                f"- task_id: {task.task_id}",
+                f"- agent: {agent_id}",
+                f"- agent_type: {agent_type}",
+                f"- session_id: {session_id}",
+                "",
+                "## Task",
+                "",
+                task.content,
+                "",
+            ]
+        )
+        (shared / plan_file).write_text(body, encoding="utf-8")
+        config_tasks.append(
+            {
+                "task_id": task.task_id,
+                "session_id": session_id,
+                "agent": agent_id,
+                "agent_type": agent_type,
+                "file": plan_file,
+            }
+        )
+
+    config = {
+        "task_id": task_id,
+        "overview_file": "plans/overview.md",
+        "tasks": config_tasks,
+    }
+    (shared / "config.yaml").write_text(
+        yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 # --- Skill Prepare Node (fast, yields SSE event within seconds) ---
@@ -255,6 +316,10 @@ def dispatch_node(state: GraphState) -> dict:
     dispatcher = Dispatcher(state["agents"])
     dispatch_results = dispatcher.dispatch(plan)
     waves = topological_sort(dispatch_results)
+    try:
+        _write_shared_plan(state["shared_dir"], state["task_id"], plan, dispatch_results)
+    except Exception:
+        logger.exception("Failed to write orchestrator plan into shared dir")
 
     return {"dispatch_results": dispatch_results, "execution_waves": waves}
 

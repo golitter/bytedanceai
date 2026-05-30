@@ -34,6 +34,13 @@ def _is_allowed(path: str, allowed_dirs: list[str]) -> bool:
     return any(_is_relative_to(target, Path(d).resolve()) for d in allowed_dirs)
 
 
+def _resolve_tool_path(path: str, base_dir: str) -> Path:
+    target = Path(path)
+    if not target.is_absolute():
+        target = Path(base_dir) / target
+    return target.resolve()
+
+
 def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> list:
     """Build the tool list for the plan_node agent loop.
 
@@ -63,13 +70,13 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         Returns prefixed line numbers and a header showing which range was read.
         Large files are truncated if output exceeds 16 000 characters.
         """
-        if not _is_allowed(path, read_dirs):
+        file_path = _resolve_tool_path(path, shared_resolved)
+        if not _is_allowed(str(file_path), read_dirs):
             return "Error: path outside allowed directories"
         if start_line < 1:
             start_line = 1
         line_count = max(1, min(line_count, 500))
         try:
-            file_path = Path(path).resolve()
             all_lines = file_path.read_text(encoding="utf-8").splitlines()
         except FileNotFoundError:
             return f"Error: file not found: {path}"
@@ -98,9 +105,9 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
     @tool
     def list_dir(path: str) -> str:
         """List directory contents within allowed workspace directories."""
-        if not _is_allowed(path, read_dirs):
+        target = _resolve_tool_path(path, shared_resolved)
+        if not _is_allowed(str(target), read_dirs):
             return "Error: path outside allowed directories"
-        target = Path(path).resolve()
         if not target.is_dir():
             return f"Error: directory not found: {path}"
         entries = []
@@ -112,7 +119,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
     @tool
     def write_file(path: str, content: str) -> str:
         """Write content to a file within the shared workspace directory."""
-        target = Path(path).resolve()
+        target = _resolve_tool_path(path, shared_resolved)
         base = Path(shared_resolved)
         try:
             target.relative_to(base)

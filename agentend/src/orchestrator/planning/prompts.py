@@ -86,7 +86,7 @@ def build_reason_prompt(
         "你可以使用以下工具来收集信息：\n"
         "- `read_file(path, start_line=1, line_count=200)`: 读取文件指定行范围（带行号，默认前 200 行，最多 500 行）\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
-        "- `list_dir(path)`: 列出目录内容（仅限 shared 目录和 orchestrator 工作区）\n"
+        "- `list_dir(path)`: 列出目录内容（仅限 shared 目录；相对路径从 shared_dir 解析）\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
         "- `plan_and_dispatch(overview, tasks)`: 编排多 Agent 任务（当需要多 Agent 协作时调用）\n"

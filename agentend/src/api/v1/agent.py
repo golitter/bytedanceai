@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
@@ -33,29 +34,32 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
         return {}
     config = request.config or {}
     task_id = config.get("task_id", request.task_id)
+    repo_path = request.repo_path or config.get("repo_path", "")
 
-    # Resolve shared_dir to absolute path under worktrees/{task_id}/shared/.agent
-    if config.get("shared_dir"):
-        shared_dir = config["shared_dir"]
-    elif workspace_path:
+    expected_shared_dir = ""
+    if workspace_path:
         # workspace_path is like {repo}/worktrees/{task_id}/{session_id}
         # shared_dir should be {repo}/worktrees/{task_id}/shared/.agent
-        from pathlib import Path
+        expected_shared_dir = str((Path(workspace_path).resolve().parent / "shared" / ".agent").resolve())
+    elif repo_path:
+        expected_shared_dir = str(
+            (Path(repo_path).resolve().parent / "worktrees" / task_id / "shared" / ".agent").resolve()
+        )
 
-        task_dir = str(Path(workspace_path).parent)
-        shared_dir = str(Path(task_dir) / "shared" / ".agent")
-    elif request.repo_path:
-        from pathlib import Path
-
-        shared_dir = str(Path(request.repo_path).resolve().parent / "worktrees" / task_id / "shared" / ".agent")
+    if config.get("shared_dir"):
+        shared_dir = str(Path(config["shared_dir"]).resolve())
+        if expected_shared_dir and shared_dir != expected_shared_dir:
+            raise HTTPException(status_code=400, detail="shared_dir must be the task shared/.agent directory")
+    elif expected_shared_dir:
+        shared_dir = expected_shared_dir
     else:
-        shared_dir = f"{task_id}/shared/.agent"
+        shared_dir = str((Path.cwd() / task_id / "shared" / ".agent").resolve())
 
     return {
         "agents": config.get("agents", []),
         "task_id": task_id,
         "shared_dir": shared_dir,
-        "repo_path": request.repo_path or "",
+        "repo_path": repo_path,
     }
 
 
@@ -64,6 +68,8 @@ async def _resolve_workspace(
     workspace_mgr: WorkspaceManager,
 ) -> str:
     """Return workspace_path, auto-creating workspace if needed."""
+    if request.agent_type == AgentType.ORCHESTRATOR:
+        return ""
     if request.workspace_path:
         return request.workspace_path
     if request.repo_path:
@@ -130,7 +136,7 @@ async def _execute_stream(
         "max_turns": rule_result.get("max_turns"),
     }
     stream_kwargs.update(_orchestrator_kwargs(request, workspace_path))
-    if workspace_path:
+    if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         stream_kwargs["cwd"] = workspace_path
     if workspace_mgr and request.agent_type == AgentType.ORCHESTRATOR:
         stream_kwargs["workspace_mgr"] = workspace_mgr
@@ -250,8 +256,8 @@ async def agent_execute(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
-    chat_kwargs.update(_orchestrator_kwargs(request))
-    if workspace_path:
+    chat_kwargs.update(_orchestrator_kwargs(request, workspace_path))
+    if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         chat_kwargs["cwd"] = workspace_path
     if request.agent_type == AgentType.ORCHESTRATOR:
         chat_kwargs["workspace_mgr"] = workspace_mgr
