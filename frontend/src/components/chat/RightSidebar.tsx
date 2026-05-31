@@ -1,4 +1,4 @@
-import { Download, FolderOpen, LogOut, PanelRightOpen, Pin } from 'lucide-react'
+import { Download, FolderOpen, FolderSync, LogOut, PanelRightOpen, Pin } from 'lucide-react'
 import { useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
@@ -119,6 +119,23 @@ export function RightSidebar({
                 strokeWidth={1.25}
               />
               <span className="truncate">{repoPath}</span>
+            </p>
+            {/* Task path */}
+            <h3 className="mb-1.5 mt-2.5 text-[11px] font-medium uppercase tracking-wider text-tertiary">
+              任务路径
+            </h3>
+            <p
+              className="flex cursor-pointer truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+              title={`${repoPath}/${taskId}`}
+              onClick={() => {
+                navigator.clipboard.writeText(`${repoPath}/${taskId}`)
+              }}
+            >
+              <FolderSync
+                className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
+                strokeWidth={1.25}
+              />
+              <span className="truncate">{taskId}</span>
             </p>
           </div>
         )}
