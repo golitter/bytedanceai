@@ -55,6 +55,9 @@ type StreamWriter struct {
 	currentAgentType  string // tracks the current agent type from SSE events
 	currentAgentName  string // tracks the current agent name from SSE events
 	currentSourceID   string // upstream logical message boundary hint from agentend
+	sourcePersistSkip map[string]bool
+	splitAfterForward bool
+	askCardMessageIDs map[string]string
 
 	buf        strings.Builder
 	bufLen     int
@@ -82,6 +85,8 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 		originalMessageID: messageID,
 		currentAgentType:  agentType,
 		currentAgentName:  "",
+		sourcePersistSkip: make(map[string]bool),
+		askCardMessageIDs: make(map[string]string),
 	}
 	registry.Store(messageID, sw)
 	return sw
@@ -120,9 +125,18 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 						}
 						sourceMessageID, _ := event.Content["message_id"].(string)
 
-						// Check for agent switch or upstream message boundary switch.
-						if newAgentType != sw.currentAgentType ||
+						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
+							sw.flushTextBuffer()
+							sw.publishForwardedText(text, newAgentType, newAgentName, sourceMessageID)
+							return
+						}
+
+						if sw.shouldSplitAfterForward() {
+							sw.flushTextBuffer()
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
+						} else if newAgentType != sw.currentAgentType ||
 							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
+							// Check for agent switch or upstream message boundary switch.
 							sw.flushTextBuffer()
 							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
 						} else if newName, ok := event.Content["agent"].(string); ok && newName != "" {
@@ -236,6 +250,49 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID 
 	sw.mu.Unlock()
 }
 
+func (sw *StreamWriter) shouldForwardTextWithoutPersist(sourceMessageID string) bool {
+	if sourceMessageID == "" || sourceMessageID == sw.messageID || sourceMessageID == sw.originalMessageID {
+		return false
+	}
+
+	sw.mu.Lock()
+	if skip, ok := sw.sourcePersistSkip[sourceMessageID]; ok {
+		sw.mu.Unlock()
+		return skip
+	}
+	sw.mu.Unlock()
+
+	var msg model.Message
+	err := db.GetDB().
+		Select("session_id").
+		Where("task_id = ? AND message_id = ?", sw.taskID, sourceMessageID).
+		First(&msg).Error
+	skip := err == nil && msg.SessionID != "" && msg.SessionID != sw.sessionID
+
+	sw.mu.Lock()
+	sw.sourcePersistSkip[sourceMessageID] = skip
+	sw.mu.Unlock()
+
+	return skip
+}
+
+func (sw *StreamWriter) publishForwardedText(text, agentType, agentName, messageID string) {
+	sw.publishToRedis(FormatSSEWithMeta(text, agentType, agentName, messageID))
+	sw.mu.Lock()
+	sw.splitAfterForward = true
+	sw.mu.Unlock()
+}
+
+func (sw *StreamWriter) shouldSplitAfterForward() bool {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	if !sw.splitAfterForward {
+		return false
+	}
+	sw.splitAfterForward = false
+	return true
+}
+
 func (sw *StreamWriter) publishToRedis(line string) {
 	// Hot path: immediate push to in-memory hub for low-latency SSE delivery
 	if strings.HasPrefix(line, "data: ") {
@@ -338,6 +395,19 @@ func (sw *StreamWriter) appendText(text string) {
 }
 
 func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status string) {
+	questionID, _ := event.Content["question_id"].(string)
+	if status == "pending" && sw.shouldSplitAfterForward() {
+		sourceAgent, _ := event.Content["source_agent"].(string)
+		sourceAgentType, _ := event.Content["source_agent_type"].(string)
+		if sourceAgentType == "" {
+			sourceAgentType = sw.currentAgentType
+		}
+		if sourceAgent == "" {
+			sourceAgent = sw.currentAgentName
+		}
+		sw.switchAgent(sourceAgentType, sourceAgent, "")
+	}
+
 	payload := map[string]interface{}{
 		"question_id":       event.Content["question_id"],
 		"source_agent":      event.Content["source_agent"],
@@ -355,16 +425,23 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 
 	sw.mu.Lock()
 	currentMessageID := sw.messageID
-	originalMessageID := sw.originalMessageID
+	targetMessageID := currentMessageID
+	if questionID != "" {
+		if existingMessageID, ok := sw.askCardMessageIDs[questionID]; ok {
+			targetMessageID = existingMessageID
+		} else {
+			sw.askCardMessageIDs[questionID] = targetMessageID
+		}
+	}
 	sw.mu.Unlock()
 
-	if currentMessageID == originalMessageID {
+	if targetMessageID == currentMessageID {
 		sw.appendText(marker)
 		sw.doFlush()
 		return
 	}
 
-	sw.appendTextToMessage(originalMessageID, marker)
+	sw.appendTextToMessage(targetMessageID, marker)
 }
 
 func (sw *StreamWriter) appendTextToMessage(messageID, text string) {

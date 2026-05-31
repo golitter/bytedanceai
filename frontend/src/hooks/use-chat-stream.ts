@@ -16,6 +16,7 @@ export function useChatStream(
   taskId: string,
   sessionId: string,
   agentType: AgentType = 'claude-code',
+  options: { includeTaskMessages?: boolean } = {},
 ) {
   const store = useChatStore()
   const abortRef = useRef<AbortController | null>(null)
@@ -211,13 +212,25 @@ export function useChatStream(
   useEffect(() => {
     let cancelled = false
 
-    getTaskMessages(taskId, { limit: INITIAL_MESSAGE_LIMIT, sessionId })
+    getTaskMessages(taskId, {
+      limit: INITIAL_MESSAGE_LIMIT,
+      sessionId: options.includeTaskMessages ? undefined : sessionId,
+    })
       .then((res) => {
         if (cancelled || res.data.length === 0) return
-        const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
-        const historyRows = streaming
-          ? res.data.filter((m) => m.message_id !== streaming.message_id)
+        const visibleRows = options.includeTaskMessages
+          ? res.data.filter((m) =>
+              m.session_id === sessionId
+                ? m.role !== 'agent' || !m.agent_type || m.agent_type === agentType
+                : m.role === 'agent',
+            )
           : res.data
+        const streaming = res.data.find(
+          (m) => m.session_id === sessionId && m.role === 'agent' && m.status === 'streaming',
+        )
+        const historyRows = streaming
+          ? visibleRows.filter((m) => m.message_id !== streaming.message_id)
+          : visibleRows
         const chatMessages: ChatMessage[] = historyRows.map((m) => ({
           id: `${m.role}-${m.id}`,
           dbId: m.id,
@@ -244,7 +257,7 @@ export function useChatStream(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, sessionId, connectToStream])
+  }, [taskId, sessionId, options.includeTaskMessages, connectToStream])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()

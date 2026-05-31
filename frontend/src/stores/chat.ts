@@ -676,10 +676,34 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
     }),
 
-  streamAskCardStart: (sessionId, event) =>
+  streamAskCardStart: (sessionId, event) => {
+    _flushTextBuf(set)
     set((s) => {
       const session = ensureSession(s, sessionId)
-      const blocks = [...session.runtimeBlocks]
+      const sourceAgentType = event.source_agent_type as AgentType | undefined
+      const sourceAgentName = event.source_agent
+      const speakerChanged =
+        (sourceAgentType &&
+          session.streamingAgentType &&
+          session.streamingAgentType !== sourceAgentType) ||
+        (sourceAgentName &&
+          session.streamingAgentName &&
+          session.streamingAgentName !== sourceAgentName)
+      const shouldCloseCurrent =
+        speakerChanged && (session.streamingContent.trim() || session.runtimeBlocks.length > 0)
+      const baseSession = shouldCloseCurrent
+        ? {
+            ...session,
+            messages: [
+              ...session.messages,
+              buildAgentMessage(session, sessionId, { keepRuntimeStreamingText: false }),
+            ],
+            streamingContent: '',
+            runtimeBlocks: [],
+          }
+        : session
+
+      const blocks = [...baseSession.runtimeBlocks]
       const existingIdx = blocks.findIndex(
         (b) => b.type === 'ask_agent' && b.question_id === event.question_id,
       )
@@ -705,10 +729,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       return {
         sessions: {
           ...s.sessions,
-          [sessionId]: { ...session, status: 'streaming', runtimeBlocks: blocks },
+          [sessionId]: {
+            ...baseSession,
+            status: 'streaming',
+            streamingAgentType: sourceAgentType ?? baseSession.streamingAgentType,
+            streamingAgentName: sourceAgentName ?? baseSession.streamingAgentName,
+            streamingMessageId: undefined,
+            runtimeBlocks: blocks,
+          },
         },
       }
-    }),
+    })
+  },
 
   streamAskCardDone: (sessionId, event) =>
     set((s) => {

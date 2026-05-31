@@ -308,11 +308,43 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         result_text = _child_result_text(result)
                         if not result_text:
                             continue
+                        orchestrator_cfg = current_state.get("orchestrator", {}) or {}
+                        source_agent = orchestrator_cfg.get("id") or orchestrator_cfg.get("name") or "Orchestrator"
+                        source_session_id = orchestrator_cfg.get("session_id", "")
+                        target_agent_type = dr.agent_type if dr else "unknown"
+                        target_session_id = dr.real_session_id if dr else ""
+                        question = dr.content if dr else result.task_id
+                        question_id = f"dispatch-{result.task_id}"
+                        yield StreamEvent.create(
+                            EventType.ASK_CARD_START,
+                            question_id=question_id,
+                            source_agent=source_agent,
+                            source_agent_type="orchestrator",
+                            source_session_id=source_session_id,
+                            target_agent=result.agent,
+                            target_agent_type=target_agent_type,
+                            target_session_id=target_session_id,
+                            question=question,
+                        )
+                        yield StreamEvent.create(
+                            EventType.ASK_CARD_DONE,
+                            question_id=question_id,
+                            source_agent=source_agent,
+                            source_agent_type="orchestrator",
+                            source_session_id=source_session_id,
+                            target_agent=result.agent,
+                            target_agent_type=target_agent_type,
+                            target_session_id=target_session_id,
+                            question=question,
+                            summary=result_text.replace("\n", " ")[:120],
+                            status="completed" if result.success else "failed",
+                        )
                         yield StreamEvent.create(
                             EventType.TEXT,
                             text=result_text,
                             agent=result.agent,
-                            agent_type=dr.agent_type if dr else "unknown",
+                            agent_type=target_agent_type,
+                            message_id=result.message_id,
                         )
 
         elif execution_waves:

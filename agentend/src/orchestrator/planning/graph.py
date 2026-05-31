@@ -271,7 +271,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
                 message=question,
                 agent_type=agent_type,
                 cwd=_cwd_var.get(),
-                skip_user_message=False,
+                skip_user_message=True,
             )
             last_run_error = None
             break

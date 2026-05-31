@@ -132,4 +132,44 @@ describe('chat store ask-agent cards', () => {
     }
     expect(state.streamingContent).toBe('正式执行结果')
   })
+
+  it('starts a new orchestrator message when an ask card arrives after sub-agent text', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamAskCardStart(sessionId, {
+      question_id: 'q-god',
+      source_agent: '规划者',
+      source_agent_type: 'orchestrator',
+      source_session_id: sessionId,
+      target_agent: 'god',
+      target_agent_type: 'claude-code',
+      target_session_id: 'session-god',
+      question: '你愿意参加 battle 吗？',
+    })
+    store.streamAgentUpdate(sessionId, 'claude-code', 'god', 'god-message-1')
+    store.streamText(sessionId, '本座不仅愿意，而且迫不及待。')
+
+    store.streamAskCardStart(sessionId, {
+      question_id: 'q-aa',
+      source_agent: '规划者',
+      source_agent_type: 'orchestrator',
+      source_session_id: sessionId,
+      target_agent: 'aa',
+      target_agent_type: 'claude-code',
+      target_session_id: 'session-aa',
+      question: '你愿意参加 battle 吗？',
+    })
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.messages).toHaveLength(2)
+    expect(state.messages[1].agentName).toBe('god')
+    expect(state.messages[1].content).toBe('本座不仅愿意，而且迫不及待。')
+    expect(state.streamingAgentName).toBe('规划者')
+    expect(state.runtimeBlocks).toHaveLength(1)
+    expect(state.runtimeBlocks[0]?.type).toBe('ask_agent')
+    if (state.runtimeBlocks[0]?.type === 'ask_agent') {
+      expect(state.runtimeBlocks[0].target_agent).toBe('aa')
+    }
+  })
 })

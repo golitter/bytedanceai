@@ -129,6 +129,7 @@ class ExecutionEngine:
         collected: list[str] = []
         error_type = ""
         error_message = ""
+        message_id = ""
 
         try:
             agent_cwd = await self._ensure_worktree(dispatch)
@@ -210,6 +211,7 @@ class ExecutionEngine:
             agent=agent_name,
             success=success,
             content="".join(collected),
+            message_id=message_id,
             duration=round(duration, 2),
             error_type=error_type,
             error_message=error_message,

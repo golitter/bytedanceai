@@ -18,6 +18,7 @@ class TaskResult(BaseModel):
     agent: str = Field(description="执行该任务的 agent id")
     success: bool = Field(description="任务是否成功完成")
     content: str = Field(description="任务执行结果内容")
+    message_id: str = Field(default="", description="Backend 持久化的 Agent 回复 message_id")
     duration: float = Field(default=0.0, description="执行耗时（秒）")
     error_type: str = Field(default="", description="失败类型，如 timeout 或 error")
     error_message: str = Field(default="", description="结构化失败原因")

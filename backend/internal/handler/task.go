@@ -467,12 +467,18 @@ func fetchGroupChatWindow(taskID, sessionID string) []map[string]interface{} {
 		"session_id", sessionID,
 		"messages_found", len(messages),
 	)
+	seen := make(map[string]bool, len(messages))
 	for _, m := range messages {
 		content := m.Content
 		if utf8.RuneCountInString(content) > maxGroupChatMsgLen {
 			runes := []rune(content)
 			content = string(runes[:maxGroupChatMsgLen]) + "\n...[截断]"
 		}
+		dedupeKey := m.AgentName + "\x00" + m.AgentType + "\x00" + content
+		if seen[dedupeKey] {
+			continue
+		}
+		seen[dedupeKey] = true
 		result = append(result, map[string]interface{}{
 			"role":       m.Role,
 			"agent_name": m.AgentName,

@@ -39,7 +39,9 @@ export function ChatArea({
   groupAgentNames,
   groupSessions,
 }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
+  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType, {
+    includeTaskMessages: Boolean(isGroupChat),
+  })
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -54,8 +56,19 @@ export function ChatArea({
     setLoadingMore(sessionId, true)
     setLoadError(null)
     try {
-      const res = await getTaskMessages(taskId, { limit: 20, before: firstMsg.dbId, sessionId })
-      const chatMessages: ChatMessage[] = res.data.map((m) => ({
+      const res = await getTaskMessages(taskId, {
+        limit: 20,
+        before: firstMsg.dbId,
+        sessionId: isGroupChat ? undefined : sessionId,
+      })
+      const visibleRows = isGroupChat
+        ? res.data.filter((m) =>
+            m.session_id === sessionId
+              ? m.role !== 'agent' || !m.agent_type || m.agent_type === agentType
+              : m.role === 'agent',
+          )
+        : res.data
+      const chatMessages: ChatMessage[] = visibleRows.map((m) => ({
         id: `${m.role}-${m.id}`,
         dbId: m.id,
         role: m.role as 'user' | 'agent',
@@ -71,7 +84,7 @@ export function ChatArea({
       setLoadingMore(sessionId, false)
       setLoadError('加载历史消息失败')
     }
-  }, [taskId, sessionId, state.messages, prependMessages, setLoadingMore])
+  }, [taskId, sessionId, agentType, isGroupChat, state.messages, prependMessages, setLoadingMore])
 
   const agentSessionLookup = useMemo(() => {
     if (!groupSessions) return undefined
