@@ -1,4 +1,12 @@
-import { Download, FolderOpen, FolderSync, LogOut, PanelRightOpen, Pin } from 'lucide-react'
+import {
+  ChevronRight,
+  Download,
+  FolderOpen,
+  FolderSync,
+  LogOut,
+  PanelRightOpen,
+  Pin,
+} from 'lucide-react'
 import { useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
@@ -63,6 +71,7 @@ export function RightSidebar({
   onExpand,
 }: RightSidebarProps) {
   const isCollapsed = width === 0
+  const [pathsOpen, togglePaths] = useCollapsible('paths', true)
 
   // Collapsed: show expand tab
   if (isCollapsed) {
@@ -101,44 +110,54 @@ export function RightSidebar({
         {/* History search */}
         <HistorySearch sessionId={sessionId} />
 
-        {/* Repo path */}
+        {/* Paths */}
         {repoPath && (
           <div className="border-b border-sidebar-border px-4 py-3">
-            <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-tertiary">
-              仓库路径
-            </h3>
-            <p
-              className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-              title={`${repoPath} — 双击复制`}
-              onDoubleClick={() => {
-                navigator.clipboard.writeText(repoPath)
-                showCopyToast()
-              }}
+            <button
+              type="button"
+              className="flex w-full items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-tertiary"
+              onClick={togglePaths}
             >
-              <FolderOpen
-                className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
-                strokeWidth={1.25}
+              <ChevronRight
+                className={`h-3 w-3 transition-transform ${pathsOpen ? 'rotate-90' : ''}`}
+                strokeWidth={1.5}
               />
-              <span className="truncate">{repoPath}</span>
-            </p>
-            {/* Task path */}
-            <h3 className="mb-1.5 mt-2.5 text-[11px] font-medium uppercase tracking-wider text-tertiary">
-              任务路径
-            </h3>
-            <p
-              className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-              title={`${repoPath}/worktrees/${taskId} — 双击复制`}
-              onDoubleClick={() => {
-                navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
-                showCopyToast()
-              }}
-            >
-              <FolderSync
-                className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
-                strokeWidth={1.25}
-              />
-              <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
-            </p>
+              路径
+            </button>
+            {pathsOpen && (
+              <div className="mt-2 flex flex-col gap-2">
+                {/* Repo path */}
+                <p
+                  className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                  title={`${repoPath} — 双击复制`}
+                  onDoubleClick={() => {
+                    navigator.clipboard.writeText(repoPath)
+                    showCopyToast()
+                  }}
+                >
+                  <FolderOpen
+                    className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
+                    strokeWidth={1.25}
+                  />
+                  <span className="truncate">{repoPath}</span>
+                </p>
+                {/* Task path */}
+                <p
+                  className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                  title={`${repoPath}/worktrees/${taskId} — 双击复制`}
+                  onDoubleClick={() => {
+                    navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
+                    showCopyToast()
+                  }}
+                >
+                  <FolderSync
+                    className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
+                    strokeWidth={1.25}
+                  />
+                  <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
+                </p>
+              </div>
+            )}
           </div>
         )}
 
