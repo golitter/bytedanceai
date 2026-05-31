@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ChatMessage } from '@/stores/chat'
@@ -173,18 +174,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
       <div className="relative">
         {/* Search icon */}
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-tertiary">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.25}
-            strokeLinecap="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
+          <Search className="h-3.5 w-3.5" strokeWidth={1.25} />
         </span>
         <input
           className="w-full rounded-md border border-border bg-accent py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-colors placeholder:text-tertiary focus:border-ring"

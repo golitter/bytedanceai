@@ -1,3 +1,4 @@
+import { ChevronDown, Pin, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { useChatStore } from '@/stores/chat'
@@ -60,17 +61,10 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
             {announcements.length}
           </span>
         </span>
-        <svg
+        <ChevronDown
           className={`h-3.5 w-3.5 text-tertiary transition-transform ${open ? '' : '-rotate-90'}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+          strokeWidth={1.25}
+        />
       </button>
 
       {/* Body */}
@@ -89,15 +83,22 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
           {sorted.map((ann) => (
             <div
               key={ann.id}
-              className="group mb-2 cursor-pointer rounded-md border border-border bg-card p-3 transition-colors last:mb-0 hover:border-primary-border hover:bg-bg-hover"
-              onContextMenu={(e) => {
-                e.preventDefault()
-                if (confirm('确认删除此公告？')) handleDelete(ann.id)
-              }}
+              className="group relative mb-2 rounded-md border border-border bg-card p-3 transition-colors last:mb-0 hover:border-primary-border hover:bg-bg-hover"
             >
+              {/* Delete button — visible on hover */}
+              <button
+                type="button"
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-0 transition-colors hover:bg-danger-bg hover:text-destructive group-hover:opacity-100"
+                title="删除公告"
+                onClick={() => {
+                  if (confirm('确认删除此公告？')) handleDelete(ann.id)
+                }}
+              >
+                <Trash2 className="h-3 w-3" strokeWidth={1.25} />
+              </button>
               {ann.pinned && (
-                <span className="mb-1.5 inline-flex rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-medium text-color-warning">
-                  📌 置顶
+                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-medium text-color-warning">
+                  <Pin className="h-2.5 w-2.5" strokeWidth={1.25} /> 置顶
                 </span>
               )}
               <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-secondary">

@@ -1,3 +1,5 @@
+import { ChevronDown } from 'lucide-react'
+
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
@@ -61,17 +63,10 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
             {members.length + 1}
           </span>
         </span>
-        <svg
+        <ChevronDown
           className={`h-3.5 w-3.5 text-tertiary transition-transform ${open ? '' : '-rotate-90'}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+          strokeWidth={1.25}
+        />
       </button>
 
       {/* Body */}

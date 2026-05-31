@@ -9,6 +9,7 @@ import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
 import { IconSidebar } from '@/components/layout/IconSidebar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useConversations } from '@/hooks/use-conversations'
+import { useResize } from '@/hooks/use-resize'
 import { AgentOverviewPage } from '@/pages/admin/AgentOverviewPage'
 import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { ServiceHealthPage } from '@/pages/admin/ServiceHealthPage'
@@ -84,6 +85,15 @@ export function ImPage() {
   const { currentSessionId, setCurrentSession } = useChatNav()
   const { activeTab } = useActiveTab()
 
+  const {
+    width: sidebarWidth,
+    isDragging,
+    handleMouseDown,
+    expand,
+  } = useResize({
+    storageKey: 'right-sidebar',
+  })
+
   // Restore session from localStorage on mount (before browser paint)
   useLayoutEffect(() => {
     if (!currentSessionId) {
@@ -150,6 +160,10 @@ export function ImPage() {
                 agentNames={active.groupAgentNames}
                 sessions={active.groupSessions}
                 repoPath={active.repoPath}
+                width={sidebarWidth}
+                isDragging={isDragging}
+                onResizeHandleMouseDown={handleMouseDown}
+                onExpand={expand}
               />
             )}
         </>

@@ -1,3 +1,4 @@
+import { ArrowRight, ChevronDown, Link2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { CoordMessage } from '@/lib/block-types'
@@ -19,9 +20,20 @@ export function CoordChannel({ messages, closed, summary }: CoordChannelProps) {
         className="flex w-full items-center justify-between px-3.5 py-2.5 text-left hover:bg-agent-orchestrator/5"
         onClick={() => setOpen(!open)}
       >
-        <span className="text-[13px] font-medium text-agent-orchestrator">🔗 协调通道</span>
-        <span className="text-[11px] text-muted-foreground">
-          {open ? '▼ 点击收起' : '▶ 点击展开'}
+        <span className="flex items-center gap-1.5 text-[13px] font-medium text-agent-orchestrator">
+          <Link2 className="h-3.5 w-3.5" strokeWidth={1.25} />
+          协调通道
+        </span>
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          {open ? (
+            <>
+              <ChevronDown className="h-3 w-3" strokeWidth={1.25} /> 收起
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 -rotate-90" strokeWidth={1.25} /> 展开
+            </>
+          )}
         </span>
       </button>
 
@@ -40,7 +52,7 @@ export function CoordChannel({ messages, closed, summary }: CoordChannelProps) {
                     className="mb-1.5 min-w-0 break-words rounded-lg border border-border bg-card px-3 py-2 text-[13px] leading-relaxed"
                   >
                     <span className="font-semibold text-agent-orchestrator">{msg.from}</span>
-                    <span className="mx-1 text-muted-foreground">→</span>
+                    <ArrowRight className="mx-1 h-3 w-3 text-muted-foreground" strokeWidth={1.25} />
                     <span className="font-semibold text-agent-orchestrator">{msg.to}</span>
                     <br />
                     {msg.text}
