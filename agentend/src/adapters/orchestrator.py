@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -22,6 +23,25 @@ from src.schemas.response import AgentResponse
 from src.skills.provisioner import SkillProvisioner
 
 logger = logging.getLogger(__name__)
+
+
+def _task_failure_block(result: TaskResult) -> str:
+    payload = {
+        "task_id": result.task_id,
+        "agent": result.agent,
+        "reason": result.error_message or "任务失败",
+        "failureType": "timeout" if result.error_type == "timeout" else "error",
+    }
+    return "```aka_yhy\ntype: task_failure\njson: " + json.dumps(payload, ensure_ascii=False) + "\n```"
+
+
+def _child_result_text(result: TaskResult) -> str:
+    parts: list[str] = []
+    if result.content.strip():
+        parts.append(result.content.strip())
+    if not result.success:
+        parts.append(_task_failure_block(result))
+    return "\n\n".join(parts)
 
 
 class OrchestratorAdapter(BaseAgentAdapter):
@@ -275,9 +295,12 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     if result is not None:
                         task_results.append(result)
                         dr = dispatch_map.get(result.task_id)
+                        result_text = _child_result_text(result)
+                        if not result_text:
+                            continue
                         yield StreamEvent.create(
                             EventType.TEXT,
-                            text=result.content or "(no output)",
+                            text=result_text,
                             agent=result.agent,
                             agent_type=dr.agent_type if dr else "unknown",
                         )
@@ -318,6 +341,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 "success": tr.success,
                 "content": tr.content,
                 "duration": tr.duration,
+                "error_type": tr.error_type,
+                "error_message": tr.error_message,
             }
             for tr in task_results
         ]

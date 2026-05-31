@@ -44,7 +44,10 @@ function isLongBlock(block: MessageBlock): boolean {
     case 'plan':
       return block.tasks.length > MANY_STRUCTURED_BLOCKS || isLongText(block.overview)
     case 'ask_agent':
+    case 'task_failure':
       return false
+    case 'final_summary':
+      return block.details.length > MANY_STRUCTURED_BLOCKS
     case 'tool_call':
       return isLongText(block.input ?? '')
     case 'image':

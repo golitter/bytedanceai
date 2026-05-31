@@ -6,11 +6,13 @@ import {
   AttachmentCard,
   CoordChannel,
   DiffCard,
+  FinalSummaryCard,
   HtmlCard,
   ImageCard,
   PlanCard,
   PreviewCard,
   RuntimeStatus,
+  TaskFailureCard,
   ToolCard,
 } from '@/components/cards'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
@@ -87,6 +89,25 @@ function BlockRenderer({
         />
       )
     }
+    case 'task_failure':
+      return (
+        <TaskFailureCard
+          taskId={block.task_id}
+          agent={block.agent}
+          reason={block.reason}
+          failureType={block.failureType}
+        />
+      )
+    case 'final_summary':
+      return (
+        <FinalSummaryCard
+          status={block.status}
+          completed={block.completed}
+          failed={block.failed}
+          nextAction={block.nextAction}
+          details={block.details}
+        />
+      )
     case 'tool_call':
       return <ToolCard name={block.name} input={block.input} />
     case 'tool_result':

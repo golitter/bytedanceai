@@ -61,7 +61,7 @@ function appendTextSegment(blocks: MessageBlock[], text: string) {
     if (textLines.length === 0) return
     const content = textLines.join('\n')
     if (content.trim()) {
-      blocks.push({ type: 'text', id: nextBlockId(), content })
+      appendTextWithFailureMarkers(blocks, content)
     }
     textLines.length = 0
   }
@@ -215,8 +215,127 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
         summary: optionalStringField(payload, 'summary'),
       }
     }
+    case 'task_failure':
+      return {
+        type: 'task_failure',
+        id: nextBlockId(),
+        task_id: optionalStringField(payload, 'task_id'),
+        agent: optionalStringField(payload, 'agent'),
+        reason: stringField(payload, 'reason') || stringField(payload, 'message'),
+        failureType: failureTypeField(payload),
+      }
+    case 'final_summary':
+      return {
+        type: 'final_summary',
+        id: nextBlockId(),
+        status: finalStatusField(payload),
+        completed: numberField(payload, 'completed', 0),
+        failed: numberField(payload, 'failed', 0),
+        nextAction: optionalStringField(payload, 'nextAction'),
+        details: arrayField(payload, 'details').map((detail) => ({
+          task_id: stringField(detail, 'task_id'),
+          agent: stringField(detail, 'agent'),
+          status: finalDetailStatusField(detail),
+          summary: optionalStringField(detail, 'summary'),
+        })),
+      }
     default:
       return null
+  }
+}
+
+const FAILURE_MARKER_RE =
+  /\[(Timeout|Error)\]\s*(?:Task\s+([A-Za-z0-9_-]+)\s*)?([\s\S]*?)(?=\[(?:Timeout|Error)\]|\n|$)/g
+
+function appendTextWithFailureMarkers(blocks: MessageBlock[], text: string) {
+  let lastIndex = 0
+  let parsedAny = false
+
+  for (const match of text.matchAll(FAILURE_MARKER_RE)) {
+    const markerStart = match.index ?? 0
+    const markerEnd = markerStart + match[0].length
+    const markerType = match[1]
+    const taskId = match[2]
+    const reason = match[3]?.trim()
+
+    if (markerStart > lastIndex) {
+      const before = text.slice(lastIndex, markerStart)
+      if (before.trim()) blocks.push({ type: 'text', id: nextBlockId(), content: before })
+    }
+
+    if (markerType === 'Timeout' && taskId && reason) {
+      blocks.push({
+        type: 'task_failure',
+        id: nextBlockId(),
+        task_id: taskId,
+        reason,
+        failureType: 'timeout',
+      })
+      parsedAny = true
+      lastIndex = markerEnd
+      continue
+    }
+
+    if (markerType === 'Error' && !reason && text.slice(markerEnd).startsWith('[Timeout]')) {
+      parsedAny = true
+      lastIndex = markerEnd
+      continue
+    }
+
+    if (markerType === 'Error' && reason) {
+      const nestedTimeout = reason.match(/^\[Timeout\]\s*Task\s+([A-Za-z0-9_-]+)\s*(.*)$/)
+      if (nestedTimeout?.[1] && nestedTimeout[2]?.trim()) {
+        blocks.push({
+          type: 'task_failure',
+          id: nextBlockId(),
+          task_id: nestedTimeout[1],
+          reason: nestedTimeout[2].trim(),
+          failureType: 'timeout',
+        })
+        parsedAny = true
+        lastIndex = markerEnd
+        continue
+      }
+
+      const parsed = parseLegacyErrorReason(reason, taskId)
+      blocks.push({
+        type: 'task_failure',
+        id: nextBlockId(),
+        task_id: parsed.taskId,
+        agent: parsed.agent,
+        reason: parsed.reason,
+        failureType: 'error',
+      })
+      parsedAny = true
+      lastIndex = markerEnd
+      continue
+    }
+  }
+
+  const rest = text.slice(lastIndex)
+  if (rest.trim() || !parsedAny) {
+    blocks.push({ type: 'text', id: nextBlockId(), content: rest || text })
+  }
+}
+
+function parseLegacyErrorReason(
+  reason: string,
+  markerTaskId?: string,
+): { taskId?: string; agent?: string; reason: string } {
+  const capturedAgentError = reason.match(/^agent=([^\s]+)\s+failed:\s*(.*)$/)
+  if (capturedAgentError) {
+    return {
+      taskId: markerTaskId,
+      agent: capturedAgentError[1],
+      reason: capturedAgentError[2]?.trim() || reason,
+    }
+  }
+  const taskError = reason.match(/^Task\s+([A-Za-z0-9_-]+)(?:\s+agent=([^\s]+))?\s+failed:\s*(.*)$/)
+  if (!taskError) return { taskId: markerTaskId, reason }
+  return {
+    taskId: taskError[1],
+    agent: taskError[2],
+    reason: taskError[3]?.trim() || reason,
   }
 }
 
@@ -307,6 +426,22 @@ function askStatusField(value: Record<string, unknown>): 'pending' | 'answered' 
   return 'pending'
 }
 
+function failureTypeField(value: Record<string, unknown>): 'timeout' | 'error' {
+  return stringField(value, 'failureType') === 'timeout' || stringField(value, 'type') === 'timeout'
+    ? 'timeout'
+    : 'error'
+}
+
+function finalStatusField(value: Record<string, unknown>): 'success' | 'partial' | 'failed' {
+  const raw = stringField(value, 'status')
+  if (raw === 'success' || raw === 'partial' || raw === 'failed') return raw
+  return 'partial'
+}
+
+function finalDetailStatusField(value: Record<string, unknown>): 'completed' | 'failed' {
+  return stringField(value, 'status') === 'failed' ? 'failed' : 'completed'
+}
+
 function booleanField(value: Record<string, unknown>, key: string, fallback: boolean): boolean {
   const raw = value[key]
   return typeof raw === 'boolean' ? raw : fallback
@@ -355,6 +490,14 @@ function parseBlockContent(inner: string): MessageBlock | null {
       const url = extractField(lines, 'url')
       return url ? { type: 'preview', id: nextBlockId(), url } : null
     }
+    case 'task_failure': {
+      const payload = extractJsonPayload(lines)
+      return payload ? legacyRuntimeBlock('task_failure', payload) : null
+    }
+    case 'final_summary': {
+      const payload = extractJsonPayload(lines)
+      return payload ? legacyRuntimeBlock('final_summary', payload) : null
+    }
     default:
       return null
   }
@@ -363,4 +506,9 @@ function parseBlockContent(inner: string): MessageBlock | null {
 function extractField(lines: string[], field: string): string | null {
   const line = lines.find((l) => l.startsWith(`${field}:`))
   return line ? line.slice(field.length + 1).trim() : null
+}
+
+function extractJsonPayload(lines: string[]): Record<string, unknown> | null {
+  const line = lines.find((l) => l.trim().startsWith('json:'))
+  return line ? parseLegacyJsonLine(line) : null
 }

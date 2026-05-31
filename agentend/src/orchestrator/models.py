@@ -19,6 +19,8 @@ class TaskResult(BaseModel):
     success: bool = Field(description="任务是否成功完成")
     content: str = Field(description="任务执行结果内容")
     duration: float = Field(default=0.0, description="执行耗时（秒）")
+    error_type: str = Field(default="", description="失败类型，如 timeout 或 error")
+    error_message: str = Field(default="", description="结构化失败原因")
 
 
 class DispatchResult(BaseModel):

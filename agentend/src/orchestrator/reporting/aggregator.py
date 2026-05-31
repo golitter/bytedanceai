@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from langchain_core.messages import HumanMessage
@@ -22,7 +23,7 @@ _AGGREGATE_PROMPT = """\
 
 {overview}
 
-## 各 Agent 执行结果
+## 各 Agent 执行结果（已截断，失败原因单独标注）
 
 {results}
 
@@ -30,6 +31,7 @@ _AGGREGATE_PROMPT = """\
 1. 整体完成情况
 2. 各任务关键产出
 3. 后续建议（如果有）
+要求：不要复制完整执行日志；不要输出原始 [Timeout] 或 [Error] 标记；失败任务请单独说明。
 """
 
 
@@ -44,13 +46,52 @@ def _current_time_context() -> str:
     )
 
 
+def _truncate_text(text: str, limit: int = 1200) -> str:
+    stripped = text.strip()
+    if len(stripped) <= limit:
+        return stripped
+    return stripped[:limit].rstrip() + "\n...(details truncated)"
+
+
+def build_final_summary_block(results: list[TaskResult]) -> str:
+    completed = sum(1 for result in results if result.success)
+    failed = len(results) - completed
+    status = "success" if failed == 0 else "failed" if completed == 0 else "partial"
+    next_action = "可以继续验收结果。" if failed == 0 else "请优先重试或人工检查失败任务，再合并最终结果。"
+    details = [
+        {
+            "task_id": result.task_id,
+            "agent": result.agent,
+            "status": "completed" if result.success else "failed",
+            "summary": (_truncate_text(result.content, 120) if result.success else result.error_message or "任务失败"),
+        }
+        for result in results
+    ]
+    payload = {
+        "status": status,
+        "completed": completed,
+        "failed": failed,
+        "nextAction": next_action,
+        "details": details,
+    }
+    return "```aka_yhy\ntype: final_summary\njson: " + json.dumps(payload, ensure_ascii=False) + "\n```"
+
+
 class Aggregator:
     async def aggregate(self, results: list[TaskResult], overview: str) -> str:
         if not results:
             return ""
 
         results_text = "\n".join(
-            f"### {r.task_id}（{r.agent}）{'✅' if r.success else '❌'}\n{r.content}" for r in results
+            "\n".join(
+                [
+                    f"### {r.task_id}（{r.agent}）{'完成' if r.success else '失败'}",
+                    f"失败类型: {r.error_type or '-'}",
+                    f"失败原因: {r.error_message or '-'}",
+                    _truncate_text(r.content),
+                ]
+            )
+            for r in results
         )
 
         llm = ChatOpenAI(
@@ -64,4 +105,6 @@ class Aggregator:
             results=results_text,
         )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        return response.content.strip()
+        details = response.content.strip()
+        summary = build_final_summary_block(results)
+        return summary if not details else f"{summary}\n\n{details}"

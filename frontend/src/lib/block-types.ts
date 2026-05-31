@@ -12,6 +12,13 @@ export interface CoordMessage {
   round: number
 }
 
+export interface FinalSummaryDetail {
+  task_id: string
+  agent: string
+  status: 'completed' | 'failed'
+  summary?: string
+}
+
 export type MessageBlock =
   | { type: 'text'; id: string; content: string }
   | { type: 'html-render'; id: string; content: string }
@@ -50,6 +57,23 @@ export type MessageBlock =
       status: 'pending' | 'answered' | 'failed'
       collapsed: boolean
       summary?: string
+    }
+  | {
+      type: 'task_failure'
+      id: string
+      task_id?: string
+      agent?: string
+      reason: string
+      failureType: 'timeout' | 'error'
+    }
+  | {
+      type: 'final_summary'
+      id: string
+      status: 'success' | 'partial' | 'failed'
+      completed: number
+      failed: number
+      nextAction?: string
+      details: FinalSummaryDetail[]
     }
   | { type: 'tool_call'; id: string; name: string; input?: string }
   | { type: 'tool_result'; id: string; output?: string }

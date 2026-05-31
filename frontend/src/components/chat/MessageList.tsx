@@ -36,6 +36,12 @@ type DisplayItem =
 
 const VIRTUALIZE_THRESHOLD = 50
 
+function shouldRenderMessage(msg: ChatMessage): boolean {
+  if (msg.role === 'user') return true
+  if (msg.blocks?.length) return true
+  return Boolean(msg.content.trim())
+}
+
 export function MessageList({
   messages,
   streamingContent,
@@ -85,10 +91,11 @@ export function MessageList({
             },
           ]
         : messages
+    const visibleMsgs = allMsgs.filter(shouldRenderMessage)
     const items: DisplayItem[] = []
-    for (let i = 0; i < allMsgs.length; i++) {
-      const msg = allMsgs[i]
-      const prevMsg = i > 0 ? allMsgs[i - 1] : undefined
+    for (let i = 0; i < visibleMsgs.length; i++) {
+      const msg = visibleMsgs[i]
+      const prevMsg = i > 0 ? visibleMsgs[i - 1] : undefined
       if (shouldShowTimeSeparator(prevMsg?.timestamp, msg.timestamp)) {
         items.push({ type: 'time-divider', timestamp: msg.timestamp })
       }

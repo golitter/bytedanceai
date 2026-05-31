@@ -192,7 +192,7 @@ function buildAgentMessage(
 function hydrateAgentBlocks(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) =>
     msg.role === 'agent' && msg.content
-      ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+      ? { ...msg, blocks: coalesceMessageBlocks(reduceEventToBlocks(msg.content)) }
       : msg,
   )
 }
@@ -727,7 +727,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const session = ensureSession(s, sessionId)
       const mapped = messages.map((msg) =>
         msg.role === 'agent' && msg.content
-          ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+          ? { ...msg, blocks: coalesceMessageBlocks(reduceEventToBlocks(msg.content)) }
           : msg,
       )
       return {

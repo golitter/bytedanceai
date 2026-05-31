@@ -189,6 +189,8 @@ class ExecutionEngine:
         session_id = dispatch.real_session_id or f"orch-{task_id}"
         success = False
         collected: list[str] = []
+        error_type = ""
+        error_message = ""
 
         try:
             agent_cwd = await self._ensure_worktree(dispatch)
@@ -227,7 +229,8 @@ class ExecutionEngine:
                     elif event_type == EventType.ERROR.value:
                         content = event.content
                         msg = content.get("error", content.get("message", "unknown error"))
-                        collected.append(f"[Error] {msg}")
+                        error_type = "error"
+                        error_message = str(msg)
                         break
                     elif event_type == EventType.DONE.value:
                         success = True
@@ -288,7 +291,8 @@ class ExecutionEngine:
                     elif event_type == "error":
                         content = event.get("content", {})
                         msg = content.get("message", "unknown error") if isinstance(content, dict) else str(content)
-                        collected.append(f"[Error] {msg}")
+                        error_type = "error"
+                        error_message = str(msg)
                         break
                 else:
                     success = True
@@ -302,15 +306,15 @@ class ExecutionEngine:
                 )
 
         except asyncio.TimeoutError:
-            msg = f"[Timeout] Task {task_id} exceeded {timeout}s"
+            msg = f"Task {task_id} exceeded {timeout}s"
             logger.warning("ExecutionEngine: %s", msg)
-            collected.append(msg)
-            yield (StreamEvent.create(EventType.ERROR, error=msg), None)
+            error_type = "timeout"
+            error_message = msg
         except Exception as exc:
-            msg = f"[Error] Task {task_id} agent={agent_name} failed: {exc}"
+            msg = f"Task {task_id} agent={agent_name} failed: {exc}"
             logger.error("ExecutionEngine: %s", msg, exc_info=True)
-            collected.append(msg)
-            yield (StreamEvent.create(EventType.ERROR, error=msg), None)
+            error_type = "error"
+            error_message = msg
 
         duration = time.monotonic() - start
         result = TaskResult(
@@ -319,6 +323,8 @@ class ExecutionEngine:
             success=success,
             content="".join(collected),
             duration=round(duration, 2),
+            error_type=error_type,
+            error_message=error_message,
         )
 
         yield (
@@ -329,6 +335,8 @@ class ExecutionEngine:
                 success=success,
                 duration=result.duration,
                 status="completed" if success else "failed",
+                error_type=error_type or None,
+                error_message=error_message or None,
             ),
             result,
         )

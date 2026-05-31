@@ -163,4 +163,89 @@ describe('reduceEventToBlocks', () => {
       expect(result[0].collapsed).toBe(false)
     }
   })
+
+  it('separates legacy timeout markers from surrounding prose', () => {
+    const result = reduceEventToBlocks(
+      '前面是正常回答。\n[Timeout] Task task-003 exceeded 300.0s\n后续说明',
+    )
+
+    expect(result.map((block) => block.type)).toEqual(['text', 'task_failure', 'text'])
+    expect(result[1].type).toBe('task_failure')
+    if (result[1].type === 'task_failure') {
+      expect(result[1].failureType).toBe('timeout')
+      expect(result[1].task_id).toBe('task-003')
+      expect(result[1].reason).toBe('exceeded 300.0s')
+    }
+  })
+
+  it('separates legacy error markers from prose and keeps task metadata', () => {
+    const result = reduceEventToBlocks(
+      '已完成部分内容。[Error] Task task-004 agent=执行者 failed: command failed',
+    )
+
+    expect(result.map((block) => block.type)).toEqual(['text', 'task_failure'])
+    expect(result[1].type).toBe('task_failure')
+    if (result[1].type === 'task_failure') {
+      expect(result[1].failureType).toBe('error')
+      expect(result[1].task_id).toBe('task-004')
+      expect(result[1].agent).toBe('执行者')
+      expect(result[1].reason).toBe('command failed')
+    }
+  })
+
+  it('leaves unknown timeout marker text untouched', () => {
+    const result = reduceEventToBlocks('[Timeout] exceeded without a task id')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('text')
+    if (result[0].type === 'text') {
+      expect(result[0].content).toBe('[Timeout] exceeded without a task id')
+    }
+  })
+
+  it('normalizes nested legacy error-timeout markers as timeout failures', () => {
+    const result = reduceEventToBlocks('[Error] [Timeout] Task task-003 exceeded 300.0s')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('task_failure')
+    if (result[0].type === 'task_failure') {
+      expect(result[0].failureType).toBe('timeout')
+      expect(result[0].task_id).toBe('task-003')
+      expect(result[0].reason).toBe('exceeded 300.0s')
+    }
+  })
+
+  it('splits adjacent legacy failure markers without requiring newlines', () => {
+    const result = reduceEventToBlocks(
+      '[Timeout] Task task-004 exceeded 300.0s[Error] [Timeout] Task task-003 exceeded 300.0s',
+    )
+
+    expect(result.map((block) => block.type)).toEqual(['task_failure', 'task_failure'])
+    expect(result[0].type).toBe('task_failure')
+    expect(result[1].type).toBe('task_failure')
+    if (result[0].type === 'task_failure' && result[1].type === 'task_failure') {
+      expect(result[0].task_id).toBe('task-004')
+      expect(result[0].reason).toBe('exceeded 300.0s')
+      expect(result[1].task_id).toBe('task-003')
+      expect(result[1].reason).toBe('exceeded 300.0s')
+    }
+  })
+
+  it('parses final summary blocks', () => {
+    const input =
+      '```aka_yhy\n' +
+      'type: final_summary\n' +
+      'json: {"status":"partial","completed":2,"failed":1,"nextAction":"重试失败任务","details":[{"task_id":"task-001","agent":"执行者","status":"completed","summary":"完成页面"},{"task_id":"task-002","agent":"检查者","status":"failed","summary":"超时"}]}\n' +
+      '```'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('final_summary')
+    if (result[0].type === 'final_summary') {
+      expect(result[0].status).toBe('partial')
+      expect(result[0].completed).toBe(2)
+      expect(result[0].failed).toBe(1)
+      expect(result[0].details[1].status).toBe('failed')
+    }
+  })
 })
