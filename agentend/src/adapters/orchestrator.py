@@ -17,6 +17,7 @@ from src.orchestrator.planning.graph import (
     reset_reason_runtime_context,
     set_reason_runtime_context,
 )
+from src.orchestrator.prompts.group_chat import build_group_chat_context
 from src.orchestrator.reporting.aggregator import Aggregator
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
@@ -91,6 +92,15 @@ class OrchestratorAdapter(BaseAgentAdapter):
         config = {"configurable": {"thread_id": session_id}}
         ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
 
+        # Query Orchestrator's own cross-agent window context
+        orchestrator_context = ""
+        if backend_client:
+            orch_session_id = orchestrator.get("session_id", "")
+            if orch_session_id:
+                window = await backend_client.get_agent_window_messages(task_id, orch_session_id)
+                if window:
+                    orchestrator_context = build_group_chat_context(cross_round_messages=window)
+
         initial_state = {
             "message": message,
             "agents": agents,
@@ -111,6 +121,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "iteration": 0,
             "max_iterations": 3,
             "memory_messages": [],
+            "orchestrator_context": orchestrator_context,
         }
 
         current_state: dict = dict(initial_state)
@@ -286,7 +297,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 task_id=task_id,
                 shared_dir=shared_dir,
                 cwd=cwd,
-                adapter_registry=self._registry,
             )
 
             for wave in execution_waves:

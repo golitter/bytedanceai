@@ -20,5 +20,6 @@ export interface AgentRequest {
   workspace_path?: string | null;
   repo_path?: string | null;
   config?: unknown | null;
+  group_chat_messages?: Record<string, unknown>[];
 }
 

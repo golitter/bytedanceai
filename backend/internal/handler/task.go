@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
@@ -293,11 +294,12 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		}()
 
 		agentReq := &generated.AgentRequest{
-			TaskId:    taskID,
-			SessionId: req.SessionID,
-			Message:   req.Message,
-			AgentType: generated.AgentType(agentType),
-			Stream:    true,
+			TaskId:            taskID,
+			SessionId:         req.SessionID,
+			Message:           req.Message,
+			AgentType:         generated.AgentType(agentType),
+			Stream:            true,
+			GroupChatMessages: fetchGroupChatWindow(taskID, req.SessionID),
 		}
 		if req.Cwd != "" {
 			agentReq.WorkspacePath = &req.Cwd
@@ -427,4 +429,55 @@ func (h *TaskHandler) ValidateRepoPath(c *gin.Context) {
 		return
 	}
 	vo.OK(c, result)
+}
+
+// maxGroupChatMsgLen is the maximum number of runes per group chat window message.
+const maxGroupChatMsgLen = 2000
+
+// fetchGroupChatWindow queries messages from other sessions since this session's
+// last agent message. Used to provide cross-agent context in group chats.
+// On error, returns an empty slice (graceful degradation).
+func fetchGroupChatWindow(taskID, sessionID string) []map[string]interface{} {
+	// 1. Find the timestamp of the last COMPLETED agent message from this session.
+	//    Exclude "streaming" to avoid picking up the message just created by RunTask.
+	var lastMsg model.Message
+	err := db.GetDB().
+		Where("task_id = ? AND session_id = ? AND role = ? AND status = ?", taskID, sessionID, "agent", "completed").
+		Order("created_at DESC").Limit(1).First(&lastMsg).Error
+
+	// 2. Query window: other sessions' completed/streaming messages after T
+	query := db.GetDB().
+		Where("task_id = ? AND session_id != ?", taskID, sessionID).
+		Where("status IN ?", []string{"completed", "streaming"})
+	if err == nil {
+		// Found a previous agent message — only include messages after it
+		query = query.Where("created_at > ?", lastMsg.CreatedAt)
+	}
+
+	var messages []model.Message
+	if err := query.Order("created_at ASC").Order("id ASC").Find(&messages).Error; err != nil {
+		slog.Warn("group chat window query failed, degrading to empty", "task_id", taskID, "session_id", sessionID, "error", err)
+		return []map[string]interface{}{}
+	}
+
+	// 3. Convert to map list with truncation
+	result := make([]map[string]interface{}, 0, len(messages))
+	slog.Info("group chat window query",
+		"task_id", taskID,
+		"session_id", sessionID,
+		"messages_found", len(messages),
+	)
+	for _, m := range messages {
+		content := m.Content
+		if utf8.RuneCountInString(content) > maxGroupChatMsgLen {
+			runes := []rune(content)
+			content = string(runes[:maxGroupChatMsgLen]) + "\n...[截断]"
+		}
+		result = append(result, map[string]interface{}{
+			"role":       m.Role,
+			"agent_name": m.AgentName,
+			"content":    content,
+		})
+	}
+	return result
 }

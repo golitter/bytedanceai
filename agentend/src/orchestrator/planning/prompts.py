@@ -22,6 +22,8 @@ REASON_PROMPT = """\
 
 {replan_section}
 
+{orchestrator_context}
+
 ## 规则
 
 ### 判断逻辑
@@ -64,6 +66,7 @@ def build_reason_prompt(
     shared_dir: str,
     l2_content: dict[str, str] | None = None,
     replan_reason: str | None = None,
+    orchestrator_context: str = "",
 ) -> str:
     from pathlib import Path
 
@@ -128,4 +131,5 @@ def build_reason_prompt(
         skills_section=skills_section,
         tools_section=tools_section,
         replan_section=replan_section,
+        orchestrator_context=orchestrator_context,
     )

@@ -4,7 +4,6 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
 
 from src.clients.backend_client import BackendClient
 from src.generated.events import EventType
@@ -12,10 +11,6 @@ from src.orchestrator.models import DispatchResult, TaskResult
 from src.schemas.events import StreamEvent
 from src.schemas.request import AgentType
 from src.workspace.manager import WorkspaceManager
-
-if TYPE_CHECKING:
-    from src.adapters.base import BaseAgentAdapter
-    from src.adapters.registry import AdapterRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +24,6 @@ class ExecutionEngine:
         task_id: str = "",
         shared_dir: str = "",
         cwd: str = "",
-        adapter_registry: AdapterRegistry | None = None,
     ) -> None:
         self._backend_client = backend_client
         self._workspace_mgr = workspace_mgr
@@ -37,62 +31,6 @@ class ExecutionEngine:
         self._task_id = task_id
         self._shared_dir = shared_dir
         self._cwd = cwd
-        self._adapter_registry = adapter_registry
-
-    def _get_adapter(self, agent_type: str) -> BaseAgentAdapter | None:
-        if not self._adapter_registry:
-            return None
-        try:
-            if agent_type == AgentType.ORCHESTRATOR.value:
-                return None
-            adapter_cls = self._adapter_registry.get(agent_type)
-            if adapter_cls:
-                return adapter_cls()
-        except (ValueError, KeyError):
-            pass
-        return None
-
-    async def _iter_adapter_with_timeout(
-        self,
-        adapter: BaseAgentAdapter,
-        session_id: str,
-        message: str,
-        cwd: str,
-        timeout: float,
-    ) -> AsyncIterator[StreamEvent]:
-        """Iterate adapter events with a total timeout guard."""
-        queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
-
-        async def _consume() -> None:
-            try:
-                async for event in adapter.stream_chat(session_id, message, cwd=cwd):
-                    await queue.put(event)
-            except Exception as exc:
-                await queue.put(StreamEvent.create(EventType.ERROR, error=str(exc)))
-            await queue.put(None)
-
-        task = asyncio.create_task(_consume())
-        deadline = time.monotonic() + timeout
-
-        try:
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise asyncio.TimeoutError()
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=max(remaining, 0.1))
-                except asyncio.TimeoutError:
-                    raise
-                if event is None:
-                    break
-                yield event
-        finally:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
 
     async def execute(
         self,
@@ -195,115 +133,65 @@ class ExecutionEngine:
         try:
             agent_cwd = await self._ensure_worktree(dispatch)
 
-            adapter = self._get_adapter(agent_type)
-            if adapter:
-                logger.info(
-                    "ExecutionEngine: short-circuit agent=%s type=%s task=%s session=%s cwd=%s",
-                    agent_name,
-                    agent_type,
-                    task_id,
-                    session_id,
-                    agent_cwd,
-                )
-                async for event in self._iter_adapter_with_timeout(
-                    adapter,
-                    session_id,
-                    dispatch.content,
-                    agent_cwd,
-                    timeout,
-                ):
-                    event_type = event.type
-                    if event_type == EventType.TEXT.value:
-                        text = event.content.get("text", "")
-                        if text:
-                            collected.append(text)
-                            yield (
-                                StreamEvent.create(
-                                    EventType.RUNTIME_TEXT,
-                                    task_id=task_id,
-                                    agent=agent_name,
-                                    text=text,
-                                ),
-                                None,
-                            )
-                    elif event_type == EventType.ERROR.value:
-                        content = event.content
-                        msg = content.get("error", content.get("message", "unknown error"))
-                        error_type = "error"
-                        error_message = str(msg)
-                        break
-                    elif event_type == EventType.DONE.value:
-                        success = True
-                        break
-                else:
-                    # Loop exhausted without DONE — treat as success (CLI exited normally)
-                    success = True
-                logger.info(
-                    "ExecutionEngine: completed agent=%s task=%s collected=%d chars success=%s (short-circuit)",
-                    agent_name,
-                    task_id,
-                    len("".join(collected)),
-                    success,
-                )
-            else:
-                logger.info(
-                    "ExecutionEngine: HTTP path agent=%s type=%s task=%s session=%s cwd=%s",
-                    agent_name,
-                    agent_type,
-                    task_id,
-                    session_id,
-                    agent_cwd,
-                )
-                message_id = await asyncio.wait_for(
-                    self._backend_client.run_task(
-                        task_id=self._task_id,
-                        session_id=session_id,
-                        message=dispatch.content,
-                        agent_type=agent_type,
-                        cwd=agent_cwd,
-                    ),
-                    timeout=30.0,
-                )
-
-                async for event in self._backend_client.stream_result(
+            # Unified HTTP path — Backend queries window and injects group_chat_messages
+            logger.info(
+                "ExecutionEngine: HTTP path agent=%s type=%s task=%s session=%s cwd=%s",
+                agent_name,
+                agent_type,
+                task_id,
+                session_id,
+                agent_cwd,
+            )
+            message_id = await asyncio.wait_for(
+                self._backend_client.run_task(
                     task_id=self._task_id,
-                    message_id=message_id,
                     session_id=session_id,
-                ):
-                    event_type = event.get("type", "")
-                    if event_type == "text":
-                        content = event.get("content", {})
-                        text = content.get("text", "") if isinstance(content, dict) else str(content)
-                        if text:
-                            collected.append(text)
-                            yield (
-                                StreamEvent.create(
-                                    EventType.RUNTIME_TEXT,
-                                    task_id=task_id,
-                                    agent=agent_name,
-                                    text=text,
-                                ),
-                                None,
-                            )
-                    elif event_type == "done":
-                        success = True
-                        break
-                    elif event_type == "error":
-                        content = event.get("content", {})
-                        msg = content.get("message", "unknown error") if isinstance(content, dict) else str(content)
-                        error_type = "error"
-                        error_message = str(msg)
-                        break
-                else:
-                    success = True
+                    message=dispatch.content,
+                    agent_type=agent_type,
+                    cwd=agent_cwd,
+                ),
+                timeout=30.0,
+            )
 
-                logger.info(
-                    "ExecutionEngine: completed agent=%s task=%s collected=%d chars success=%s (HTTP)",
-                    agent_name,
-                    task_id,
-                    len("".join(collected)),
-                    success,
-                )
+            async for event in self._backend_client.stream_result(
+                task_id=self._task_id,
+                message_id=message_id,
+                session_id=session_id,
+            ):
+                event_type = event.get("type", "")
+                if event_type == "text":
+                    content = event.get("content", {})
+                    text = content.get("text", "") if isinstance(content, dict) else str(content)
+                    if text:
+                        collected.append(text)
+                        yield (
+                            StreamEvent.create(
+                                EventType.RUNTIME_TEXT,
+                                task_id=task_id,
+                                agent=agent_name,
+                                text=text,
+                            ),
+                            None,
+                        )
+                elif event_type == "done":
+                    success = True
+                    break
+                elif event_type == "error":
+                    content = event.get("content", {})
+                    msg = content.get("message", "unknown error") if isinstance(content, dict) else str(content)
+                    error_type = "error"
+                    error_message = str(msg)
+                    break
+            else:
+                success = True
+
+            logger.info(
+                "ExecutionEngine: completed agent=%s task=%s collected=%d chars success=%s",
+                agent_name,
+                task_id,
+                len("".join(collected)),
+                success,
+            )
 
         except asyncio.TimeoutError:
             msg = f"Task {task_id} exceeded {timeout}s"

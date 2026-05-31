@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from src.app.agent_config import get_agent_config_dir
@@ -5,6 +6,8 @@ from src.rules.base import BaseRule
 
 # Tools considered dangerous; blocked by SafetyRule
 _DANGEROUS_TOOLS = {"dangerouslyDisableSandbox"}
+
+logger = logging.getLogger(__name__)
 
 
 class SafetyRule(BaseRule):
@@ -133,3 +136,26 @@ class SoulRule(BaseRule):
         return {
             "system_prompt_append": (f"## 你的身份文档 (SOUL.md)\n\n{content}"),
         }
+
+
+class GroupChatRule(BaseRule):
+    name = "group_chat"
+    description = "Injects group chat context from other agents"
+    phase = "pre"
+    priority = 6
+
+    def check(self, context: dict) -> bool:
+        # Always allow execution — this rule only adds context, never blocks
+        return True
+
+    def enforce(self, context: dict) -> dict:
+        from src.orchestrator.prompts.group_chat import build_group_chat_context
+
+        messages = context.get("group_chat_messages", [])
+        text = build_group_chat_context(cross_round_messages=messages)
+        if not text:
+            return {}
+
+        logger.info("GroupChatRule: injecting %d window messages, %d chars", len(messages), len(text))
+        print(f"[GroupChatRule] injecting {len(messages)} window messages, {len(text)} chars", flush=True)
+        return {"system_prompt_append": text}

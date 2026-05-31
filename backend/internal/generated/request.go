@@ -22,5 +22,6 @@ type AgentRequest struct {
 	WorkspacePath *string `json:"workspace_path,omitempty"`
 	RepoPath *string `json:"repo_path,omitempty"`
 	Config *interface{} `json:"config,omitempty"`
+	GroupChatMessages []map[string]interface{} `json:"group_chat_messages,omitempty"`
 }
 

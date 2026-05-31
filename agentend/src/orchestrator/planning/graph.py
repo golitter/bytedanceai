@@ -201,6 +201,7 @@ def skill_prepare_node(state: GraphState) -> dict:
         shared_dir=state["shared_dir"],
         l2_content=l2,
         replan_reason=state.get("replan_reason"),
+        orchestrator_context=state.get("orchestrator_context", ""),
     )
 
     return {"system_prompt": system_prompt}

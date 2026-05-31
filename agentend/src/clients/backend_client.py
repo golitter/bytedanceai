@@ -128,3 +128,27 @@ class BackendClient:
                             pass
         finally:
             await sse_client.aclose()
+
+    async def get_agent_window_messages(self, task_id: str, session_id: str) -> list[dict]:
+        """GET /api/tasks/:taskId/messages/window?session_id=xxx
+
+        Returns the group chat window messages for this session.
+        On error, returns an empty list (graceful degradation).
+        """
+        try:
+            resp = await self._client.get(
+                f"{self._base_url}/api/tasks/{task_id}/messages/window",
+                params={"session_id": session_id},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            data = body.get("data", [])
+            return data if isinstance(data, list) else []
+        except Exception:
+            logger.warning(
+                "BackendClient.get_agent_window_messages: failed task=%s session=%s",
+                task_id,
+                session_id,
+                exc_info=True,
+            )
+            return []

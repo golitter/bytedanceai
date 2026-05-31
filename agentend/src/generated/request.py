@@ -22,4 +22,5 @@ class AgentRequest(BaseModel):
     workspace_path: Optional[str] = None
     repo_path: Optional[str] = None
     config: Optional[Any] = None
+    group_chat_messages: list[Any] = []
 

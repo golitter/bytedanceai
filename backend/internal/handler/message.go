@@ -80,3 +80,17 @@ func reverseMessages(messages []model.Message) {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 }
+
+// WindowMessages returns the group chat window messages for a given session.
+func (h *MessageHandler) WindowMessages(c *gin.Context) {
+	taskID := c.Param("taskId")
+	sessionID := c.Query("session_id")
+
+	if sessionID == "" {
+		vo.BadRequest(c, "session_id is required")
+		return
+	}
+
+	result := fetchGroupChatWindow(taskID, sessionID)
+	vo.OK(c, result)
+}

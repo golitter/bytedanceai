@@ -64,6 +64,22 @@ definitions:
           - "null"
         additionalProperties: true
         description: "额外配置"
+      group_chat_messages:
+        type: array
+        default: []
+        description: "群聊窗口消息（Backend 注入，其他 Agent 自上次发言以来的消息）"
+        items:
+          type: object
+          properties:
+            role:
+              type: string
+              description: "消息角色（user/agent）"
+            agent_name:
+              type: string
+              description: "Agent 名称"
+            content:
+              type: string
+              description: "消息内容（已截断）"
     required:
       - task_id
       - session_id

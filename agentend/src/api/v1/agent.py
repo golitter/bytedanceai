@@ -189,6 +189,7 @@ async def agent_stream(
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+        "group_chat_messages": request.group_chat_messages or [],
     }
     passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
@@ -242,6 +243,7 @@ async def agent_execute(
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+        "group_chat_messages": request.group_chat_messages or [],
     }
     passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
