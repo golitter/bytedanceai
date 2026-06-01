@@ -40,6 +40,15 @@ class WorkspaceManager:
         stored = await self._store.load_all()
         self._workspaces.update(stored)
 
+    async def create_task_base(self, repo_path: str, task_id: str) -> str:
+        """Create the task-base worktree for orchestrator read-only code access.
+
+        Returns the absolute path of the task-base worktree.
+        Idempotent -- safe to call multiple times for the same task_id.
+        """
+        async with self._get_lock(task_id):
+            return await self._git.task_base_worktree_create(repo_path, task_id)
+
     async def create(
         self,
         repo_path: str,
@@ -122,6 +131,7 @@ class WorkspaceManager:
                 if await self.cleanup(ws.id):
                     count += 1
         if count > 0 and repo_path:
+            await self._git.task_base_worktree_remove(repo_path, task_id)
             await self._git.branch_delete(repo_path, task_branch_name(task_id))
         return count
 

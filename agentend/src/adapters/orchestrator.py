@@ -76,10 +76,14 @@ class OrchestratorAdapter(BaseAgentAdapter):
         workspace_mgr = kwargs.get("workspace_mgr")
         backend_client: BackendClient | None = kwargs.get("backend_client")
         soul_md = kwargs.get("soul_md", "")
+        task_base_path = kwargs.get("task_base_path", "")
 
         # Orchestrator is a coordinator, not a code worker. Keep its planning
         # tools scoped to shared/.agent; sub-agents read/edit code in their own worktrees.
+        # Orchestrator can read the task-base worktree for code context.
         allowed_read_dirs = [str(Path(shared_dir).resolve())]
+        if task_base_path:
+            allowed_read_dirs.append(str(Path(task_base_path).resolve()))
 
         SkillProvisioner().provision(shared_dir, "orchestrator")
 
@@ -108,6 +112,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "task_id": task_id,
             "shared_dir": shared_dir,
             "allowed_read_dirs": allowed_read_dirs,
+            "task_base_path": task_base_path,
             "output_type": "",
             "text": "",
             "plan": None,

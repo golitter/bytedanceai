@@ -89,6 +89,7 @@ class GraphState(TypedDict):
     # skill_prepare intermediate state
     system_prompt: str
     orchestrator: dict
+    task_base_path: str
 
 
 def _build_agents_desc(agents: list[dict]) -> str:
@@ -202,6 +203,7 @@ def skill_prepare_node(state: GraphState) -> dict:
         l2_content=l2,
         replan_reason=state.get("replan_reason"),
         orchestrator_context=state.get("orchestrator_context", ""),
+        task_base_path=state.get("task_base_path", ""),
     )
 
     return {"system_prompt": system_prompt}

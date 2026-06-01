@@ -68,6 +68,26 @@ class GitOps:
         ok, _ = await self._run_git("branch", branch, "main", cwd=repo_path)
         return ok
 
+    async def task_base_worktree_create(self, repo_path: str, task_id: str) -> str:
+        """Create a task-base worktree at worktrees/{task_id}/task-base on task/{task_id}.
+
+        Returns the absolute path. Idempotent -- creates the task branch if needed.
+        """
+        await self.task_branch_create(repo_path, task_id)
+        task_branch = f"task/{task_id}"
+        worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
+        ok = await self.worktree_add(repo_path, worktree_path, task_branch, base_branch=task_branch)
+        if not ok:
+            raise RuntimeError(f"Failed to create task-base worktree for {task_id}")
+        return worktree_path
+
+    async def task_base_worktree_remove(self, repo_path: str, task_id: str) -> bool:
+        """Remove the task-base worktree for a given task_id."""
+        worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
+        if not Path(worktree_path).exists():
+            return True
+        return await self.worktree_remove(worktree_path)
+
     async def worktree_list(self, repo_path: str) -> list[tuple[str, str]]:
         ok, out = await self._run_git("worktree", "list", "--porcelain", cwd=repo_path)
         if not ok:

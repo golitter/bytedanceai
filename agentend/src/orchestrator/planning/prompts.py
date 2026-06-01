@@ -24,6 +24,8 @@ REASON_PROMPT = """\
 
 {orchestrator_context}
 
+{workspace_section}
+
 ## 规则
 
 ### 判断逻辑
@@ -67,6 +69,7 @@ def build_reason_prompt(
     l2_content: dict[str, str] | None = None,
     replan_reason: str | None = None,
     orchestrator_context: str = "",
+    task_base_path: str = "",
 ) -> str:
     from pathlib import Path
 
@@ -105,13 +108,38 @@ def build_reason_prompt(
     else:
         skills_section = "## 可用 Skills\n\n(无)"
 
+    workspace_section = ""
+    if task_base_path:
+        from pathlib import Path
+
+        task_base_resolved = str(Path(task_base_path).resolve())
+        shared_resolved = str(Path(shared_dir).resolve())
+        workspace_section = (
+            "## 工作区目录\n\n"
+            "你可以读取两个目录：\n"
+            f"- **任务代码仓库（只读）**: `{task_base_resolved}`\n"
+            "  这是任务分支 `task/{task_id}` 的 worktree，包含完整的项目代码。"
+            "你可以浏览代码结构、读取源文件来了解项目并做出精准的规划。读取代码时必须使用绝对路径。\n"
+            f"- **共享元数据（可读写）**: `{shared_resolved}`\n"
+            "  包含 plans/、memory/、SOUL.md、.orchestrator/skills/ 等编排相关文件。"
+            "相对路径基于此目录解析。\n\n"
+            "### 子 Agent 工作流程\n\n"
+            "每个子 Agent 拥有独立的代码分支和 worktree 目录（基于任务分支创建，文件结构相同），"
+            "它们在各自的 worktree 中修改代码，完成后 merge 回任务分支。\n\n"
+            "分发任务时：\n"
+            "- 使用**相对路径**指定要修改的文件（如 `README.md`、`frontend/src/App.tsx`），"
+            "不要使用绝对路径——子 Agent 会在自己的 worktree 中找到同名文件\n"
+            "- content 应包含明确的文件路径和修改要求（改什么、改成什么样）\n"
+            "- 你无需关心子 Agent 的 worktree 路径，系统会自动分配\n"
+        )
+
     tools_section = (
         "## 可用工具\n\n"
         "你可以使用以下工具来收集信息：\n"
         "- `current_time()`: 获取当前本地日期和时间；涉及报告日期、今天、明天等时间问题时必须调用\n"
         "- `read_file(path, start_line=1, line_count=200)`: 读取文件指定行范围（带行号，默认前 200 行，最多 500 行）\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
-        "- `list_dir(path)`: 列出目录内容（仅限 shared 目录；相对路径从 shared_dir 解析）\n"
+        "- `list_dir(path)`: 列出目录内容\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
         "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
@@ -130,6 +158,7 @@ def build_reason_prompt(
         soul_section=soul_section,
         skills_section=skills_section,
         tools_section=tools_section,
+        workspace_section=workspace_section,
         replan_section=replan_section,
         orchestrator_context=orchestrator_context,
     )

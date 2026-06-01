@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,6 +27,7 @@ from src.session.store import SessionMappingStore
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
+logger = logging.getLogger(__name__)
 
 
 def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
@@ -37,14 +39,17 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
     repo_path = request.repo_path or config.get("repo_path", "")
 
     expected_shared_dir = ""
+    task_base_path = ""
     if workspace_path:
         # workspace_path is like {repo}/worktrees/{task_id}/{session_id}
         # shared_dir should be {repo}/worktrees/{task_id}/shared/.agent
         expected_shared_dir = str((Path(workspace_path).resolve().parent / "shared" / ".agent").resolve())
+        task_base_path = str((Path(workspace_path).resolve().parent / "task-base").resolve())
     elif repo_path:
         expected_shared_dir = str(
             (Path(repo_path).resolve().parent / "worktrees" / task_id / "shared" / ".agent").resolve()
         )
+        task_base_path = str((Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base").resolve())
 
     if config.get("shared_dir"):
         shared_dir = str(Path(config["shared_dir"]).resolve())
@@ -62,6 +67,7 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
         "shared_dir": shared_dir,
         "repo_path": repo_path,
         "soul_md": config.get("soul_md", ""),
+        "task_base_path": task_base_path,
     }
 
 
@@ -71,6 +77,13 @@ async def _resolve_workspace(
 ) -> str:
     """Return workspace_path, auto-creating workspace if needed."""
     if request.agent_type == AgentType.ORCHESTRATOR:
+        # Create task-base worktree for orchestrator read-only code access
+        repo_path = request.repo_path or (request.config or {}).get("repo_path", "")
+        if repo_path:
+            try:
+                await workspace_mgr.create_task_base(repo_path, request.task_id)
+            except Exception:
+                logger.exception("Failed to create task-base worktree for task %s", request.task_id)
         return ""
     if request.workspace_path:
         return request.workspace_path
