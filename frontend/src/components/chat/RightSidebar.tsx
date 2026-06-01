@@ -79,11 +79,11 @@ export function RightSidebar({
       <div className="flex h-full shrink-0 items-start border-l border-sidebar-border bg-sidebar pt-3">
         <button
           type="button"
-          className="flex h-8 w-7 items-center justify-center rounded-l-md text-tertiary transition-colors hover:bg-bg-hover hover:text-foreground"
+          className="flex h-8 w-7 items-center justify-center rounded-l-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-bg-hover hover:text-foreground"
           onClick={onExpand}
           title="展开侧栏"
         >
-          <PanelRightOpen className="h-4 w-4" strokeWidth={1.25} />
+          <PanelRightOpen className="h-4 w-4" strokeWidth={1.5} />
         </button>
       </div>
     )

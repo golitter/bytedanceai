@@ -41,7 +41,9 @@ export function useResize({
   const [width, setWidth] = useState(() => {
     try {
       const stored = localStorage.getItem(storageKey + LS_WIDTH_SUFFIX)
-      return stored ? Number(stored) : initialWidth
+      const parsed = stored ? Number(stored) : initialWidth
+      // Guard against 0 (stale value from before the fix)
+      return parsed > 0 ? parsed : initialWidth
     } catch {
       return initialWidth
     }
@@ -108,7 +110,6 @@ export function useResize({
       const newWidth = Math.min(maxWidth, Math.max(0, startWidthRef.current + delta))
 
       if (newWidth < collapseThreshold) {
-        setWidth(0)
         setIsCollapsed(true)
       } else {
         const clamped = Math.max(minWidth, newWidth)
