@@ -7,6 +7,7 @@ type SessionState string
 const (
 	SessionStateIdle SessionState = "idle"
 	SessionStateRunning SessionState = "running"
+	SessionStateAwaitingReview SessionState = "awaiting_review"
 	SessionStateCompleted SessionState = "completed"
 	SessionStateInterrupted SessionState = "interrupted"
 	SessionStateError SessionState = "error"
@@ -16,6 +17,7 @@ const (
 type SessionStateTransitions struct {
 	Idle []SessionState `json:"idle"`
 	Running []SessionState `json:"running"`
+	AwaitingReview []SessionState `json:"awaiting_review"`
 	Completed []SessionState `json:"completed"`
 	Interrupted []SessionState `json:"interrupted"`
 	Error []SessionState `json:"error"`

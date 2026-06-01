@@ -12,6 +12,7 @@ class EventType(str, Enum):
     TOOL_RESULT = "tool_result"
     ARTIFACT = "artifact"
     PLANNING = "planning"
+    PLAN_REVIEW = "plan_review"
     DONE = "done"
     ERROR = "error"
     RUNTIME_EXECUTING = "runtime_executing"

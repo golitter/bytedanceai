@@ -12,6 +12,7 @@ definitions:
     enum:
       - idle        # 空闲，等待任务
       - running     # 执行中
+      - awaiting_review # 等待用户审查 Orchestrator 规划
       - completed   # 正常完成（终态）
       - interrupted # 被中断（终态）
       - error       # 出错（终态）
@@ -40,7 +41,15 @@ definitions:
           - completed
           - interrupted
           - error
+          - awaiting_review
         description: "running → completed / interrupted / error"
+      awaiting_review:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const:
+          - running
+        description: "awaiting_review → running"
       completed:
         type: array
         items:
@@ -68,6 +77,7 @@ definitions:
     required:
       - idle
       - running
+      - awaiting_review
       - completed
       - interrupted
       - error

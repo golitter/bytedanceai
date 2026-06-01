@@ -11,6 +11,7 @@ const (
 	EventTypeToolResult EventType = "tool_result"
 	EventTypeArtifact EventType = "artifact"
 	EventTypePlanning EventType = "planning"
+	EventTypePlanReview EventType = "plan_review"
 	EventTypeDone EventType = "done"
 	EventTypeError EventType = "error"
 	EventTypeRuntimeExecuting EventType = "runtime_executing"

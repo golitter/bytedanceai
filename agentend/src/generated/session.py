@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class SessionState(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
+    AWAITING_REVIEW = "awaiting_review"
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     ERROR = "error"
@@ -16,6 +17,7 @@ class SessionState(str, Enum):
 class SessionStateTransitions(BaseModel):
     idle: list[Any]
     running: list[Any]
+    awaiting_review: list[Any]
     completed: list[Any]
     interrupted: list[Any]
     error: list[Any]

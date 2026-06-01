@@ -16,6 +16,7 @@ definitions:
       - tool_result           # 工具调用结果返回
       - artifact              # 产出物（文件/代码等）
       - planning              # 规划/思考过程
+      - plan_review           # Orchestrator 规划审查请求
       - done                  # 流结束
       - error                 # 错误事件
       - runtime_executing     # Agent 开始执行任务

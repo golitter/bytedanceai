@@ -20,6 +20,7 @@ docs/
 - [three-tier-design.md](design/three-tier-design.md) — 三层架构设计（React + Go + Python）
 - [planning-context-module.md](design/planning-context-module.md) — Orchestrator Planning ToolMessage 结构化设计
 - [soul-md-identity-document.md](design/soul-md-identity-document.md) — SOUL.md Agent 身份文档设计与实现
+- [orchestrator-plan-review.md](design/orchestrator-plan-review.md) — Orchestrator 规划审查机制（会话状态 + 后端 API 网关）
 ### reference/
 
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
@@ -54,6 +55,7 @@ docs/
 
 - [codediff-test.md](payloads/codediff-test.md) — CodeDiff 测试
 - [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — Orchestrator 测试场景
+- [plan-review-demo.html](payloads/plan-review-demo.html) — 规划审查前端 Demo（PlanReviewCard 交互原型）
 
 ### dev-plan/（独立保留）
 
