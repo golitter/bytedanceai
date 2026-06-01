@@ -13,7 +13,7 @@ export function PreviewCard({ url }: PreviewCardProps) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-[transform,opacity] hover:text-foreground"
         >
           在新标签页打开
           <ExternalLink className="h-3 w-3" strokeWidth={1.25} />

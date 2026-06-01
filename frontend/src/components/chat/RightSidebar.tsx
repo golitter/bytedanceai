@@ -11,6 +11,7 @@ import { useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
+import { MESSAGE_ROLES } from '@/lib/constants'
 
 import { AnnouncementsSection } from './AnnouncementsSection'
 import { HistorySearch } from './HistorySearch'
@@ -79,7 +80,7 @@ export function RightSidebar({
       <div className="flex h-full shrink-0 items-start border-l border-sidebar-border bg-sidebar pt-3">
         <button
           type="button"
-          className="flex h-8 w-7 items-center justify-center rounded-l-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-bg-hover hover:text-foreground"
+          className="flex h-8 w-7 items-center justify-center rounded-l-md border border-border bg-accent text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
           onClick={onExpand}
           title="展开侧栏"
         >
@@ -99,7 +100,7 @@ export function RightSidebar({
       >
         {/* Visible grip line */}
         <div
-          className={`absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 transition-colors duration-120 ${
+          className={`absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 transition-[transform,opacity] duration-120 ${
             isDragging ? 'bg-brand' : 'bg-border group-hover:bg-brand'
           }`}
         />
@@ -130,7 +131,7 @@ export function RightSidebar({
                 <div>
                   <span className="mb-0.5 block text-[11px] text-tertiary">仓库路径</span>
                   <p
-                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
                     title={`${repoPath} — 双击复制`}
                     onDoubleClick={() => {
                       navigator.clipboard.writeText(repoPath)
@@ -148,7 +149,7 @@ export function RightSidebar({
                 <div>
                   <span className="mb-0.5 block text-[11px] text-tertiary">任务路径</span>
                   <p
-                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
                     title={`${repoPath}/worktrees/${taskId} — 双击复制`}
                     onDoubleClick={() => {
                       navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
@@ -177,7 +178,7 @@ export function RightSidebar({
         <div className="flex flex-col gap-0.5 px-4 py-3">
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
             onClick={() =>
               exportChatAsMarkdown(
                 taskId,
@@ -190,14 +191,14 @@ export function RightSidebar({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
           >
             <Pin className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.25} />
             置顶会话
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-colors hover:bg-danger-bg"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[transform,opacity] hover:bg-danger-bg"
             onClick={() => {
               if (confirm('确认退出群聊？退出后将无法查看群聊消息。')) {
                 /* TODO: leave group */
@@ -228,8 +229,8 @@ function showCopyToast() {
     padding: '8px 16px',
     borderRadius: '8px',
     fontSize: '13px',
-    color: '#fff',
-    background: 'rgba(0,0,0,0.75)',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-card)',
     backdropFilter: 'blur(8px)',
     zIndex: '9999',
     pointerEvents: 'none',
@@ -255,7 +256,7 @@ async function exportChatAsMarkdown(taskId: string, sessionIds: string[]) {
     .sort((a, b) => a.timestamp - b.timestamp)
   const lines = allMessages.map(
     (m) =>
-      `**${m.role === 'user' ? 'You' : (m.agentName ?? 'Agent')}** (${new Date(m.timestamp).toLocaleString()}):\n${m.content}`,
+      `**${m.role === MESSAGE_ROLES.USER ? 'You' : (m.agentName ?? 'Agent')}** (${new Date(m.timestamp).toLocaleString()}):\n${m.content}`,
   )
   const md = `# Chat Export — ${taskId}\n\n${lines.join('\n\n---\n\n')}`
   const blob = new Blob([md], { type: 'text/markdown' })

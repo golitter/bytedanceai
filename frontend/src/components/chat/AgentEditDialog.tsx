@@ -1,7 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { updateSession, uploadAvatar } from '@/lib/api'
 
 interface AgentEditDialogProps {
@@ -68,6 +74,7 @@ export function AgentEditDialog({
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-foreground">编辑 Agent</DialogTitle>
+          <DialogDescription className="sr-only">编辑 Agent 名称和头像</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">

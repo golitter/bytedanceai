@@ -20,7 +20,7 @@ export function AttachmentCard({ path, sessionId }: AttachmentCardProps) {
         <a
           href={fileUrl}
           download
-          className="ml-auto shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="ml-auto shrink-0 rounded-md p-1.5 text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground"
         >
           <Download className="h-4 w-4" strokeWidth={1.25} />
         </a>

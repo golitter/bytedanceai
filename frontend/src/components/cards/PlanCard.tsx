@@ -16,7 +16,7 @@ const statusIcon: Record<string, string> = {
 const statusColor: Record<string, string> = {
   running: 'text-agent-claude',
   completed: 'text-agent-opencode',
-  failed: 'text-red-500',
+  failed: 'text-destructive',
   pending: 'text-muted-foreground',
 }
 

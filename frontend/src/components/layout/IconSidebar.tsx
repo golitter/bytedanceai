@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import { getAdminAvatar } from '@/lib/api'
+import { CURRENT_USER_NAME } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import { useAdminStore } from '@/stores/admin'
 import { type NavTab, useActiveTab } from '@/stores/chat'
 
@@ -20,19 +22,16 @@ function NavItem({ icon, label, tab, disabled }: NavItemProps) {
 
   return (
     <button
-      className="flex w-[44px] flex-col items-center justify-center gap-[2px] rounded-[6px] py-[6px]"
-      style={{
-        height: 44,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.35 : 1,
-        background: isActive ? 'var(--primary-soft)' : 'transparent',
-        color: isActive ? 'var(--primary)' : 'var(--text-tertiary)',
-      }}
+      className={cn(
+        'flex w-[44px] h-11 flex-col items-center justify-center gap-[2px] rounded-[6px] py-[6px] transition-[transform,opacity]',
+        disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer',
+        isActive ? 'bg-primary-soft text-primary' : 'text-tertiary',
+      )}
       onClick={() => !disabled && setActiveTab(tab)}
       {...(!isActive && !disabled ? hoverStyle : {})}
     >
       {icon}
-      <span style={{ fontSize: 11, lineHeight: 1 }}>{label}</span>
+      <span className="text-[11px] leading-none">{label}</span>
     </button>
   )
 }
@@ -60,33 +59,34 @@ function UserAvatarCard() {
     <div className="group relative mb-5">
       <img
         src={displayUrl}
-        alt="田乐檬"
+        alt={CURRENT_USER_NAME}
         className="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity duration-150 group-hover:opacity-85"
         {...hoverStyle}
       />
-      <span
-        className="absolute -right-0.5 -bottom-0.5 h-[10px] w-[10px] rounded-full border border-[var(--bg-sidebar)]"
-        style={{ background: 'var(--color-success)' }}
-      />
+      <span className="absolute -right-0.5 -bottom-0.5 h-[10px] w-[10px] rounded-full border border-sidebar bg-success" />
 
-      {/* hover 卡片 */}
+      {/* hover 卡片 — popup shadow is allowed per VSG */}
       <div
         className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-[12px] border border-border bg-card p-4 opacity-0 shadow-lg transition-[transform,opacity] duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
         style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
       >
         <div className="flex items-center gap-2.5">
-          <img src={displayUrl} alt="田乐檬" className="h-10 w-10 rounded-full object-cover" />
+          <img
+            src={displayUrl}
+            alt={CURRENT_USER_NAME}
+            className="h-10 w-10 rounded-full object-cover"
+          />
           <div>
-            <div className="text-[13px] font-semibold text-foreground">田乐檬</div>
+            <div className="text-[13px] font-semibold text-foreground">{CURRENT_USER_NAME}</div>
             <div className="text-[11px] text-tertiary">tln · 在线</div>
           </div>
         </div>
         <div className="my-2 h-px bg-border" />
         <div className="flex gap-1.5">
-          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-[transform,opacity] hover:bg-active">
             编辑资料
           </button>
-          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-[transform,opacity] hover:bg-active">
             退出登录
           </button>
         </div>

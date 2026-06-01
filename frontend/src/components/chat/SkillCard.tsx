@@ -12,7 +12,7 @@ export function SkillCard({ skill }: { skill: AgentSkill }) {
           </span>
         )}
       </div>
-      <p className="text-[13px] leading-relaxed text-secondary">{skill.description}</p>
+      <p className="text-[13px] leading-relaxed text-text-secondary">{skill.description}</p>
       {skill.source && <p className="mt-1.5 font-mono text-[11px] text-tertiary">{skill.source}</p>}
     </div>
   )

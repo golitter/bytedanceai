@@ -72,14 +72,14 @@ export default function DiffFileEditorInner({
       <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-1.5">
         <button
           onClick={onCancel}
-          className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground"
         >
           取消
         </button>
         <button
           onClick={handleSave}
           disabled={saving || modifiedContent === newContent}
-          className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-[transform,opacity] hover:bg-primary/90 disabled:opacity-50"
         >
           {saving ? '保存中...' : '保存修改'}
         </button>

@@ -17,7 +17,7 @@ export function AgentMeta({ detail }: { detail: AgentDetail }) {
 function MetaItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-secondary">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-text-secondary">{label}</span>
       <span className={cn('text-[13px] break-all', mono && 'font-mono text-xs')}>{value}</span>
     </div>
   )

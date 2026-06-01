@@ -2,7 +2,7 @@ import { AlertCircle, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
-import { AGENT_COLORS } from '@/lib/constants'
+import { AGENT_COLORS, AGENT_TYPES } from '@/lib/constants'
 
 import { AgentAvatar } from './AgentAvatar'
 
@@ -24,7 +24,10 @@ interface AskAgentCardProps {
 
 function isAgentType(value: string | undefined): value is AgentType {
   return (
-    value === 'claude-code' || value === 'opencode' || value === 'orchestrator' || value === 'codex'
+    value === AGENT_TYPES.ClaudeCode ||
+    value === AGENT_TYPES.Opencode ||
+    value === AGENT_TYPES.Orchestrator ||
+    value === AGENT_TYPES.Codex
   )
 }
 
@@ -52,10 +55,10 @@ export function AskAgentCard({
   const answered = status === 'answered'
   const failed = status === 'failed'
   const canToggle = answered || failed
-  const sourceType = isAgentType(sourceAgentType) ? sourceAgentType : 'orchestrator'
+  const sourceType = isAgentType(sourceAgentType) ? sourceAgentType : AGENT_TYPES.Orchestrator
   const sourceColor = AGENT_COLORS[sourceType] ?? 'var(--primary)'
-  const sourceLabel = sourceAgent || 'orchestrator'
-  const agentType = isAgentType(targetAgentType) ? targetAgentType : 'claude-code'
+  const sourceLabel = sourceAgent || AGENT_TYPES.Orchestrator
+  const agentType = isAgentType(targetAgentType) ? targetAgentType : AGENT_TYPES.ClaudeCode
   const targetColor = AGENT_COLORS[agentType] ?? 'var(--primary)'
   const targetLabel = targetAgent
   const headerSummary = compact(question)

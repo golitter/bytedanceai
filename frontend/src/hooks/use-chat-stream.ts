@@ -4,6 +4,7 @@ import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
 import { getTaskMessages, submitMessage } from '@/lib/api'
+import { MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -234,7 +235,7 @@ export function useChatStream(
     async (message: string, agentType: AgentType = 'claude-code') => {
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
-        role: 'user',
+        role: MESSAGE_ROLES.USER,
         content: message,
         timestamp: Date.now(),
       }

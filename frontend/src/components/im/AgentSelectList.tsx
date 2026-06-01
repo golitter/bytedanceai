@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import type { AgentType } from '@/generated/request'
+import { AGENT_TYPES } from '@/lib/constants'
 
 export interface AgentEntry {
   type: AgentType
@@ -34,7 +35,10 @@ export function AgentSelectList({
       setRuleError('')
       return
     }
-    if (addingType === 'orchestrator' && agents.some((a) => a.type === 'orchestrator')) {
+    if (
+      addingType === AGENT_TYPES.Orchestrator &&
+      agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
+    ) {
       setRuleError('只能添加一个 Orchestrator')
       setNameError(false)
       return
@@ -129,7 +133,7 @@ export function AgentSelectList({
               {types.map((agent) => (
                 <button
                   key={agent.type}
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground transition-[transform,opacity] hover:bg-accent"
                   onClick={() => {
                     setAddingType(agent.type as AgentType)
                     setInputName('')

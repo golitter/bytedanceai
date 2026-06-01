@@ -1,5 +1,5 @@
 import type { AgentType } from '@/generated/request'
-import { API_BASE } from '@/lib/constants'
+import { AGENT_TYPES, API_BASE } from '@/lib/constants'
 
 export class ApiError extends Error {
   status: number
@@ -129,7 +129,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 
     // Group chat: task has multiple sessions → show as one conversation using orchestrator
     if (sessions.length > 1) {
-      const orchestrator = sessions.find((s) => s.agent_type === 'orchestrator')
+      const orchestrator = sessions.find((s) => s.agent_type === AGENT_TYPES.Orchestrator)
       const primary = orchestrator ?? sessions[0]
       convos.push({
         taskId: detail.task.task_id,
@@ -180,8 +180,8 @@ export async function createConversation(
   title?: string,
 ): Promise<Conversation> {
   // Validate: orchestrator alone is not allowed
-  const hasOrchestrator = agents.some((a) => a.type === 'orchestrator')
-  const hasNonOrchestrator = agents.some((a) => a.type !== 'orchestrator')
+  const hasOrchestrator = agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
+  const hasNonOrchestrator = agents.some((a) => a.type !== AGENT_TYPES.Orchestrator)
   if (hasOrchestrator && !hasNonOrchestrator) {
     throw new Error('Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent')
   }
@@ -190,7 +190,7 @@ export async function createConversation(
   const allAgents = hasOrchestrator
     ? agents
     : agents.length >= 2
-      ? [{ type: 'orchestrator' as AgentType, name: '编排器' }, ...agents]
+      ? [{ type: AGENT_TYPES.Orchestrator as AgentType, name: '编排器' }, ...agents]
       : agents
 
   const names = agents.map((a) => a.name || a.type).join(' + ')
@@ -202,7 +202,7 @@ export async function createConversation(
   )
   const detail = await fetchTask(task.task_id)
   // Primary session: orchestrator for group chats, first session for single
-  const orchestrator = detail.sessions.find((s) => s.agent_type === 'orchestrator')
+  const orchestrator = detail.sessions.find((s) => s.agent_type === AGENT_TYPES.Orchestrator)
   const primary = orchestrator ?? detail.sessions[0]
   if (!primary) throw new Error('Backend failed to create session')
   const isGroup = allAgents.length > 1

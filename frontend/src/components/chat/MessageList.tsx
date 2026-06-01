@@ -7,6 +7,7 @@ import { useMessageScroll } from '@/hooks/use-message-scroll'
 import type { AgentSessionInfo } from '@/lib/api'
 import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { MessageBlock } from '@/lib/block-types'
+import { MESSAGE_ROLES } from '@/lib/constants'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
@@ -38,7 +39,7 @@ type DisplayItem =
 const VIRTUALIZE_THRESHOLD = 50
 
 function shouldRenderMessage(msg: ChatMessage): boolean {
-  if (msg.role === 'user') return true
+  if (msg.role === MESSAGE_ROLES.USER) return true
   if (msg.blocks?.length) return true
   return Boolean(msg.content.trim())
 }
@@ -221,7 +222,7 @@ export function MessageList({
 
       {!autoScroll && (
         <button
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg bg-accent transition-colors"
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg bg-accent transition-[transform,opacity]"
           onClick={() => {
             scrollToBottom()
             enableAutoScroll()

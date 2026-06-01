@@ -1,6 +1,7 @@
 import { ChevronDown, Pin, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { MESSAGE_ROLES } from '@/lib/constants'
 import { useChatStore } from '@/stores/chat'
 
 import { useCollapsible } from './RightSidebar'
@@ -28,7 +29,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
   const handleCreate = async () => {
     if (!newContent.trim()) return
     await addAnnouncement(taskId, {
-      sender_id: 'user',
+      sender_id: MESSAGE_ROLES.USER,
       sender_name: 'You',
       content: newContent.trim(),
       pinned: newPinned,
@@ -55,7 +56,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
         onClick={toggleOpen}
       >
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-secondary transition-colors hover:text-foreground">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
           群公告
           <span className="rounded-full bg-accent px-1.5 py-px text-[11px] font-normal tracking-normal text-tertiary">
             {announcements.length}
@@ -83,12 +84,12 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
           {sorted.map((ann) => (
             <div
               key={ann.id}
-              className="group relative mb-2 rounded-md border border-border bg-card p-3 transition-colors last:mb-0 hover:border-primary-border hover:bg-bg-hover"
+              className="group relative mb-2 rounded-md border border-border bg-card p-3 transition-[transform,opacity] last:mb-0 hover:border-primary-border hover:bg-bg-hover"
             >
               {/* Delete button — visible on hover */}
               <button
                 type="button"
-                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-0 transition-colors hover:bg-danger-bg hover:text-destructive group-hover:opacity-100"
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-0 transition-[transform,opacity] hover:bg-danger-bg hover:text-destructive group-hover:opacity-100"
                 title="删除公告"
                 onClick={() => {
                   if (confirm('确认删除此公告？')) handleDelete(ann.id)
@@ -97,15 +98,15 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                 <Trash2 className="h-3 w-3" strokeWidth={1.25} />
               </button>
               {ann.pinned && (
-                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-medium text-color-warning">
+                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-color-warning">
                   <Pin className="h-2.5 w-2.5" strokeWidth={1.25} /> 置顶
                 </span>
               )}
-              <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-secondary">
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-text-secondary">
                 <span>{ann.sender_name}</span>
               </div>
               <div className="text-xs leading-relaxed text-foreground">{ann.content}</div>
-              <div className="mt-1.5 text-[10px] text-tertiary">
+              <div className="mt-1.5 text-[11px] text-tertiary">
                 {new Date(ann.created_at).toLocaleDateString('zh-CN', {
                   month: '2-digit',
                   day: '2-digit',
@@ -118,7 +119,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
           {!showCreateForm ? (
             <button
               type="button"
-              className="mt-2 w-full rounded-md border border-dashed border-primary-border py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:bg-primary-soft hover:text-primary"
+              className="mt-2 w-full rounded-md border border-dashed border-primary-border py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:border-primary hover:bg-primary-soft hover:text-primary"
               onClick={() => setShowCreateForm(true)}
             >
               + 发布新公告
@@ -134,7 +135,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                 autoFocus
               />
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-1.5 text-xs text-secondary">
+                <label className="flex items-center gap-1.5 text-xs text-text-secondary">
                   <input
                     type="checkbox"
                     checked={newPinned}

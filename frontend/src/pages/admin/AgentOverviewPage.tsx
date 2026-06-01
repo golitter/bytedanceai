@@ -1,33 +1,26 @@
+import { useQuery } from '@tanstack/react-query'
 import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
-import { adminAuth, type AgentInfo, getAdminAgents } from '@/lib/api'
+import { adminAuth, getAdminAgents } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function AgentOverviewPage() {
-  const [agents, setAgents] = useState<AgentInfo[]>([])
-  const [loading, setLoading] = useState(false)
+  const {
+    data: agents,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ['admin-agents'],
+    queryFn: getAdminAgents,
+    staleTime: 30_000,
+  })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [reauthTarget, setReauthTarget] = useState<string | null>(null)
   const [reauthPassword, setReauthPassword] = useState('')
   const [reauthError, setReauthError] = useState('')
   const [reauthLoading, setReauthLoading] = useState(false)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      setAgents(await getAdminAgents())
-    } catch {
-      /* ignore */
-    }
-    setLoading(false)
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    load()
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [])
 
   const handleToggle = (agentType: string) => {
     if (expanded.has(agentType)) {
@@ -63,14 +56,11 @@ export function AgentOverviewPage() {
   return (
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Agent 概览
-        </h2>
+        <h2 className="text-lg font-semibold text-foreground">Agent 概览</h2>
         <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] transition-colors"
-          style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity]"
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--bg-hover)'
           }}
@@ -78,44 +68,29 @@ export function AgentOverviewPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
+          <RefreshCw
+            className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {agents.map((agent) => (
-          <div
-            key={agent.type}
-            className="rounded-lg"
-            style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
-          >
+        {(agents ?? []).map((agent) => (
+          <div key={agent.type} className="rounded-lg border border-border bg-card">
             <div className="flex items-start gap-3 p-4">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-lg"
-                style={{ background: 'var(--primary-soft)' }}
-              >
-                <Bot
-                  className="h-5 w-5"
-                  strokeWidth={1.25}
-                  style={{ color: 'var(--color-brand)' }}
-                />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft">
+                <Bot className="h-5 w-5 text-brand" strokeWidth={1.25} />
               </div>
               <div className="flex-1">
-                <h3 className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {agent.name}
-                </h3>
-                <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
-                  {agent.description}
-                </p>
-                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  {agent.configDir}
-                </p>
+                <h3 className="text-[14px] font-medium text-foreground">{agent.name}</h3>
+                <p className="text-[12px] text-tertiary">{agent.description}</p>
+                <p className="mt-1 text-[11px] text-tertiary">{agent.configDir}</p>
               </div>
               <button
                 onClick={() => handleToggle(agent.type)}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] transition-colors"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[transform,opacity]"
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'var(--bg-hover)'
                 }}
@@ -132,14 +107,8 @@ export function AgentOverviewPage() {
               </button>
             </div>
             {expanded.has(agent.type) && (
-              <div
-                className="p-4"
-                style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-hover)' }}
-              >
-                <pre
-                  className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-md p-3 font-mono text-[12px]"
-                  style={{ background: 'var(--bg-canvas)', color: 'var(--text-primary)' }}
-                >
+              <div className="border-t border-border bg-hover p-4">
+                <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-md bg-bg-canvas p-3 font-mono text-[12px] text-foreground">
                   {agent.configContent || '无配置内容'}
                 </pre>
               </div>
@@ -150,27 +119,13 @@ export function AgentOverviewPage() {
 
       {/* Inline re-auth dialog */}
       {reauthTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-        >
-          <div
-            className="w-[340px] rounded-lg p-5"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-[340px] rounded-lg border border-border bg-card p-5">
             <div className="mb-3 flex items-center gap-2">
-              <Lock
-                className="h-4 w-4"
-                strokeWidth={1.25}
-                style={{ color: 'var(--color-brand)' }}
-              />
-              <span className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                敏感操作确认
-              </span>
+              <Lock className="h-4 w-4 text-brand" strokeWidth={1.25} />
+              <span className="text-[14px] font-medium text-foreground">敏感操作确认</span>
             </div>
-            <p className="mb-3 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-              查看配置文件需要再次验证密码
-            </p>
+            <p className="mb-3 text-[13px] text-text-secondary">查看配置文件需要再次验证密码</p>
             <form onSubmit={handleReauthSubmit} className="flex flex-col gap-3">
               <input
                 type="password"
@@ -180,33 +135,22 @@ export function AgentOverviewPage() {
                   setReauthError('')
                 }}
                 placeholder="请输入密码"
-                className="h-9 rounded-md px-3 text-sm outline-none"
-                style={{
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-canvas)',
-                  color: 'var(--text-primary)',
-                }}
+                className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none"
                 autoFocus
               />
-              {reauthError && (
-                <p className="text-xs" style={{ color: 'var(--color-error)' }}>
-                  {reauthError}
-                </p>
-              )}
+              {reauthError && <p className="text-xs text-error">{reauthError}</p>}
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setReauthTarget(null)}
-                  className="h-9 flex-1 rounded-md text-[13px]"
-                  style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={reauthLoading || !reauthPassword}
-                  className="h-9 flex-1 rounded-md text-[13px] font-medium disabled:opacity-50"
-                  style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
+                  className="h-9 flex-1 rounded-md bg-brand text-[13px] font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {reauthLoading ? '验证中...' : '确认'}
                 </button>

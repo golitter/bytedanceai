@@ -25,7 +25,7 @@ const BADGE_CONFIG: Record<string, { icon: ReactNode; label: string; className: 
   committed: {
     icon: <Check className="h-3 w-3" strokeWidth={1.25} />,
     label: '已接受',
-    className: 'bg-green-500/10 text-green-600',
+    className: 'bg-success/10 text-success',
   },
   reverted: {
     icon: <RotateCcw className="h-3 w-3" strokeWidth={1.25} />,
@@ -55,8 +55,8 @@ export function DiffHeader({
     <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
       <span className="text-xs text-muted-foreground">
         {summary.filesChanged} file{summary.filesChanged !== 1 ? 's' : ''} changed,{' '}
-        <span className="text-green-500">+{summary.additions}</span>{' '}
-        <span className="text-red-500">-{summary.deletions}</span>
+        <span className="text-success">+{summary.additions}</span>{' '}
+        <span className="text-destructive">-{summary.deletions}</span>
       </span>
       <div className="flex items-center gap-1">
         {/* View mode toggle */}
@@ -64,7 +64,7 @@ export function DiffHeader({
           <button
             onClick={() => onViewTypeChange('split')}
             className={clsx(
-              'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-colors',
+              'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-[transform,opacity]',
               viewType === 'split'
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
@@ -76,7 +76,7 @@ export function DiffHeader({
           <button
             onClick={() => onViewTypeChange('unified')}
             className={clsx(
-              'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-colors',
+              'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-[transform,opacity]',
               viewType === 'unified'
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
@@ -99,7 +99,7 @@ export function DiffHeader({
         {!isSettled && hasSession && (
           <button
             onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground"
           >
             <Pencil className="h-3 w-3" strokeWidth={1.25} />
             编辑
@@ -110,7 +110,7 @@ export function DiffHeader({
             <button
               onClick={onAccept}
               disabled={actionStatus !== 'idle'}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
               <Check className="h-3 w-3" strokeWidth={1.25} />
               {actionStatus === 'committing' ? '提交中...' : '接受变更'}
@@ -118,7 +118,7 @@ export function DiffHeader({
             <button
               onClick={onReject}
               disabled={actionStatus !== 'idle'}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
               <RotateCcw className="h-3 w-3" strokeWidth={1.25} />
               {actionStatus === 'reverting' ? '撤销中...' : '拒绝变更'}

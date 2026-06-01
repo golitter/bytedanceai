@@ -17,7 +17,7 @@ import {
   ToolCard,
 } from '@/components/cards'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
@@ -260,7 +260,7 @@ function AgentMessageContent({
         )}
         <button
           type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-foreground"
           onClick={(event) => {
             event.stopPropagation()
             setZoomed(true)
@@ -294,6 +294,7 @@ function AgentMessageContent({
       <Dialog open={zoomed} onOpenChange={setZoomed}>
         <DialogContent className="flex h-[min(86vh,900px)] max-h-[86vh] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0">
           <DialogTitle className="sr-only">消息详情</DialogTitle>
+          <DialogDescription className="sr-only">查看消息的完整内容</DialogDescription>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 pr-8">
             {renderContent(true)}
           </div>

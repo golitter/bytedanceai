@@ -4,7 +4,7 @@ import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
-import { AGENT_NAMES } from '@/lib/constants'
+import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -29,7 +29,7 @@ interface ChatAreaProps {
 export function ChatArea({
   taskId,
   sessionId,
-  agentType = 'claude-code',
+  agentType = AGENT_TYPES.ClaudeCode,
   agentName,
   avatarUrl,
   repoPath: _repoPath,
@@ -42,7 +42,7 @@ export function ChatArea({
   const { state, sendMessage } = useChatStream(taskId, sessionId, agentType, {
     includeTaskMessages: Boolean(isGroupChat),
   })
-  const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
+  const isStreaming = ACTIVE_STATUSES.has(state.status)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const { data: conversations } = useConversations()
@@ -64,8 +64,8 @@ export function ChatArea({
       const visibleRows = isGroupChat
         ? res.data.filter((m) =>
             m.session_id === sessionId
-              ? m.role !== 'agent' || !m.agent_type || m.agent_type === agentType
-              : m.role === 'agent',
+              ? m.role !== MESSAGE_ROLES.AGENT || !m.agent_type || m.agent_type === agentType
+              : m.role === MESSAGE_ROLES.AGENT,
           )
         : res.data
       const chatMessages: ChatMessage[] = visibleRows.map((m) => ({
@@ -103,7 +103,7 @@ export function ChatArea({
     const streamingNames = taskSessions
       .filter((c) => {
         const s = getSession(c.sessionId)
-        return ['loading', 'streaming', 'tool_running'].includes(s.status)
+        return ACTIVE_STATUSES.has(s.status)
       })
       .map((c) => c.agentName ?? AGENT_NAMES[c.agentType] ?? c.agentType)
     if (streamingNames.length === 0) return undefined

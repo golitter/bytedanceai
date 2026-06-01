@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
-import { AGENT_NAMES } from '@/lib/constants'
+import { ACTIVE_STATUSES, AGENT_NAMES, CURRENT_USER_NAME } from '@/lib/constants'
 import { useAdminStore } from '@/stores/admin'
 import { useChatStore } from '@/stores/chat'
 
@@ -22,11 +22,7 @@ function getAgentTypeLabel(agentType: AgentType): string {
 function isOnline(sessionId: string, sessions: Record<string, { status: string }>): boolean {
   const session = sessions[sessionId]
   if (!session) return false
-  return (
-    session.status === 'streaming' ||
-    session.status === 'loading' ||
-    session.status === 'tool_running'
-  )
+  return ACTIVE_STATUSES.has(session.status)
 }
 
 export function MembersSection({ agentTypes, agentNames, sessions }: MembersSectionProps) {
@@ -57,7 +53,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
         onClick={toggleOpen}
       >
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-secondary transition-colors hover:text-foreground">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
           群成员
           <span className="rounded-full bg-accent px-1.5 py-px text-[11px] font-normal tracking-normal text-tertiary">
             {members.length + 1}
@@ -87,18 +83,15 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
                       adminAvatarUrl ||
                       'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
                     }
-                    alt="田乐檬"
+                    alt={CURRENT_USER_NAME}
                     className="h-full w-full rounded-md object-cover"
                   />
                 </div>
               </div>
-              <span
-                className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-background"
-                style={{ width: 6, height: 6, backgroundColor: 'var(--color-success)' }}
-              />
+              <span className="absolute -right-0.5 -bottom-0.5 block h-1.5 w-1.5 rounded-full border border-background bg-success" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">田乐檬</div>
+              <div className="text-[13px] font-medium">{CURRENT_USER_NAME}</div>
               <div className="text-[11px] text-tertiary">用户</div>
             </div>
           </div>
@@ -110,7 +103,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
             return (
               <div
                 key={i}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-bg-hover"
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 transition-[transform,opacity] hover:bg-bg-hover"
                 onClick={() => handleNavigate(member.sessionId)}
                 role="button"
                 tabIndex={0}

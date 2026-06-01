@@ -2,6 +2,8 @@ import { BarChart3, Bot, FolderOpen, Heart, LayoutDashboard, Trash2, UserCog } f
 import { useEffect, useState } from 'react'
 
 import { getAdminAvatar } from '@/lib/api'
+import { CURRENT_USER_NAME } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import { type AdminMenuKey, useAdminMenu, useAdminStore } from '@/stores/admin'
 
 interface MenuItemProps {
@@ -38,18 +40,11 @@ function MenuItem({ icon, label, menuKey }: MenuItemProps) {
 
   return (
     <button
-      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] transition-colors"
-      style={{
-        background: isActive ? 'var(--primary-soft)' : 'transparent',
-        color: isActive ? 'var(--color-brand)' : 'var(--text-secondary)',
-      }}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] transition-[transform,opacity]',
+        isActive ? 'bg-primary-soft text-brand' : 'text-text-secondary hover:bg-hover',
+      )}
       onClick={() => setActiveMenuKey(menuKey)}
-      onMouseEnter={(e) => {
-        if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) e.currentTarget.style.background = 'transparent'
-      }}
     >
       {icon}
       <span>{label}</span>
@@ -72,10 +67,7 @@ export function AdminMenu() {
   }, [setAdminAvatarUrl])
 
   return (
-    <div
-      className="flex h-full w-[180px] shrink-0 flex-col"
-      style={{ borderRight: '1px solid var(--border)', background: 'var(--bg-card)' }}
-    >
+    <div className="flex h-full w-[180px] shrink-0 flex-col border-r border-border bg-card">
       <div className="flex flex-col items-center gap-2 px-4 py-4">
         <img
           src={
@@ -86,12 +78,10 @@ export function AdminMenu() {
           alt="Admin"
           className="h-12 w-12 rounded-[10px] object-cover"
         />
-        <span className="text-[12px] font-medium" style={{ color: 'var(--text-primary)' }}>
-          田乐檬
-        </span>
+        <span className="text-[12px] font-medium text-foreground">{CURRENT_USER_NAME}</span>
       </div>
 
-      <div className="mx-3 h-px" style={{ background: 'var(--border)' }} />
+      <div className="mx-3 h-px bg-border" />
 
       <nav className="flex flex-col gap-0.5 p-2">
         {MENU_ITEMS.map((item) => (

@@ -16,7 +16,7 @@ const statusConfig: Record<string, { bg: string; color: string; label: string; p
     label: '完成',
     pulse: false,
   },
-  failed: { bg: 'bg-red-500/10', color: 'text-red-500', label: '失败', pulse: false },
+  failed: { bg: 'bg-destructive/10', color: 'text-destructive', label: '失败', pulse: false },
   pending: { bg: 'bg-muted', color: 'text-muted-foreground', label: '等待', pulse: false },
 }
 

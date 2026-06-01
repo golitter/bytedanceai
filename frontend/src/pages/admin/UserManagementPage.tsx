@@ -1,22 +1,24 @@
+import { useQuery } from '@tanstack/react-query'
 import { Camera } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { getAdminAvatar, updateAdminAvatar, uploadAvatar } from '@/lib/api'
+import { CURRENT_USER_NAME } from '@/lib/constants'
 import { useAdminStore } from '@/stores/admin'
 
 export function UserManagementPage() {
-  const [avatarUrl, setAvatarUrl] = useState('')
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-avatar'],
+    queryFn: getAdminAvatar,
+    staleTime: 30_000,
+  })
+  // Track a locally overridden URL (from upload); fall back to query data
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const setAdminAvatarUrl = useAdminStore((s) => s.setAdminAvatarUrl)
-  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    getAdminAvatar()
-      .then((data) => setAvatarUrl(data.url))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+  const avatarUrl = localAvatarUrl ?? data?.url ?? ''
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -25,7 +27,7 @@ export function UserManagementPage() {
     try {
       const url = await uploadAvatar(file)
       await updateAdminAvatar(url)
-      setAvatarUrl(url)
+      setLocalAvatarUrl(url)
       setAdminAvatarUrl(url)
     } catch {
       // ignore
@@ -34,29 +36,20 @@ export function UserManagementPage() {
     }
   }
 
-  if (loading) {
+  if (isLoading && !localAvatarUrl) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-          加载中...
-        </span>
+        <span className="text-sm text-tertiary">加载中...</span>
       </div>
     )
   }
 
   return (
     <div className="p-6">
-      <h2 className="mb-6 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-        用户管理
-      </h2>
+      <h2 className="mb-6 text-lg font-semibold text-foreground">用户管理</h2>
 
-      <div
-        className="rounded-lg p-6"
-        style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
-      >
-        <h3 className="mb-4 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-          管理员头像
-        </h3>
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-4 text-sm font-medium text-text-secondary">管理员头像</h3>
 
         <div className="flex items-center gap-4">
           <div className="group relative">
@@ -80,15 +73,10 @@ export function UserManagementPage() {
           </div>
 
           <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-              田乐檬
-            </p>
-            <p className="mt-0.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              管理员
-            </p>
+            <p className="text-sm font-medium text-foreground">{CURRENT_USER_NAME}</p>
+            <p className="mt-0.5 text-xs text-tertiary">管理员</p>
             <button
-              className="mt-2 text-xs transition-colors"
-              style={{ color: 'var(--color-brand)' }}
+              className="mt-2 text-xs text-brand transition-[transform,opacity]"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
             >

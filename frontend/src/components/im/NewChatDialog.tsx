@@ -3,11 +3,17 @@ import { useState } from 'react'
 
 import { type AgentEntry, AgentSelectList } from '@/components/im/AgentSelectList'
 import { RepoPathInput } from '@/components/im/RepoPathInput'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { AgentType } from '@/generated/request'
 import { useCreateConversation } from '@/hooks/use-conversations'
 import { fetchAgentTypes } from '@/lib/api'
-import { AGENT_DESCRIPTIONS } from '@/lib/constants'
+import { AGENT_DESCRIPTIONS, AGENT_TYPES } from '@/lib/constants'
 import { useChatNav } from '@/stores/chat'
 
 interface NewChatDialogProps {
@@ -43,14 +49,21 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   const types = agentTypes?.length
     ? agentTypes
-    : (['claude-code', 'opencode', 'orchestrator', 'codex'] as AgentType[]).map((t) => ({
+    : (
+        [
+          AGENT_TYPES.ClaudeCode,
+          AGENT_TYPES.Opencode,
+          AGENT_TYPES.Orchestrator,
+          AGENT_TYPES.Codex,
+        ] as AgentType[]
+      ).map((t) => ({
         type: t,
         name: t,
         description: AGENT_DESCRIPTIONS[t] ?? '',
       }))
 
-  const hasOrchestrator = agents.some((a) => a.type === 'orchestrator')
-  const hasNonOrchestrator = agents.some((a) => a.type !== 'orchestrator')
+  const hasOrchestrator = agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
+  const hasNonOrchestrator = agents.some((a) => a.type !== AGENT_TYPES.Orchestrator)
   const orchestratorAlone = hasOrchestrator && !hasNonOrchestrator
 
   const canSubmit =
@@ -84,6 +97,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
       <DialogContent className="max-w-sm border-border bg-card">
         <DialogHeader>
           <DialogTitle className="text-foreground">新建对话</DialogTitle>
+          <DialogDescription className="sr-only">选择 Agent 并创建新对话</DialogDescription>
         </DialogHeader>
 
         <RepoPathInput
@@ -133,7 +147,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         )}
 
         <button
-          className="w-full rounded-md py-2 text-sm font-medium transition-colors"
+          className="w-full rounded-md py-2 text-sm font-medium transition-[transform,opacity]"
           style={{
             backgroundColor: canSubmit ? 'var(--primary)' : 'var(--muted)',
             color: canSubmit ? 'var(--primary-foreground)' : 'var(--muted-foreground)',

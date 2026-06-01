@@ -1,7 +1,7 @@
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
-import { AGENT_NAMES } from '@/lib/constants'
+import { AGENT_NAMES, AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
 import type { ChatMessage } from '@/stores/chat'
 
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
@@ -88,16 +88,16 @@ export function MessageRenderer({
   agentSessionLookup,
   streamingAgentName,
 }: MessageRendererProps) {
-  if (msg.role === 'user') {
+  if (msg.role === MESSAGE_ROLES.USER) {
     return <MessageBubble variant="user">{msg.content}</MessageBubble>
   }
 
-  if (msg.role === 'agent') {
+  if (msg.role === MESSAGE_ROLES.AGENT) {
     const initialAgentName = isStreaming
       ? streamingAgentName || msg.agentName || agentName
       : msg.agentName || agentName
 
-    const resolvedAgentType = msg.agentType ?? sessionAgentType ?? 'claude-code'
+    const resolvedAgentType = msg.agentType ?? sessionAgentType ?? AGENT_TYPES.ClaudeCode
 
     const agentSession =
       agentSessionLookup?.get(initialAgentName ?? '') ??

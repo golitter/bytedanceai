@@ -3,6 +3,7 @@ import { GroupAvatar } from '@/components/chat/GroupAvatar'
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 interface ConversationItemProps {
   conversation: Conversation
@@ -31,11 +32,10 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
 
   return (
     <button
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left"
-      style={{
-        backgroundColor: isActive ? 'var(--accent)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--primary)' : '2px solid transparent',
-      }}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left',
+        isActive ? 'bg-accent border-l-2 border-l-primary' : 'border-l-2 border-l-transparent',
+      )}
       onClick={onClick}
       {...(!isActive && hoverStyle)}
     >
@@ -56,8 +56,10 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">
           <span
-            className="truncate text-sm font-medium"
-            style={{ color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)' }}
+            className={cn(
+              'truncate text-sm font-medium',
+              isActive ? 'text-foreground' : 'text-muted-foreground',
+            )}
           >
             {displayName}
           </span>

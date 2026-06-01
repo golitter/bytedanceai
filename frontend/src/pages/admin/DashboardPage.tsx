@@ -1,5 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 import { getAdminResources, type ResourcesResponse } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -12,16 +12,14 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[13px]">
-        <span style={{ color: 'var(--text-secondary)' }}>
+        <span className="text-text-secondary">
           {used.toFixed(1)} / {total.toFixed(1)} {unit}
         </span>
-        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-          {pct}%
-        </span>
+        <span className="font-medium text-foreground">{pct}%</span>
       </div>
-      <div className="h-2 w-full rounded-sm" style={{ background: 'var(--border)' }}>
+      <div className="h-2 w-full rounded-sm bg-border">
         <div
-          className="h-full rounded-sm transition-all"
+          className="h-full rounded-sm transition-[transform,opacity]"
           style={{ width: `${pct}%`, background: barColor }}
         />
       </div>
@@ -30,45 +28,25 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
 }
 
 export function DashboardPage() {
-  const [data, setData] = useState<ResourcesResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const res = await getAdminResources()
-      setData(res)
-    } catch {
-      /* ignore */
-    }
-    setLoading(false)
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    load()
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [])
+  const { data, isLoading, refetch, isRefetching } = useQuery<ResourcesResponse>({
+    queryKey: ['admin-resources'],
+    queryFn: getAdminResources,
+    staleTime: 30_000,
+  })
 
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-          总览仪表盘
-        </h2>
+        <h2 className="text-lg font-semibold text-foreground">总览仪表盘</h2>
         <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] transition-colors"
-          style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--bg-hover)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity] hover:bg-hover"
         >
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
+          <RefreshCw
+            className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>
@@ -79,15 +57,8 @@ export function DashboardPage() {
             {(['disk', 'memory', 'redis'] as const).map((key) => {
               const labels = { disk: '磁盘', memory: '内存', redis: 'Redis' }
               return (
-                <div
-                  key={key}
-                  className="rounded-lg p-4"
-                  style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
-                >
-                  <h3
-                    className="mb-3 text-[13px] font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
+                <div key={key} className="rounded-lg border border-border bg-card p-4">
+                  <h3 className="mb-3 text-[13px] font-medium text-text-secondary">
                     {labels[key]}
                   </h3>
                   <ProgressBar {...data[key]} />
@@ -96,11 +67,8 @@ export function DashboardPage() {
             })}
           </>
         ) : (
-          <div
-            className="col-span-3 py-8 text-center text-sm"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            {loading ? '加载中...' : '暂无数据'}
+          <div className="col-span-3 py-8 text-center text-sm text-tertiary">
+            {isLoading ? '加载中...' : '暂无数据'}
           </div>
         )}
       </div>

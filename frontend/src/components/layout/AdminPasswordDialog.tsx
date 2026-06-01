@@ -1,7 +1,13 @@
 import { Lock } from 'lucide-react'
 import { useState } from 'react'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { adminAuth } from '@/lib/api'
 import { useAdminStore } from '@/stores/admin'
 
@@ -51,6 +57,11 @@ export function AdminPasswordDialog() {
             <Lock className="h-4 w-4" strokeWidth={1.25} />
             {passwordDialogPurpose === 'login' ? '管理员验证' : '敏感操作确认'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {passwordDialogPurpose === 'login'
+              ? '请输入管理密码以进入管理面板'
+              : '查看敏感信息需要再次验证密码'}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -82,7 +93,7 @@ export function AdminPasswordDialog() {
           <button
             type="submit"
             disabled={loading || !password}
-            className="h-9 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+            className="h-9 rounded-md text-sm font-medium transition-[transform,opacity] disabled:opacity-50"
             style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
           >
             {loading ? '验证中...' : '确认'}

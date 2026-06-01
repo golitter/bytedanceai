@@ -12,9 +12,9 @@ interface FinalSummaryCardProps {
 }
 
 const statusCopy = {
-  success: { label: '已完成', color: 'text-emerald-300', bg: 'bg-emerald-500/10' },
-  partial: { label: '部分完成', color: 'text-amber-300', bg: 'bg-amber-500/10' },
-  failed: { label: '执行失败', color: 'text-red-300', bg: 'bg-red-500/10' },
+  success: { label: '已完成', color: 'text-success', bg: 'bg-success/10' },
+  partial: { label: '部分完成', color: 'text-warning', bg: 'bg-warning/10' },
+  failed: { label: '执行失败', color: 'text-destructive', bg: 'bg-destructive/10' },
 }
 
 export function FinalSummaryCard({
@@ -67,7 +67,7 @@ export function FinalSummaryCard({
                 className="grid grid-cols-[7rem_6rem_1fr] gap-3 border-b border-border/50 px-3 py-2 text-xs last:border-b-0"
               >
                 <span className="truncate font-mono text-muted-foreground">{detail.task_id}</span>
-                <span className={detail.status === 'failed' ? 'text-red-300' : 'text-emerald-300'}>
+                <span className={detail.status === 'failed' ? 'text-destructive' : 'text-success'}>
                   {detail.status === 'failed' ? '失败' : '完成'}
                 </span>
                 <span className="min-w-0 truncate text-muted-foreground">

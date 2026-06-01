@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { MESSAGE_ROLES } from '@/lib/constants'
 import type { ChatMessage } from '@/stores/chat'
 import { useChatStore } from '@/stores/chat'
 
@@ -177,7 +178,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
           <Search className="h-3.5 w-3.5" strokeWidth={1.25} />
         </span>
         <input
-          className="w-full rounded-md border border-border bg-accent py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-colors placeholder:text-tertiary focus:border-ring"
+          className="w-full rounded-md border border-border bg-accent py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-[transform,opacity] placeholder:text-tertiary focus:border-ring"
           placeholder="搜索历史消息..."
           value={query}
           onChange={(e) => handleInput(e.target.value)}
@@ -191,14 +192,15 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
               <button
                 key={r.message.id}
                 type="button"
-                className="w-full rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-bg-hover"
+                className="w-full rounded-sm px-2.5 py-2 text-left transition-[transform,opacity] hover:bg-bg-hover"
                 onClick={() => scrollToMessage(r.message.id)}
               >
                 <div className="mb-0.5 flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-secondary">
-                    {r.message.agentName ?? (r.message.role === 'user' ? 'You' : 'Agent')}
+                  <span className="text-[11px] font-medium text-text-secondary">
+                    {r.message.agentName ??
+                      (r.message.role === MESSAGE_ROLES.USER ? 'You' : 'Agent')}
                   </span>
-                  <span className="ml-auto text-[10px] text-tertiary">
+                  <span className="ml-auto text-[11px] text-tertiary">
                     {formatTime(r.message.timestamp)}
                   </span>
                 </div>
