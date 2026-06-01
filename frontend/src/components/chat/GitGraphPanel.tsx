@@ -48,6 +48,14 @@ export function GitGraphPanel({
     }
     return result
   }, [commits, branches])
+  const headsByCommitHash = useMemo(() => {
+    const result: Record<string, string[]> = {}
+    for (const b of branches) {
+      if (!b.headHash) continue
+      result[b.headHash] = [...(result[b.headHash] ?? []), b.name]
+    }
+    return result
+  }, [branches])
 
   const headIdx = branchHeadIdxMap[currentBranch] ?? -1
   const total = commits.length
@@ -136,10 +144,23 @@ export function GitGraphPanel({
         )
       }
       parts.push(`<circle cx="${cx}" cy="${cy}" r="4.5" fill="${color}"/>`)
+
+      for (const branchName of headsByCommitHash[commit.hash] ?? []) {
+        if (branchName === commit.lane) continue
+        const headX = laneX[branchName]
+        if (headX === undefined) continue
+        const headColor = branchColorMap[branchName]
+        parts.push(
+          `<line x1="${cx}" y1="${cy}" x2="${headX}" y2="${cy}" stroke="${headColor}" stroke-width="1.5" opacity="0.55"/>`,
+        )
+        parts.push(
+          `<circle cx="${headX}" cy="${cy}" r="5.5" fill="var(--bg-card)" stroke="${headColor}" stroke-width="2"/>`,
+        )
+      }
     }
 
     return parts.join('')
-  }, [commits, branchNames, laneX, branchColorMap, headIdx, total, svgH])
+  }, [commits, branchNames, laneX, branchColorMap, headIdx, total, svgH, headsByCommitHash])
 
   return (
     <div className="border-b border-sidebar-border">
@@ -169,14 +190,17 @@ export function GitGraphPanel({
           {/* Branch labels */}
           <div className="mb-2 flex items-center gap-2">
             {branchNames.map((name) => {
+              const branch = branches.find((b) => b.name === name)
+              const exists = branch?.exists ?? Boolean(branch?.headHash)
               const isCurrent = name === currentBranch
               return (
                 <button
                   key={name}
                   type="button"
-                  className={`flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] font-medium transition-[transform,opacity] hover:brightness-110 ${
+                  className={`flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] font-medium transition-[transform,opacity] hover:brightness-110 ${
                     isCurrent ? 'bg-primary-soft text-primary' : 'bg-accent text-text-secondary'
-                  }`}
+                  } ${exists ? 'border-transparent' : 'border-dashed border-warning/60 opacity-70'}`}
+                  title={exists ? name : `${name}（git ref 不存在）`}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (!isCurrent) onBranchChange(name)
@@ -230,6 +254,19 @@ export function GitGraphPanel({
                       <span className="min-w-0 flex-1 truncate text-[11px] text-text-primary">
                         {commit.msg}
                       </span>
+                      {(headsByCommitHash[commit.hash] ?? []).map((branchName) => (
+                        <span
+                          key={branchName}
+                          className="max-w-[72px] shrink-0 truncate rounded-full border border-border bg-accent px-1.5 py-0.5 font-mono text-[9px] leading-none text-text-secondary"
+                          title={branchName}
+                          style={{
+                            borderColor: branchColorMap[branchName],
+                            color: branchColorMap[branchName],
+                          }}
+                        >
+                          {branchLabels[branchName] ?? branchName}
+                        </span>
+                      ))}
                       <span
                         className="h-[5px] w-[5px] shrink-0 rounded-full"
                         style={{ background: authorColor }}

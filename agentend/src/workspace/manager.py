@@ -58,14 +58,12 @@ class WorkspaceManager:
         agent_type: AgentType,
     ) -> Workspace:
         async with self._get_lock(task_id):
+            task_branch = task_branch_name(task_id)
+            await self._git.task_base_worktree_create(repo_path, task_id)
+
             existing = self._find_active(task_id, session_id)
             if existing:
                 return existing
-
-            task_branch = task_branch_name(task_id)
-            ok = await self._git.task_branch_create(repo_path, task_id)
-            if not ok:
-                raise RuntimeError(f"Failed to create task branch {task_branch}")
 
             ws = Workspace(
                 task_id=task_id,

@@ -81,15 +81,14 @@ export function RightSidebar({
   const gitGraphData = useGitGraphData(taskId)
   const initialBranch = useMemo(() => gitGraphData.currentBranch, [gitGraphData.currentBranch])
   const [currentBranch, setCurrentBranch] = useState(initialBranch)
-
-  // Sync when API data arrives and changes the initial branch
-  if (
-    gitGraphData.currentBranch &&
-    currentBranch !== gitGraphData.currentBranch &&
-    !currentBranch
-  ) {
-    setCurrentBranch(gitGraphData.currentBranch)
-  }
+  const branchNames = useMemo(
+    () => gitGraphData.branches.map((b) => b.name),
+    [gitGraphData.branches],
+  )
+  const selectedBranch =
+    currentBranch && branchNames.includes(currentBranch)
+      ? currentBranch
+      : gitGraphData.currentBranch
 
   // Build sessionId → agentName mapping from sessions prop
   const sessionNameMap = useMemo(
@@ -141,7 +140,7 @@ export function RightSidebar({
       </div>
 
       {/* Sidebar content */}
-      <aside className="flex h-full min-w-0 flex-1 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar">
+      <aside className="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-l border-sidebar-border bg-sidebar">
         {/* History search */}
         <HistorySearch sessionId={sessionId} />
 
@@ -211,7 +210,7 @@ export function RightSidebar({
         {/* Git Graph */}
         <GitGraphPanel
           data={gitGraphData}
-          currentBranch={currentBranch}
+          currentBranch={selectedBranch}
           onBranchChange={setCurrentBranch}
           branchLabels={branchLabels}
         />
@@ -278,7 +277,7 @@ function showCopyToast() {
     pointerEvents: 'none',
     opacity: '0',
     transition: 'opacity 0.2s ease',
-  } satisfies CSSStyleDeclaration)
+  } satisfies Partial<CSSStyleDeclaration>)
   document.body.appendChild(el)
   requestAnimationFrame(() => {
     el.style.opacity = '1'
@@ -358,6 +357,7 @@ function useGitGraphData(taskId: string): GitGraphData {
         headMsg: b.headMsg,
         headAuthor: b.headAuthor,
         headTime: b.headTime,
+        exists: b.exists,
       })),
       currentBranch,
     }

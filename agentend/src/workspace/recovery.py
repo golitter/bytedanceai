@@ -7,6 +7,10 @@ from src.workspace.store import WorkspaceStoreProtocol
 logger = logging.getLogger(__name__)
 
 
+def _is_task_base_worktree(path: str, branch: str) -> bool:
+    return path.endswith("/task-base") and branch.startswith("task/")
+
+
 def parse_worktree_list(output: str) -> list[tuple[str, str]]:
     results: list[tuple[str, str]] = []
     current_path = None
@@ -53,6 +57,8 @@ async def recover_workspaces(git_ops: GitOps, store: WorkspaceStoreProtocol, rep
     main_path = physical[0][0] if physical else None
     for path, branch in physical:
         if path == main_path:
+            continue
+        if _is_task_base_worktree(path, branch):
             continue
         if path not in stored_paths:
             logger.warning("Removing orphan worktree: %s (branch: %s)", path, branch)

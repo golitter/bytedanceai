@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import shutil
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -73,10 +74,21 @@ class GitOps:
 
         Returns the absolute path. Idempotent -- creates the task branch if needed.
         """
-        await self.task_branch_create(repo_path, task_id)
         task_branch = f"task/{task_id}"
         worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
-        ok = await self.worktree_add(repo_path, worktree_path, task_branch, base_branch=task_branch)
+
+        for path, branch in await self.worktree_list(repo_path):
+            if path == worktree_path:
+                if branch == task_branch:
+                    return worktree_path
+                raise RuntimeError(f"task-base path is already used by branch {branch}")
+
+        path_obj = Path(worktree_path)
+        if path_obj.exists():
+            logger.warning("Removing stale task-base directory before recreation: %s", worktree_path)
+            shutil.rmtree(path_obj)
+
+        ok = await self.worktree_add(repo_path, worktree_path, task_branch, base_branch="main")
         if not ok:
             raise RuntimeError(f"Failed to create task-base worktree for {task_id}")
         return worktree_path

@@ -307,7 +307,9 @@ async def get_task_git_info(
     ok, branch_out = await _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
     git_branches = set(b.strip() for b in branch_out.splitlines() if b.strip()) if ok else set()
 
-    # Merge: workspace branches + git branches matching this task
+    # Merge: expected workspace branches + git branches matching this task.
+    # Keep expected branches even if their git refs are currently missing so the
+    # UI can surface the missing task branch instead of silently hiding it.
     relevant_branches_set = set(workspace_branches)
     for b in git_branches:
         if b == "main" or b == task_branch or b.endswith(f"/{task_id}"):
@@ -382,10 +384,20 @@ async def get_task_git_info(
                     "headMsg": head_parts[1] if len(head_parts) > 1 else "",
                     "headAuthor": head_parts[2] if len(head_parts) > 2 else "",
                     "headTime": head_parts[3] if len(head_parts) > 3 else "",
+                    "exists": b in git_branches,
                 }
             )
         else:
-            branches_info.append({"name": b, "headHash": "", "headMsg": "", "headAuthor": "", "headTime": ""})
+            branches_info.append(
+                {
+                    "name": b,
+                    "headHash": "",
+                    "headMsg": "",
+                    "headAuthor": "",
+                    "headTime": "",
+                    "exists": False,
+                }
+            )
 
     return {
         "repoPath": repo_path,

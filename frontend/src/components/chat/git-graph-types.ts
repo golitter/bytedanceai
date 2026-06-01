@@ -18,6 +18,7 @@ export interface GitBranchConfig {
   headMsg?: string
   headAuthor?: string
   headTime?: string
+  exists?: boolean
 }
 
 export interface GitGraphData {
@@ -36,6 +37,7 @@ export interface GitInfoApiResponse {
     headMsg: string
     headAuthor: string
     headTime: string
+    exists?: boolean
   }[]
   commits: {
     hash: string
@@ -44,6 +46,7 @@ export interface GitInfoApiResponse {
     author: string
     lane: string
     time: string
+    parentHashes?: string[]
   }[]
 }
 
