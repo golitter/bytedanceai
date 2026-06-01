@@ -143,6 +143,7 @@ api := r.Group("/api")
 		ws.POST("/:id/revert", workspaceHandler.Revert)
 		ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
 		ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
+		ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
 	}
 
 	// Session-level workspace proxy routes

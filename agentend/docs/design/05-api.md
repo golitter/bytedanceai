@@ -96,6 +96,7 @@ class ReviewRequest(BaseModel):
 | `/v1/workspace/{id}` | DELETE | 清理 workspace（worktree + branch） |
 | `/v1/workspace` | GET | 列出所有 workspace |
 | `/v1/workspace/by-session/{session_id}` | GET | 按 session_id 查找活跃 workspace |
+| `/v1/workspace/task/{task_id}/git-info` | GET | 获取 task 分支的 Git 信息（分支、提交、日志） |
 
 ### Pin 管理 (`src/api/v1/pin.py`)
 

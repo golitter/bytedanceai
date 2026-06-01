@@ -95,7 +95,6 @@ backend/
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
 │   ├── agentend_client/     # AgentEnd HTTP 客户端
 │   └── qiniu/               # 七牛云上传
-├── Makefile                 # build / run / fmt / tidy
 ├── go.mod
 └── go.sum
 ```

@@ -55,7 +55,7 @@ export interface ChatMessage {
   status?: string
 }
 
-export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
+export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error' | 'retrying'
 
 export interface ActiveStream {
   messageId: string

@@ -516,7 +516,21 @@ if req.Status == "pending" {
 
 ### 工作区代理 (`internal/handler/workspace.go`)
 
-`WorkspaceHandler` 通过闭包注入 `agentend_client.Client`，将前端请求代理到 AgentEnd 的工作区 API。提供两类路由：
+`WorkspaceHandler` 通过闭包注入 `agentend_client.Client`，将前端请求代理到 AgentEnd 的工作区 API。内部使用自定义 `httpClient`（30s 超时）代替 `http.DefaultClient`。提供两类路由：
+
+```go
+type WorkspaceHandler struct {
+	agentClient *agentend_client.Client
+	httpClient  *http.Client
+}
+
+func NewWorkspaceHandler(agentClient *agentend_client.Client) *WorkspaceHandler {
+	return &WorkspaceHandler{
+		agentClient: agentClient,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+	}
+}
+```
 
 **直接工作区路由**（`/api/workspace/:id/...`）— 直接使用 workspace ID：
 
@@ -528,6 +542,7 @@ ws.POST("/:id/commit", workspaceHandler.Commit)
 ws.POST("/:id/revert", workspaceHandler.Revert)
 ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
 ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
+ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
 ```
 
 **Session 路由**（`/api/session/:sessionId/...`）— 先通过 `resolveWorkspaceID` 查询 AgentEnd 获取 workspace ID，再代理：
@@ -535,7 +550,7 @@ ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
 ```go
 func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) {
 	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", h.agentClient.BaseURL(), sessionID)
-	resp, err := http.DefaultClient.Get(url)
+	resp, err := h.httpClient.Get(url)
 	// ...
 	var ws struct { ID string `json:"id"` }
 	json.NewDecoder(resp.Body).Decode(&ws)
@@ -544,6 +559,15 @@ func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) 
 ```
 
 `proxy` 方法为通用代理函数，转发请求到 AgentEnd 并流式回传响应（通过 `io.Copy`）。
+
+**TaskGitInfo** — 按 task_id 代理获取 Git 信息（分支、最近提交等）：
+
+```go
+func (h *WorkspaceHandler) TaskGitInfo(c *gin.Context) {
+	taskID := c.Param("taskId")
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/task/%s/git-info", taskID), nil)
+}
+```
 
 ### 公告管理 (`internal/handler/announcement.go`)
 

@@ -22,6 +22,7 @@
 | POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
 | POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
 | POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并任务分支到 main |
+| GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支 Git 信息 |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找工作区 |
 | DELETE | `/v1/workspace/{id}` | 清理工作区 |
 | POST | `/v1/validate-repo-path` | 验证 repo 路径 |
@@ -98,7 +99,7 @@ agentend/
 - [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
 - [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
 - [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
-- [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Scope / Taskctl）
+- [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Soul / GroupChat / Scope / Taskctl / Skill）
 - [05-api.md](../design/05-api.md) — API 端点（SSE 流式 / 同步执行 / Session CRUD）
 - [06-app-wiring.md](../design/06-app-wiring.md) — 应用组装（FastAPI 生命周期 + DI）
 - [07-session-mapping.md](../design/07-session-mapping.md) — CLI Session ID 映射

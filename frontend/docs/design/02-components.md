@@ -332,6 +332,94 @@ export function TimeDivider({ timestamp }: { timestamp: number }) {
 
 消息历史搜索组件，支持关键词搜索和消息角色筛选（user/agent/system）。搜索结果高亮匹配片段，点击结果可跳转到对应消息。内部使用 `MESSAGE_ROLES` 常量进行角色筛选。
 
+### git-graph-types (`src/components/chat/git-graph-types.ts`)
+
+Git Graph 与 Terminal 共享的类型定义与常量模块。核心类型：
+
+```typescript
+interface GitCommit {
+  hash: string
+  fullHash?: string
+  msg: string
+  author: string
+  lane: string
+  time: string
+  parentHashes?: string[]
+}
+
+interface GitBranchConfig {
+  name: string
+  color: string
+  headHash?: string
+  headMsg?: string
+  headAuthor?: string
+  headTime?: string
+  exists?: boolean
+}
+
+interface GitGraphData {
+  repoPath?: string
+  commits: GitCommit[]
+  branches: GitBranchConfig[]
+  currentBranch: string
+}
+
+interface GitGraphPanelProps {
+  data: GitGraphData
+  currentBranch: string
+  onBranchChange: (branch: string) => void
+  branchLabels: Record<string, string>
+}
+
+interface TerminalPanelProps {
+  currentBranch: string
+  availableBranches: string[]
+  gitGraphData: GitGraphData
+  onBranchChange: (branch: string) => void
+  branchLabels: Record<string, string>
+}
+```
+
+还导出 `GIT_AUTHOR_COLORS`（作者→Agent 色映射）、`ROW_HEIGHT`（28）/ `LANE_WIDTH`（64）布局常量、`getBranchColor()` 分支颜色函数和 `buildBranchLabels()` 分支名→显示标签映射函数。
+
+### GitGraphPanel (`src/components/chat/GitGraphPanel.tsx`)
+
+群聊右侧栏 Git Graph 面板，使用 SVG 渲染分支拓扑图。可折叠（通过 `useCollapsible` hook）。Props 接收 `GitGraphPanelProps`：
+
+```tsx
+export function GitGraphPanel({
+  data,            // GitGraphData：commits + branches
+  currentBranch,   // 当前分支名
+  onBranchChange,  // 分支切换回调
+  branchLabels,    // 分支名→显示标签映射
+}: GitGraphPanelProps)
+```
+
+渲染分三层：
+1. **Branch labels** — 顶部显示所有分支标签（圆点 + 名称），当前分支高亮为 `bg-primary-soft`，点击触发 `onBranchChange`
+2. **SVG graph** — 左侧固定宽度 64px 的 SVG 区域，绘制 lane rail（半透明竖线）、跨分支 bezier 连接线、commit 节点（当前 HEAD 为绿色大圆点），右侧显示 commit hash + message + branch badge + author dot + time
+3. **Stats footer** — 底部统计 commits 数和 branches 数
+
+鼠标悬停 commit 行时显示 tooltip（fixed 定位），展示完整 hash、message、author、lane、time。当前 HEAD commit 行高亮为 `bg-primary-soft/30`。
+
+### TerminalPanel (`src/components/chat/TerminalPanel.tsx`)
+
+群聊右侧栏终端面板，模拟命令行界面，支持 `git checkout`/`git switch` 真实分支切换。可折叠。Props 接收 `TerminalPanelProps`：
+
+```tsx
+export function TerminalPanel({
+  currentBranch,      // 当前分支名
+  availableBranches,  // 可用分支列表
+  gitGraphData,       // GitGraphData（用于 git log 等命令）
+  onBranchChange,     // 分支切换回调
+  branchLabels,       // 分支名→显示标签映射
+}: TerminalPanelProps)
+```
+
+渲染为仿 macOS 终端窗口：标题栏（红黄绿圆点 + 路径）、输出区域（`terminal-output` 类，`max-h-[200px]`）、输入行（分支名提示符 + 闪烁光标）。
+
+支持命令：`help`、`clear`、`pwd`、`ls`、`whoami`、`git status`、`git log`、`git branch`、`git checkout <branch>`、`git switch <branch>`、`npm run build`、`npm test`、`echo`、`cat`。其中 `git checkout`/`git switch` 调用 `onBranchChange` 真实切换分支。输出使用 `dangerouslySetInnerHTML` + ANSI 风格 HTML span 着色，通过 `.terminal-output` CSS 类映射颜色变量。
+
 ---
 
 ### Markdown 渲染 (`components/markdown/`)

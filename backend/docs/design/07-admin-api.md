@@ -105,11 +105,11 @@ type ResourceInfo struct {
 
 ### 工作区管理 (`internal/handler/admin_workspace.go`)
 
-`GetWorkspaces` 代理到 AgentEnd 获取工作区列表。`DeleteWorkspace` 代理删除指定工作区。
+`GetWorkspaces` 直接查询 MySQL sessions 表（`status = "running"`），构造工作区列表返回。`DeleteWorkspace` 将对应 Session 状态更新为 `cleaned`。
 
 ### Agent 概览 (`internal/handler/admin_agent.go`)
 
-`GetAgents` 代理到 AgentEnd 获取 Agent 列表。
+`GetAgents` 读取本地文件系统中的 Agent 配置文件（`~/.claude/settings.json`、`~/.opencode/config.json` 等），返回 Agent 信息列表，敏感字段自动脱敏。
 
 ### 统计数据 (`internal/handler/admin_stats.go`)
 

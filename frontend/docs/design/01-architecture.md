@@ -124,6 +124,8 @@ src/
 │   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送）
 │   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯 + DiceBear initials）
 │   │   ├── GroupAvatar.tsx           # 群聊头像（多 Agent 头像叠加）
+│   │   ├── git-graph-types.ts        # Git Graph 数据类型（GitCommit / GitBranchConfig / GitGraphData + Terminal 类型）
+│   │   ├── GitGraphPanel.tsx         # 群聊右侧栏 Git Graph 面板（SVG 分支图 + commit 列表 + tooltip）
 │   │   ├── AgentHoverCard.tsx        # Agent 悬停卡片（Popover + 技能预览 + 跳转详情页）
 │   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
 │   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
@@ -133,6 +135,7 @@ src/
 │   │   ├── MembersSection.tsx        # 群聊成员列表区块
 │   │   ├── AnnouncementsSection.tsx  # 群聊公告区块（展示 + 创建 + 删除 + 置顶）
 │   │   ├── HistorySearch.tsx         # 消息历史搜索（关键词 + 角色筛选 + 结果跳转）
+│   │   ├── TerminalPanel.tsx         # 终端面板（ANSI 渲染 + git 命令模拟 + 分支切换）
 │   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）

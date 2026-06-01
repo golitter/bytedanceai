@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-Orchestrator 作为任务编排器，通过 LangGraph 7 节点状态机实现 **skill_prepare → reason（含 ask_agent 工具调用）→ dispatch → execute → review → evolve → save_mem** 闭环编排。
+Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **skill_prepare → reason（含 ask_agent 工具调用）→ human_review → dispatch → execute → review → evolve → save_mem** 闭环编排。
 
 核心功能：
 1. **Skill Prepare** — L1→L2 技能发现与加载，构造 REASON_PROMPT
@@ -24,9 +24,9 @@ POST /v1/agent/stream (agent_type=orchestrator)
   OrchestratorAdapter.stream_chat()
         │
         ▼
-  LangGraph StateGraph (7 nodes, conditional routing)
+  LangGraph StateGraph (8 nodes, conditional routing)
         │
-   skill_prepare ──▶ reason ──▶ dispatch ──▶ execute ──▶ review
+   skill_prepare ──▶ reason ──▶ human_review ──▶ dispatch ──▶ execute ──▶ review
                         │                      ▲          │
                         │ (ask_agent)          │  (needs_replan=true)
                         │                      │          │
@@ -43,7 +43,7 @@ src/
 ├── orchestrator/
 │   ├── models.py            # TaskDef, PlanOutput, TaskResult, DispatchResult
 │   ├── planning/
-│   │   ├── graph.py         # LangGraph 7-node StateGraph（含 ask_agent 处理 + conditional routing）
+│   │   ├── graph.py         # LangGraph 8-node StateGraph（含 ask_agent 处理 + human_review + conditional routing）
 │   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
 │   │   ├── tools.py         # 规划工具（read_file, list_dir, ask_agent, plan_and_dispatch 等）
 │   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载

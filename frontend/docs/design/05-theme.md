@@ -231,6 +231,59 @@ export function useHoverStyle(hoverBg = 'var(--accent)', normalBg = 'transparent
 }
 ```
 
+### 滚动条样式
+
+全局自定义滚动条，通过 CSS 变量控制颜色，支持亮色/暗色主题自适应。变量定义：
+
+| 变量 | 浅色值 | 暗色值 | 用途 |
+|------|--------|--------|------|
+| `--scrollbar-track` | `rgba(0, 0, 0, 0.04)` | `rgba(255, 255, 255, 0.025)` | 滚动条轨道背景 |
+| `--scrollbar-thumb` | `rgba(0, 0, 0, 0.22)` | `rgba(139, 145, 160, 0.32)` | 滚动条滑块颜色 |
+| `--scrollbar-thumb-hover` | `rgba(0, 0, 0, 0.34)` | `rgba(139, 145, 160, 0.52)` | 滚动条滑块悬停颜色 |
+
+Firefox 通过 `scrollbar-color` / `scrollbar-width: thin` 实现（在 `@layer base` 的 `*` 选择器中）。WebKit/Blink 通过 `::-webkit-scrollbar` 系列伪元素实现：
+
+```css
+@layer base {
+  * {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    min-height: 44px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-corner { background: transparent; }
+  *:hover::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+}
+```
+
+滑块使用 `border: 3px solid transparent` + `background-clip: padding-box` 实现圆角胶囊效果，轨道默认透明，仅在元素悬停时显示。
+
+### 终端输出样式 (`.terminal-output`)
+
+TerminalPanel 使用 `dangerouslySetInnerHTML` 渲染 ANSI 风格 HTML，通过 `.terminal-output` 选择器将语义 class 映射到 CSS 变量：
+
+```css
+.terminal-output .text-success { color: var(--color-success); }
+.terminal-output .text-error { color: var(--color-error); }
+.terminal-output .text-primary { color: var(--primary); }
+.terminal-output .text-text-secondary { color: var(--text-secondary); }
+.terminal-output .text-text-tertiary { color: var(--text-tertiary); }
+.terminal-output .text-text-primary { color: var(--text-primary); }
+```
+
+这些规则确保终端输出中通过 `<span class="text-success">` 等 class 名着色的文本与全局主题色保持一致。
+
 ### 圆角系统
 
 通过 CSS 变量 `--radius` 定义基础圆角（0.625rem），Tailwind 映射多个梯度：
