@@ -108,6 +108,7 @@ func main() {
 
 		ws := api.Group("/workspace")
 		{
+			ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
 			ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
 			ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
 			ws.GET("/:id/diff", workspaceHandler.GetDiff)

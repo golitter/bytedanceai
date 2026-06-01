@@ -274,3 +274,121 @@ async def get_workspace_by_session(
         if ws.session_id == session_id and ws.status.value == "active":
             return asdict(ws)
     raise HTTPException(status_code=404, detail="No active workspace for this session")
+
+
+# ─── Git Info ───────────────────────────────────────────────────
+
+
+@router.get("/task/{task_id}/git-info")
+async def get_task_git_info(
+    task_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    """Return real git branches and commits for a task's workspaces."""
+    from src.workspace.models import task_branch_name
+
+    # Find all workspaces for this task
+    task_workspaces = [ws for ws in mgr.list() if ws.task_id == task_id]
+    if not task_workspaces:
+        raise HTTPException(status_code=404, detail=f"No workspaces found for task {task_id}")
+
+    # Use the repo_path from any workspace (they share the same repo)
+    repo_path = task_workspaces[0].repo_path
+    if not repo_path:
+        raise HTTPException(status_code=500, detail="Workspace has no repo_path")
+
+    # 1. Build branch list from workspace records + git verification
+    task_branch = task_branch_name(task_id)
+    workspace_branches = [task_branch]
+    for ws in task_workspaces:
+        if ws.branch_name and ws.branch_name not in workspace_branches:
+            workspace_branches.append(ws.branch_name)
+
+    ok, branch_out = await _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
+    git_branches = set(b.strip() for b in branch_out.splitlines() if b.strip()) if ok else set()
+
+    # Merge: workspace branches + git branches matching this task
+    relevant_branches_set = set(workspace_branches)
+    for b in git_branches:
+        if b == "main" or b == task_branch or b.endswith(f"/{task_id}"):
+            relevant_branches_set.add(b)
+
+    # Order: agent branches first, then task, then main (most specific first for commit lane assignment)
+    agent_branches = sorted(b for b in relevant_branches_set if b.startswith("agent/"))
+    task_branches = [b for b in relevant_branches_set if b.startswith("task/")]
+    main_branch = ["main"] if "main" in relevant_branches_set else []
+    relevant_branches = agent_branches + task_branches + main_branch
+    if not relevant_branches:
+        relevant_branches = ["main"]
+
+    # 2. Build hash→lane mapping
+    #    Strategy: iterate agent → task → main. Each branch overwrites shared commits.
+    #    Result: agent-only → agent, task-only → task, main-only → main.
+    #    (agent's rev-list includes task+main commits, but task/main overwrite them back)
+    branch_hash_map: dict[str, str] = {}  # full_hash → lane
+    for branch in relevant_branches:
+        ok, rev_out = await _run_git("rev-list", branch, "--max-count=100", cwd=repo_path)
+        if not ok or not rev_out.strip():
+            continue
+        for h in rev_out.strip().splitlines():
+            h = h.strip()
+            if h:
+                branch_hash_map[h] = branch
+
+    # 3. Get ALL commits in topological order with parent info
+    #    %P = parent hashes (space-separated), %H = full hash, etc.
+    commits: list[dict] = []
+    ok, log_out = await _run_git(
+        "log",
+        "--all",
+        "--topo-order",
+        "--format=%H|%h|%s|%an|%ar|%P",
+        "--max-count=30",
+        cwd=repo_path,
+    )
+    if ok and log_out.strip():
+        for line in log_out.strip().splitlines():
+            parts = line.split("|", 5)
+            if len(parts) < 6:
+                continue
+            full_hash, short_hash, msg, author, time_ago, parents_str = parts
+            lane = branch_hash_map.get(full_hash, "main")
+            # Parse parent hashes (space-separated, may be empty for initial commit)
+            parent_hashes = [p for p in parents_str.split() if p]
+            # Only include commits relevant to our branches
+            if lane != "main" or any(p in branch_hash_map for p in parent_hashes) or not parent_hashes:
+                commits.append(
+                    {
+                        "hash": short_hash,
+                        "fullHash": full_hash,
+                        "msg": msg,
+                        "author": author,
+                        "lane": lane,
+                        "time": time_ago,
+                        "parentHashes": parent_hashes,
+                    }
+                )
+
+    # 3. For each branch, get its tip commit (head)
+    branches_info = []
+    for b in relevant_branches:
+        ok, tip = await _run_git("log", "-1", "--format=%h|%s|%an|%ar", b, cwd=repo_path)
+        if ok and tip.strip():
+            head_parts = tip.strip().split("|", 3)
+            branches_info.append(
+                {
+                    "name": b,
+                    "headHash": head_parts[0] if len(head_parts) > 0 else "",
+                    "headMsg": head_parts[1] if len(head_parts) > 1 else "",
+                    "headAuthor": head_parts[2] if len(head_parts) > 2 else "",
+                    "headTime": head_parts[3] if len(head_parts) > 3 else "",
+                }
+            )
+        else:
+            branches_info.append({"name": b, "headHash": "", "headMsg": "", "headAuthor": "", "headTime": ""})
+
+    return {
+        "repoPath": repo_path,
+        "branches": branches_info,
+        "commits": commits,
+    }

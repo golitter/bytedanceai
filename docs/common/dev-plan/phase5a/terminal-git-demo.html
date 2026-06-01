@@ -293,6 +293,10 @@
     padding: 2px 8px; border-radius: 99px;
   }
   .git-branch-label .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .git-branch-label {
+    cursor: pointer; transition: all var(--transition); user-select: none;
+  }
+  .git-branch-label:hover { filter: brightness(1.2); }
   .git-branch-label.current { background: var(--primary-soft); color: var(--primary); }
   .git-branch-label.default { background: var(--accent); color: var(--text-secondary); }
   .git-branch-label.current .dot { background: var(--primary); }
@@ -620,8 +624,8 @@
       <div class="section-body" id="body-git" style="max-height:600px;">
         <!-- Branch legend -->
         <div class="git-header-row">
-          <span class="git-branch-label current"><span class="dot"></span>feat/chat-ui</span>
-          <span class="git-branch-label default"><span class="dot"></span>main</span>
+          <span class="git-branch-label current" id="branch-feat/group-chat-agent" onclick="switchBranch('feat/group-chat-agent')"><span class="dot"></span>feat/group-chat-agent</span>
+          <span class="git-branch-label default" id="branch-main" onclick="switchBranch('main')"><span class="dot"></span>main</span>
         </div>
         <!-- Graph (rendered by JS) -->
         <div class="git-graph-container" id="gitGraphContainer"></div>
@@ -658,7 +662,7 @@
             <div class="terminal-line">&nbsp;</div>
           </div>
           <div class="terminal-input-row" onclick="document.getElementById('termInput').focus()">
-            <span class="terminal-prompt">$</span>
+            <span class="terminal-prompt" id="termPrompt">(<span style="color:var(--color-success);">feat/group-chat-agent</span>) $</span>
             <input class="terminal-input" id="termInput" placeholder="Type a command..." autofocus onkeydown="handleTerminalInput(event)" />
             <span class="terminal-cursor" id="termCursor"></span>
           </div>
@@ -689,7 +693,7 @@ function toggleSection(name) {
 // Two columns: main (left) and task branch (right)
 // ================================================================
 
-const BRANCH_COLORS = { 'main': '#8B91A0', 'feat/chat-ui': '#6366F1' };
+const BRANCH_COLORS = { 'main': '#8B91A0', 'feat/group-chat-agent': '#6366F1' };
 
 const AGENT_COLORS = {
   'Orchestrator': '#EAB308', 'Claude Code': '#DA7756',
@@ -697,32 +701,52 @@ const AGENT_COLORS = {
 };
 
 // Lane X positions inside the 64px lane area
-const LANE_X = { 'main': 18, 'feat/chat-ui': 46 };
+const LANE_X = { 'main': 18, 'feat/group-chat-agent': 46 };
+
+// Branch HEAD index — last commit on each branch
+const BRANCH_HEADS = { 'main': 2, 'feat/group-chat-agent': 7 };
+
+// Current branch state
+let currentBranch = 'feat/group-chat-agent';
+
+function switchBranch(name) {
+  if (name === currentBranch) return;
+  currentBranch = name;
+  // Update branch label styles
+  Object.keys(BRANCH_HEADS).forEach(b => {
+    const el = document.getElementById('branch-' + b);
+    if (el) {
+      el.className = 'git-branch-label ' + (b === currentBranch ? 'current' : 'default');
+    }
+  });
+  // Re-render git graph
+  renderGitGraph();
+}
 
 const COMMITS = [
-  { hash: 'a1b2c3d', msg: 'init: project scaffold',          author: '田乐檬',       lane: 'main',         time: '3d ago',  parents: [] },
-  { hash: 'b2c3d4e', msg: 'feat: add auth module',           author: 'Claude Code',  lane: 'main',         time: '3d ago',  parents: [0] },
-  { hash: 'c3d4e5f', msg: 'feat: add chat area component',   author: 'Claude Code',  lane: 'main',         time: '2d ago',  parents: [1] },
-  { hash: 'd4e5f6a', msg: 'feat: message bubble styling',    author: 'Orchestrator', lane: 'feat/chat-ui', time: '2d ago',  parents: [1] },
-  { hash: 'e5f6a7b', msg: 'feat: agent badge & color bar',   author: 'Claude Code',  lane: 'feat/chat-ui', time: '2d ago',  parents: [3] },
-  { hash: 'f6a7b8c', msg: 'feat: streaming indicator',       author: 'OpenCode',     lane: 'feat/chat-ui', time: '1d ago',  parents: [4] },
-  { hash: 'a7b8c9d', msg: 'fix: scroll-to-bottom on new msg',author: 'Claude Code',  lane: 'feat/chat-ui', time: '1d ago',  parents: [5] },
-  { hash: 'f2a3b4c', msg: 'feat: terminal + git graph panel', author: 'Claude Code',  lane: 'feat/chat-ui', time: '刚刚',    parents: [6] },
+  { hash: 'a1b2c3d', msg: 'init: project scaffold',                author: '田乐檬',       lane: 'main',                 time: '3d ago',  parents: [] },
+  { hash: 'b2c3d4e', msg: 'feat: add auth module',                 author: 'Claude Code',  lane: 'main',                 time: '3d ago',  parents: [0] },
+  { hash: 'c3d4e5f', msg: 'feat: add chat area component',         author: 'Claude Code',  lane: 'main',                 time: '2d ago',  parents: [1] },
+  { hash: 'd4e5f6a', msg: 'feat: group chat orchestrator',         author: 'Orchestrator', lane: 'feat/group-chat-agent', time: '2d ago',  parents: [1] },
+  { hash: 'e5f6a7b', msg: 'feat: multi-agent message dispatch',    author: 'Claude Code',  lane: 'feat/group-chat-agent', time: '2d ago',  parents: [3] },
+  { hash: 'f6a7b8c', msg: 'feat: streaming for group responses',   author: 'OpenCode',     lane: 'feat/group-chat-agent', time: '1d ago',  parents: [4] },
+  { hash: 'a7b8c9d', msg: 'fix: agent identity in message store',  author: 'Claude Code',  lane: 'feat/group-chat-agent', time: '1d ago',  parents: [5] },
+  { hash: 'f2a3b4c', msg: 'feat: terminal + git graph panel',      author: 'Claude Code',  lane: 'feat/group-chat-agent', time: '刚刚',    parents: [6] },
 ];
 
-const HEAD_IDX = COMMITS.length - 1;
 const ROW_H = 28;
 
 function renderGitGraph() {
   const container = document.getElementById('gitGraphContainer');
   const total = COMMITS.length;
   const svgH = total * ROW_H;
+  const headIdx = BRANCH_HEADS[currentBranch];
 
   let svg = `<svg width="64" height="${svgH}" style="position:absolute;left:0;top:0;">`;
 
   // Lane rails — faint continuous vertical lines
   svg += `<line x1="${LANE_X['main']}" y1="0" x2="${LANE_X['main']}" y2="${svgH}" stroke="#8B91A0" stroke-width="1.5" opacity="0.12"/>`;
-  svg += `<line x1="${LANE_X['feat/chat-ui']}" y1="0" x2="${LANE_X['feat/chat-ui']}" y2="${svgH}" stroke="#6366F1" stroke-width="1.5" opacity="0.12"/>`;
+  svg += `<line x1="${LANE_X['feat/group-chat-agent']}" y1="0" x2="${LANE_X['feat/group-chat-agent']}" y2="${svgH}" stroke="#6366F1" stroke-width="1.5" opacity="0.12"/>`;
 
   // Connections: iterate rows (row 0 = newest commit)
   for (let r = 0; r < total; r++) {
@@ -755,7 +779,7 @@ function renderGitGraph() {
     const commit = COMMITS[ci];
     const cx = LANE_X[commit.lane];
     const cy = r * ROW_H + ROW_H / 2;
-    const isHead = ci === HEAD_IDX;
+    const isHead = ci === headIdx;
     const color = isHead ? '#22C55E' : BRANCH_COLORS[commit.lane];
 
     if (isHead) {
@@ -771,7 +795,7 @@ function renderGitGraph() {
   for (let r = 0; r < total; r++) {
     const ci = total - 1 - r;
     const commit = COMMITS[ci];
-    const isHead = ci === HEAD_IDX;
+    const isHead = ci === headIdx;
     const authorColor = AGENT_COLORS[commit.author] || '#8B91A0';
 
     rows += `
@@ -820,22 +844,41 @@ renderGitGraph();
 // Terminal
 // ================================================================
 const COMMANDS = {
-  'help': () => '<span class="output">Available commands: clear, ls, pwd, git status, git log, git branch, npm run build, npm test, whoami, cat, echo, help</span>',
+  'help': () => '<span class="output">Available commands: clear, ls, pwd, git status, git log, git branch, git checkout &lt;branch&gt;, npm run build, npm test, whoami, cat, echo, help</span>',
   'clear': () => '__CLEAR__',
   'pwd': () => '<span class="output">/home/user/workspace/project</span>',
   'ls': () => '<span class="output">src/  package.json  tsconfig.json  README.md  node_modules/  .git/</span>',
   'whoami': () => '<span class="output">agent-claude</span>',
-  'git status': () => '<span class="output">On branch </span><span class="path">feat/chat-ui</span>\n<span class="output">Changes not staged for commit:</span>\n<span class="error">  modified:   src/components/chat/RightSidebar.tsx</span>\n<span class="error">  modified:   src/components/chat/MessageBubble.tsx</span>\n\n<span class="output">no changes added to commit</span>',
-  'git branch': () => '<span class="output">* </span><span class="path">feat/chat-ui</span>\n<span class="output">  main</span>',
+  'git status': () => {
+    if (currentBranch === 'main') {
+      return '<span class="output">On branch </span><span class="path">main</span>\n<span class="output">nothing to commit, working tree clean</span>';
+    }
+    return '<span class="output">On branch </span><span class="path">feat/group-chat-agent</span>\n<span class="output">Changes not staged for commit:</span>\n<span class="error">  modified:   src/components/chat/RightSidebar.tsx</span>\n<span class="error">  modified:   src/components/chat/MessageBubble.tsx</span>\n\n<span class="output">no changes added to commit</span>';
+  },
+  'git branch': () => {
+    const branches = ['main', 'feat/group-chat-agent'];
+    return branches.map(b =>
+      (b === currentBranch ? '<span class="output">* </span>' : '<span class="output">  </span>') +
+      '<span class="path">' + b + '</span>'
+    ).join('\n');
+  },
   'git log': () => {
-    const logs = [
-      '<span class="path">f2a3b4c</span> <span class="output">feat: terminal + git graph panel</span> <span style="color:var(--text-tertiary);">(刚刚)</span>',
-      '<span class="path">a7b8c9d</span> <span class="output">fix: scroll-to-bottom on new msg</span> <span style="color:var(--text-tertiary);">(1d ago)</span>',
-      '<span class="path">f6a7b8c</span> <span class="output">feat: streaming indicator</span> <span style="color:var(--text-tertiary);">(1d ago)</span>',
-      '<span class="path">e5f6a7b</span> <span class="output">feat: agent badge & color bar</span> <span style="color:var(--text-tertiary);">(2d ago)</span>',
-      '<span class="path">d4e5f6a</span> <span class="output">feat: message bubble styling</span> <span style="color:var(--text-tertiary);">(2d ago)</span>',
-    ];
-    return logs.map(l => `<span class="terminal-line">${l}</span>`).join('');
+    // Show commits reachable from current branch HEAD
+    const headIdx = BRANCH_HEADS[currentBranch];
+    const reachable = [];
+    const visit = (idx) => {
+      if (reachable.includes(idx)) return;
+      reachable.push(idx);
+      COMMITS[idx].parents.forEach(p => visit(p));
+    };
+    visit(headIdx);
+    // Sort by index descending (newest first)
+    reachable.sort((a, b) => b - a);
+    const logs = reachable.map(ci => {
+      const c = COMMITS[ci];
+      return '<span class="path">' + c.hash + '</span> <span class="output">' + c.msg + '</span> <span style="color:var(--text-tertiary);">(' + c.time + ')</span>';
+    });
+    return logs.map(l => '<span class="terminal-line">' + l + '</span>').join('');
   },
   'npm run build': () => '<span class="output">vite v8.0.0 building for production...</span>\n<span class="output">✓ </span><span class="path">42 modules transformed.</span>\n<span class="output">dist/index.html</span>            <span class="path">0.46 kB │ gzip: 0.30 kB</span>\n<span class="output">dist/assets/index.css</span>       <span class="path">14.23 kB │ gzip: 4.81 kB</span>\n<span class="output">dist/assets/index.js</span>        <span class="path">186.40 kB │ gzip: 59.12 kB</span>\n<span style="color:var(--color-success);">✓ built in 1.23s</span>',
   'npm test': () => '<span style="color:var(--color-success);">Tests:       12 passed, 12 total</span>\n<span class="output">Time:        2.34s</span>\n<span class="output">Ran all test suites.</span>',
@@ -852,6 +895,21 @@ function handleTerminalInput(e) {
     output.innerHTML += `<div class="terminal-line"><span class="prompt">$ </span><span class="cmd">${escapeHtml(cmd)}</span></div>`;
 
     if (cmd === '') { /* empty */ }
+    else if (cmd.startsWith('git checkout ') || cmd.startsWith('git switch ')) {
+      const target = cmd.replace(/^git (checkout|switch) /, '').trim();
+      if (BRANCH_HEADS[target] !== undefined) {
+        if (target === currentBranch) {
+          output.innerHTML += '<div class="terminal-line"><span class="output">Already on \'' + target + '\'</span></div>';
+        } else {
+          switchBranch(target);
+          output.innerHTML += '<div class="terminal-line"><span class="output">Switched to branch \'' + target + '\'</span></div>';
+          // Update terminal prompt
+          updateTerminalPrompt();
+        }
+      } else {
+        output.innerHTML += '<div class="terminal-line"><span class="error">error: pathspec \'' + escapeHtml(target) + '\' did not match any branch known to git</span></div>';
+      }
+    }
     else if (COMMANDS[cmd]) {
       const result = COMMANDS[cmd]();
       if (result === '__CLEAR__') { output.innerHTML = ''; }
@@ -879,6 +937,13 @@ function escapeHtml(str) {
 document.querySelector('.terminal-window').addEventListener('click', () => {
   document.getElementById('termInput').focus();
 });
+
+function updateTerminalPrompt() {
+  const prompt = document.getElementById('termPrompt');
+  if (prompt) {
+    prompt.innerHTML = '(<span style="color:var(--color-success);">' + currentBranch + '</span>) $';
+  }
+}
 </script>
 
 </body>

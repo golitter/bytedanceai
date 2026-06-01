@@ -116,6 +116,11 @@ func (h *WorkspaceHandler) Revert(c *gin.Context) {
 	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", workspaceID), nil)
 }
 
+func (h *WorkspaceHandler) TaskGitInfo(c *gin.Context) {
+	taskID := c.Param("taskId")
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/task/%s/git-info", taskID), nil)
+}
+
 func (h *WorkspaceHandler) StartPreview(c *gin.Context) {
 	workspaceID := c.Param("id")
 	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/preview/start", workspaceID), nil)

@@ -7,13 +7,16 @@ import {
   PanelRightOpen,
   Pin,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
-import { MESSAGE_ROLES } from '@/lib/constants'
+import { API_BASE, MESSAGE_ROLES } from '@/lib/constants'
 
 import { AnnouncementsSection } from './AnnouncementsSection'
+import type { GitGraphData, GitInfoApiResponse } from './git-graph-types'
+import { buildBranchLabels, getBranchColor } from './git-graph-types'
+import { GitGraphPanel } from './GitGraphPanel'
 import { HistorySearch } from './HistorySearch'
 import { MembersSection } from './MembersSection'
 
@@ -66,13 +69,44 @@ export function RightSidebar({
   agentNames,
   sessions,
   repoPath,
-  width = 280,
+  width = 300,
   isDragging = false,
   onResizeHandleMouseDown,
   onExpand,
 }: RightSidebarProps) {
   const isCollapsed = width === 0
   const [pathsOpen, togglePaths] = useCollapsible('paths', false)
+
+  // ── Git branch state (shared between GitGraph) ──
+  const gitGraphData = useGitGraphData(taskId)
+  const initialBranch = useMemo(() => gitGraphData.currentBranch, [gitGraphData.currentBranch])
+  const [currentBranch, setCurrentBranch] = useState(initialBranch)
+
+  // Sync when API data arrives and changes the initial branch
+  if (
+    gitGraphData.currentBranch &&
+    currentBranch !== gitGraphData.currentBranch &&
+    !currentBranch
+  ) {
+    setCurrentBranch(gitGraphData.currentBranch)
+  }
+
+  // Build sessionId → agentName mapping from sessions prop
+  const sessionNameMap = useMemo(
+    () => Object.fromEntries(sessions.map((s) => [s.sessionId, s.agentName])),
+    [sessions],
+  )
+
+  // Build branch label mapping: agent/{sid}/... → agent name, task/{id} → "task", main → "main"
+  const branchLabels = useMemo(
+    () =>
+      buildBranchLabels(
+        gitGraphData.branches.map((b) => b.name),
+        sessionNameMap,
+        taskId,
+      ),
+    [gitGraphData.branches, sessionNameMap, taskId],
+  )
 
   // Collapsed: show expand tab
   if (isCollapsed) {
@@ -174,6 +208,14 @@ export function RightSidebar({
         {/* Members */}
         <MembersSection agentTypes={agentTypes} agentNames={agentNames} sessions={sessions} />
 
+        {/* Git Graph */}
+        <GitGraphPanel
+          data={gitGraphData}
+          currentBranch={currentBranch}
+          onBranchChange={setCurrentBranch}
+          branchLabels={branchLabels}
+        />
+
         {/* More actions */}
         <div className="flex flex-col gap-0.5 px-4 py-3">
           <button
@@ -266,4 +308,58 @@ async function exportChatAsMarkdown(taskId: string, sessionIds: string[]) {
   a.download = `chat-${taskId}.md`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// ─── Real Git Graph Data from API ────────────────────────────────
+
+const EMPTY_GIT_DATA: GitGraphData = { commits: [], branches: [], currentBranch: '' }
+
+function useGitGraphData(taskId: string): GitGraphData {
+  const [apiData, setApiData] = useState<GitInfoApiResponse | null>(null)
+
+  useEffect(() => {
+    if (!taskId) return
+    let cancelled = false
+    const fetchGitInfo = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/workspace/task/${taskId}/git-info`)
+        if (!res.ok) return
+        const data: GitInfoApiResponse = await res.json()
+        if (!cancelled) setApiData(data)
+      } catch {
+        // Silently fail — sidebar still works without git data
+      }
+    }
+    fetchGitInfo()
+    // Refresh every 30s
+    const interval = setInterval(fetchGitInfo, 30_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [taskId])
+
+  return useMemo(() => {
+    if (!apiData) return EMPTY_GIT_DATA
+
+    // Determine current branch: prefer the most specific branch (agent > task > main)
+    const branchNames = apiData.branches.map((b) => b.name)
+    const agentBranch = branchNames.find((b) => b.startsWith('agent/'))
+    const taskBranch = branchNames.find((b) => b.startsWith('task/'))
+    const currentBranch = agentBranch ?? taskBranch ?? 'main'
+
+    return {
+      repoPath: apiData.repoPath,
+      commits: apiData.commits,
+      branches: apiData.branches.map((b) => ({
+        name: b.name,
+        color: getBranchColor(b.name),
+        headHash: b.headHash,
+        headMsg: b.headMsg,
+        headAuthor: b.headAuthor,
+        headTime: b.headTime,
+      })),
+      currentBranch,
+    }
+  }, [apiData])
 }

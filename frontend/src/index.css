@@ -254,3 +254,11 @@
 .animate-search-highlight {
   animation: search-highlight 800ms ease;
 }
+
+/* ─── Terminal output (dangerouslySetInnerHTML) ─── */
+.terminal-output .text-success { color: var(--color-success); }
+.terminal-output .text-error { color: var(--color-error); }
+.terminal-output .text-primary { color: var(--primary); }
+.terminal-output .text-text-secondary { color: var(--text-secondary); }
+.terminal-output .text-text-tertiary { color: var(--text-tertiary); }
+.terminal-output .text-text-primary { color: var(--text-primary); }
