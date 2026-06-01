@@ -169,6 +169,12 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				case generated.EventTypeAskCardDone:
 					sw.flushTextBuffer()
 					sw.persistAskCardEvent(event, askCardStatus(event.Content["status"]))
+				case generated.EventTypePlanReview:
+					sw.flushTextBuffer()
+					sw.persistPlanReviewEvent(event)
+					db.GetDB().Model(&model.Session{}).
+						Where("session_id = ? AND task_id = ?", sw.sessionID, sw.taskID).
+						Update("status", "awaiting_review")
 				default:
 					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
 					sw.flushTextBuffer()
@@ -442,6 +448,18 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 	}
 
 	sw.appendTextToMessage(targetMessageID, marker)
+}
+
+func (sw *StreamWriter) persistPlanReviewEvent(event generated.StreamEvent) {
+	payload := map[string]interface{}{
+		"session_id": event.Content["session_id"],
+		"task_id":    event.Content["task_id"],
+		"plan":       event.Content["plan"],
+		"waves":      event.Content["waves"],
+		"status":     "pending",
+	}
+	sw.appendText(legacyRuntimeBlockLine("plan_review", payload))
+	sw.doFlush()
 }
 
 func (sw *StreamWriter) appendTextToMessage(messageID, text string) {

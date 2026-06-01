@@ -265,6 +265,23 @@ export async function submitMessage(
   return json.data
 }
 
+export async function submitPlanReview(
+  taskId: string,
+  body: { session_id: string; action: 'approve' | 'discuss' | 'modify'; content?: string },
+): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new Error(json.msg || `HTTP ${res.status}`)
+  }
+  const json = await res.json()
+  return json.data
+}
+
 export interface TaskMessagesResponse {
   data: TaskMessage[]
   has_more: boolean

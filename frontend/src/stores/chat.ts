@@ -23,7 +23,7 @@ import {
   fetchAnnouncements as apiFetchAnnouncements,
 } from '@/lib/api'
 import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
-import type { CoordMessage, MessageBlock, PlanTask } from '@/lib/block-types'
+import type { CoordMessage, MessageBlock, PlanReviewPayload, PlanTask } from '@/lib/block-types'
 
 export interface ChatMessage {
   id: string
@@ -62,6 +62,7 @@ interface SessionChatState {
   hasMore: boolean
   isLoadingMore: boolean
   runtimeBlocks: MessageBlock[]
+  activePlanReviewKey?: string
 }
 
 interface ChatNavState {
@@ -104,6 +105,12 @@ interface ChatStoreState {
     event: { task_id: string; agent: string; text: string },
   ) => void
   streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
+  streamPlanReviewEvent: (sessionId: string, event: PlanReviewPayload) => void
+  setPlanReviewStatus: (
+    sessionId: string,
+    reviewKey: string | undefined,
+    status: 'pending' | 'submitted' | 'approved' | 'stale',
+  ) => void
   streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
   streamCoordinationDone: (sessionId: string, summary: string) => void
   streamAskCardStart: (
@@ -171,6 +178,7 @@ const initialSessionState: SessionChatState = {
   hasMore: true,
   isLoadingMore: false,
   runtimeBlocks: [],
+  activePlanReviewKey: undefined,
 }
 
 let _runtimeBlockId = 0
@@ -257,6 +265,31 @@ function patchAskAgentBlock(
     collapsed: status === 'answered',
     summary: event.summary || block.summary,
   }
+}
+
+function planReviewKey(
+  sessionId: string,
+  block: Extract<MessageBlock, { type: 'plan_review' }>,
+): string {
+  return block.review_key || `${block.task_id ?? ''}:${block.session_id ?? sessionId}`
+}
+
+function patchPlanReviewStatus(
+  blocks: MessageBlock[] | undefined,
+  sessionId: string,
+  reviewKey: string | undefined,
+  status: 'pending' | 'submitted' | 'approved' | 'stale',
+): MessageBlock[] | undefined {
+  if (!blocks) return blocks
+  return blocks.map((block) => {
+    if (block.type !== 'plan_review') return block
+    if (reviewKey && planReviewKey(sessionId, block) !== reviewKey) return block
+    return {
+      ...block,
+      review_key: planReviewKey(sessionId, block),
+      status: status === 'stale' ? 'submitted' : status,
+    }
+  })
 }
 
 function findMatchingOptimisticUser(merged: ChatMessage[], msg: ChatMessage): number {
@@ -416,6 +449,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           messages: [...(s.sessions[sessionId]?.messages ?? []), message],
           streamingContent: '',
           runtimeBlocks: [],
+          activePlanReviewKey: undefined,
           error: null,
           activeStream,
         },
@@ -432,6 +466,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           streamingAgentType: agentType,
           streamingAgentName: undefined,
           streamingMessageId: undefined,
+          activePlanReviewKey: undefined,
         },
       },
     })),
@@ -552,6 +587,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             streamingMessageId: undefined,
             activeStream: null,
             runtimeBlocks: [],
+            activePlanReviewKey: undefined,
           },
         },
       }
@@ -570,6 +606,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           streamingContent: '',
           streamingMessageId: undefined,
           runtimeBlocks: [],
+          activePlanReviewKey: undefined,
           activeStream: null,
         },
       },
@@ -602,7 +639,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       return {
         sessions: {
           ...s.sessions,
-          [sessionId]: { ...session, runtimeBlocks: blocks },
+          [sessionId]: { ...session, runtimeBlocks: blocks, activePlanReviewKey: undefined },
         },
       }
     }),
@@ -630,7 +667,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       return {
         sessions: {
           ...s.sessions,
-          [sessionId]: { ...session, runtimeBlocks: blocks },
+          [sessionId]: { ...session, runtimeBlocks: blocks, activePlanReviewKey: undefined },
         },
       }
     }),
@@ -653,6 +690,66 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         sessions: {
           ...s.sessions,
           [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamPlanReviewEvent: (sessionId, event) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const reviewKey =
+        event.review_key || `${event.task_id ?? ''}:${event.session_id ?? sessionId}`
+      const blocks = session.runtimeBlocks.filter((b) => b.type !== 'runtime_status')
+      const existingIdx = blocks.findIndex(
+        (b) => b.type === 'plan_review' && planReviewKey(sessionId, b) === reviewKey,
+      )
+      const block: MessageBlock = {
+        type: 'plan_review',
+        id: existingIdx >= 0 ? blocks[existingIdx].id : nextRuntimeBlockId(),
+        ...event,
+        review_key: reviewKey,
+        status: 'pending',
+      }
+      if (existingIdx >= 0) {
+        blocks[existingIdx] = block
+      } else {
+        blocks.push(block)
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            status: 'streaming',
+            runtimeBlocks: blocks,
+            activePlanReviewKey: reviewKey,
+          },
+        },
+      }
+    }),
+
+  setPlanReviewStatus: (sessionId, reviewKey, status) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const activePlanReviewKey =
+        status === 'pending'
+          ? reviewKey
+          : session.activePlanReviewKey === reviewKey || !reviewKey
+            ? undefined
+            : session.activePlanReviewKey
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            activePlanReviewKey,
+            runtimeBlocks:
+              patchPlanReviewStatus(session.runtimeBlocks, sessionId, reviewKey, status) ?? [],
+            messages: session.messages.map((message) => ({
+              ...message,
+              blocks: patchPlanReviewStatus(message.blocks, sessionId, reviewKey, status),
+            })),
+          },
         },
       }
     }),
@@ -720,6 +817,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ],
             streamingContent: '',
             runtimeBlocks: [],
+            activePlanReviewKey: undefined,
           }
         : session
 
@@ -756,6 +854,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             streamingAgentName: sourceAgentName ?? baseSession.streamingAgentName,
             streamingMessageId: undefined,
             runtimeBlocks: blocks,
+            activePlanReviewKey: undefined,
           },
         },
       }

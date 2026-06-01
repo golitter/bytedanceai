@@ -118,6 +118,58 @@ export function useChatStream(
               }
               break
             }
+            case EventTypeValues.PlanReview: {
+              const plan = (event.content?.plan ?? {}) as {
+                overview?: string
+                tasks?: Array<{
+                  task_id?: string
+                  session_id?: string
+                  title?: string
+                  content?: string
+                }>
+              }
+              const rawWaves = event.content?.waves
+              const waves = Array.isArray(rawWaves)
+                ? rawWaves.map((wave) =>
+                    Array.isArray(wave)
+                      ? wave.map((task) => {
+                          const item = task as {
+                            task_id?: string
+                            session_id?: string
+                            agent?: string
+                            title?: string
+                            content?: string
+                          }
+                          return {
+                            task_id: item.task_id ?? '',
+                            session_id: item.session_id,
+                            agent: item.agent ?? item.session_id ?? '',
+                            title: item.title || (item.content ?? '').slice(0, 80),
+                            content: item.content,
+                            status: 'pending' as const,
+                          }
+                        })
+                      : [],
+                  )
+                : []
+              store.streamPlanReviewEvent(sessionId, {
+                review_key: `${taskId}:${(event.content?.session_id as string | undefined) ?? sessionId}`,
+                session_id: (event.content?.session_id as string | undefined) ?? sessionId,
+                task_id: (event.content?.task_id as string | undefined) ?? taskId,
+                overview: plan.overview ?? '',
+                tasks: (plan.tasks ?? []).map((task) => ({
+                  task_id: task.task_id ?? '',
+                  session_id: task.session_id,
+                  agent: task.session_id ?? '',
+                  title: task.title || (task.content ?? '').slice(0, 80),
+                  content: task.content,
+                  status: 'pending',
+                })),
+                waves,
+                status: 'pending',
+              })
+              break
+            }
             case EventTypeValues.CoordinationStart:
               // coordination channel opens — no action needed, messages will follow
               break

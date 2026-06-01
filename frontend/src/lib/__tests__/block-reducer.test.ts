@@ -111,6 +111,39 @@ describe('reduceEventToBlocks', () => {
     }
   })
 
+  it('folds legacy plan review lines', () => {
+    const input =
+      'type: plan_review\n' +
+      'json: {"session_id":"s-1","task_id":"t-1","status":"pending","plan":{"overview":"先检查再实现","tasks":[{"task_id":"task-001","session_id":"agent-a","title":"跑 lint","content":"执行 lint"}]},"waves":[]}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('plan_review')
+    if (result[0].type === 'plan_review') {
+      expect(result[0].overview).toBe('先检查再实现')
+      expect(result[0].tasks[0].agent).toBe('agent-a')
+      expect(result[0].tasks[0].content).toBe('执行 lint')
+    }
+  })
+
+  it('keeps separate plan review rounds when review keys differ', () => {
+    const input =
+      'type: plan_review\n' +
+      'json: {"review_key":"r-1","session_id":"s-1","task_id":"t-1","status":"submitted","plan":{"overview":"旧规划","tasks":[{"task_id":"task-001","session_id":"agent-a","title":"旧任务"}]},"waves":[]}\n' +
+      'type: plan_review\n' +
+      'json: {"review_key":"r-2","session_id":"s-1","task_id":"t-1","status":"pending","plan":{"overview":"新规划","tasks":[{"task_id":"task-001","session_id":"agent-a","title":"新任务"}]},"waves":[]}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(2)
+    expect(result.map((block) => block.type)).toEqual(['plan_review', 'plan_review'])
+    if (result[0].type === 'plan_review' && result[1].type === 'plan_review') {
+      expect(result[0].overview).toBe('旧规划')
+      expect(result[0].status).toBe('submitted')
+      expect(result[1].overview).toBe('新规划')
+      expect(result[1].status).toBe('pending')
+    }
+  })
+
   it('folds legacy fenced runtime status lines', () => {
     const input =
       '```yaml\n' +
@@ -246,6 +279,23 @@ describe('reduceEventToBlocks', () => {
       expect(result[0].completed).toBe(2)
       expect(result[0].failed).toBe(1)
       expect(result[0].details[1].status).toBe('failed')
+    }
+  })
+
+  it('parses final summary blocks when detail summaries contain fenced code', () => {
+    const input =
+      '```aka_yhy\n' +
+      'type: final_summary\n' +
+      'json: {"status":"success","completed":1,"failed":0,"nextAction":"可以继续验收结果。","details":[{"task_id":"task-001","agent":"执行者01","status":"completed","summary":"```markdown\\n# Hello from test-agent1\\n```\\n仅一行占位标题。"}]}\n' +
+      '```\n\n' +
+      '好的，这是根据执行结果生成的汇总报告。'
+    const result = reduceEventToBlocks(input)
+
+    expect(result.map((block) => block.type)).toEqual(['final_summary', 'text'])
+    expect(result[0].type).toBe('final_summary')
+    if (result[0].type === 'final_summary') {
+      expect(result[0].status).toBe('success')
+      expect(result[0].details[0].summary).toContain('Hello from test-agent1')
     }
   })
 })

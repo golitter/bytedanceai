@@ -10,6 +10,7 @@ import {
   HtmlCard,
   ImageCard,
   PlanCard,
+  PlanReviewCard,
   PreviewCard,
   RuntimeStatus,
   TaskFailureCard,
@@ -29,14 +30,18 @@ import { AskAgentCard } from './AskAgentCard'
 
 function BlockRenderer({
   block,
+  taskId,
   sessionId,
   agentSessionLookup,
   expandedPreview,
+  interactive,
 }: {
   block: MessageBlock
+  taskId?: string
   sessionId?: string
   agentSessionLookup?: Map<string, AgentSessionInfo>
   expandedPreview?: boolean
+  interactive?: boolean
 }) {
   switch (block.type) {
     case 'text':
@@ -53,6 +58,19 @@ function BlockRenderer({
       return <PreviewCard url={block.url} />
     case 'plan':
       return <PlanCard overview={block.overview} tasks={block.tasks} />
+    case 'plan_review':
+      return (
+        <PlanReviewCard
+          reviewKey={block.review_key}
+          taskId={block.task_id ?? taskId}
+          sessionId={block.session_id ?? sessionId}
+          overview={block.overview}
+          tasks={block.tasks}
+          waves={block.waves}
+          status={block.status}
+          interactive={interactive}
+        />
+      )
     case 'runtime_status':
       return (
         <RuntimeStatus
@@ -119,6 +137,7 @@ function BlockRenderer({
 interface BaseProps {
   children?: ReactNode
   blocks?: MessageBlock[]
+  taskId?: string
   sessionId?: string
   agentSessionLookup?: Map<string, AgentSessionInfo>
 }
@@ -148,22 +167,36 @@ const AGENT_TEXT_WIDTH = 'max-w-[min(68vw,38rem)]'
 const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(68vw,46rem)]'
 const LONG_MESSAGE_PREVIEW_HEIGHT = 'h-[22rem]'
 
+function canInteractWithPlanReview(
+  blocks: MessageBlock[],
+  index: number,
+  interactive?: boolean,
+): boolean {
+  if (!interactive) return false
+  if (blocks.some((block) => block.type === 'runtime_status')) return false
+  return !blocks.slice(index + 1).some((block) => block.type !== 'text')
+}
+
 function AgentMessageContent({
   blocks,
   children,
+  taskId,
   sessionId,
   agentSessionLookup,
   isStreaming,
   isLong,
+  interactive,
   agentLabel,
   agentColor,
 }: {
   blocks?: MessageBlock[]
   children?: ReactNode
+  taskId?: string
   sessionId?: string
   agentSessionLookup?: Map<string, AgentSessionInfo>
   isStreaming?: boolean
   isLong?: boolean
+  interactive?: boolean
   agentLabel?: string
   agentColor?: string
 }) {
@@ -174,13 +207,19 @@ function AgentMessageContent({
   const renderContent = (expandedPreview = false) => (
     <div className="min-w-0 max-w-full space-y-3">
       {hasBlocks
-        ? blocks!.map((block) => (
+        ? blocks!.map((block, index) => (
             <BlockRenderer
               key={block.id}
               block={block}
+              taskId={taskId}
               sessionId={sessionId}
               agentSessionLookup={agentSessionLookup}
               expandedPreview={expandedPreview}
+              interactive={
+                block.type === 'plan_review'
+                  ? canInteractWithPlanReview(blocks!, index, interactive)
+                  : interactive
+              }
             />
           ))
         : children}
@@ -313,10 +352,12 @@ export function MessageBubble(props: MessageBubbleProps) {
           />
           <AgentMessageContent
             blocks={props.blocks}
+            taskId={props.taskId}
             sessionId={props.sessionId}
             agentSessionLookup={props.agentSessionLookup}
             isStreaming={props.isStreaming}
             isLong={props.isLong}
+            interactive={props.isStreaming}
             agentLabel={agentLabel}
             agentColor={agentColor}
           >

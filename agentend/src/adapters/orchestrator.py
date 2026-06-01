@@ -120,6 +120,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "execution_waves": [],
             "task_results": [],
             "task_status": {},
+            "review_decision": "",
+            "review_message": "",
             "needs_replan": False,
             "replan_reason": "",
             "summary": "",
@@ -228,7 +230,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         )
 
                 elif node_name == "evolve":
-                    pass
+                    yield self._build_done_event(current_state)
 
                 elif node_name == "save_mem":
                     yield self._build_done_event(current_state)
@@ -264,14 +266,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
             plan = node_output.get("plan")
             if plan:
                 events.append(StreamEvent.create(EventType.PLANNING, node="reason", status="plan_generated"))
-                events.append(
-                    StreamEvent.create(
-                        EventType.TEXT,
-                        text=plan.overview,
-                        agent="Orchestrator",
-                        agent_type="orchestrator",
-                    )
-                )
         return events
 
     async def _handle_execute(

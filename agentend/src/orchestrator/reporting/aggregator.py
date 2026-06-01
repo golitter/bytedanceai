@@ -47,7 +47,7 @@ def _current_time_context() -> str:
 
 
 def _truncate_text(text: str, limit: int = 1200) -> str:
-    stripped = text.strip()
+    stripped = text.replace("```", "`\u200b``").strip()
     if len(stripped) <= limit:
         return stripped
     return stripped[:limit].rstrip() + "\n...(details truncated)"

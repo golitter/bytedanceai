@@ -6,7 +6,13 @@ from src.generated.session import SessionState
 
 _VALID_TRANSITIONS: dict[SessionState, set[SessionState]] = {
     SessionState.IDLE: {SessionState.RUNNING},
-    SessionState.RUNNING: {SessionState.COMPLETED, SessionState.INTERRUPTED, SessionState.ERROR},
+    SessionState.RUNNING: {
+        SessionState.COMPLETED,
+        SessionState.INTERRUPTED,
+        SessionState.ERROR,
+        SessionState.AWAITING_REVIEW,
+    },
+    SessionState.AWAITING_REVIEW: {SessionState.RUNNING},
     SessionState.COMPLETED: set(),
     SessionState.INTERRUPTED: set(),
     SessionState.ERROR: set(),

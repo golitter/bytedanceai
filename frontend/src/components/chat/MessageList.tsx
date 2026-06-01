@@ -22,6 +22,7 @@ interface MessageListProps {
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
+  taskId?: string
   sessionId?: string
   sessionAgentType?: AgentType
   agentSessionLookup?: Map<string, AgentSessionInfo>
@@ -51,6 +52,7 @@ export function MessageList({
   isStreaming,
   avatarUrl,
   agentName,
+  taskId,
   sessionId,
   sessionAgentType,
   agentSessionLookup,
@@ -151,6 +153,7 @@ export function MessageList({
           isStreaming={item.isStreamingMsg}
           avatarUrl={avatarUrl}
           agentName={agentName}
+          taskId={taskId}
           sessionId={sessionId}
           sessionAgentType={sessionAgentType}
           agentSessionLookup={agentSessionLookup}

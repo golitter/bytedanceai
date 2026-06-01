@@ -3,6 +3,18 @@ export interface PlanTask {
   agent: string
   title: string
   status: 'pending' | 'running' | 'completed' | 'failed'
+  content?: string
+  session_id?: string
+}
+
+export interface PlanReviewPayload {
+  review_key?: string
+  session_id?: string
+  task_id?: string
+  overview: string
+  tasks: PlanTask[]
+  waves: PlanTask[][]
+  status: 'pending' | 'submitted' | 'approved'
 }
 
 export interface CoordMessage {
@@ -27,6 +39,7 @@ export type MessageBlock =
   | { type: 'diff'; id: string; snapshotId: string }
   | { type: 'preview'; id: string; url: string }
   | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
+  | ({ type: 'plan_review'; id: string } & PlanReviewPayload)
   | {
       type: 'runtime_status'
       id: string

@@ -2,8 +2,6 @@ import type { MessageBlock, PlanTask } from './block-types'
 
 const BLOCK_MARKER = 'aka_yhy'
 
-const BLOCK_RE = new RegExp('```' + BLOCK_MARKER + '\\n([\\s\\S]*?)```', 'g')
-
 let _blockIdCounter = 0
 function nextBlockId(): string {
   return `blk-${++_blockIdCounter}`
@@ -13,22 +11,22 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   const blocks: MessageBlock[] = []
   let lastIndex = 0
 
-  for (const match of fullText.matchAll(BLOCK_RE)) {
-    const matchStart = match.index!
+  for (const match of findAkaBlocks(fullText)) {
+    const matchStart = match.start
     if (matchStart > lastIndex) {
       const text = fullText.slice(lastIndex, matchStart)
       appendTextSegment(blocks, text)
     }
 
-    const inner = match[1].trim()
+    const inner = match.inner.trim()
     const parsed = parseBlockContent(inner)
     if (parsed) {
       blocks.push(parsed)
     } else {
-      blocks.push({ type: 'text', id: nextBlockId(), content: match[0] })
+      blocks.push({ type: 'text', id: nextBlockId(), content: match.raw })
     }
 
-    lastIndex = matchStart + match[0].length
+    lastIndex = match.end
   }
 
   if (lastIndex < fullText.length) {
@@ -37,6 +35,55 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
 
   if (blocks.length === 0) {
     return [{ type: 'text', id: nextBlockId(), content: fullText }]
+  }
+
+  return blocks
+}
+
+function findAkaBlocks(
+  text: string,
+): Array<{ start: number; end: number; inner: string; raw: string }> {
+  const blocks: Array<{ start: number; end: number; inner: string; raw: string }> = []
+  const openFence = '```' + BLOCK_MARKER
+  let searchFrom = 0
+
+  while (searchFrom < text.length) {
+    const start = text.indexOf(openFence, searchFrom)
+    if (start < 0) break
+
+    const openLineEnd = text.indexOf('\n', start)
+    if (openLineEnd < 0) break
+
+    let cursor = openLineEnd + 1
+    let closeStart = -1
+    let closeEnd = -1
+
+    while (cursor <= text.length) {
+      const lineEnd = text.indexOf('\n', cursor)
+      const end = lineEnd < 0 ? text.length : lineEnd
+      const line = text.slice(cursor, end).trim()
+      if (line === '```') {
+        closeStart = cursor
+        closeEnd = end
+        break
+      }
+      if (lineEnd < 0) break
+      cursor = lineEnd + 1
+    }
+
+    if (closeStart < 0) {
+      searchFrom = openLineEnd + 1
+      continue
+    }
+
+    const end = closeEnd
+    blocks.push({
+      start,
+      end,
+      inner: text.slice(openLineEnd + 1, closeStart),
+      raw: text.slice(start, end),
+    })
+    searchFrom = end
   }
 
   return blocks
@@ -174,6 +221,26 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
           .map(planTask)
           .filter((task): task is PlanTask => task !== null),
       }
+    case 'plan_review': {
+      const plan = objectField(payload, 'plan')
+      return {
+        type: 'plan_review',
+        id: nextBlockId(),
+        review_key: optionalStringField(payload, 'review_key'),
+        session_id: optionalStringField(payload, 'session_id'),
+        task_id: optionalStringField(payload, 'task_id'),
+        overview: stringField(plan, 'overview'),
+        tasks: arrayField(plan, 'tasks')
+          .map(planTask)
+          .filter((task): task is PlanTask => task !== null),
+        waves: unknownArrayField(payload, 'waves').map((wave) =>
+          arrayValue(wave)
+            .map(planTask)
+            .filter((task): task is PlanTask => task !== null),
+        ),
+        status: planReviewStatusField(payload),
+      }
+    }
     case 'runtime_status':
       return {
         type: 'runtime_status',
@@ -353,6 +420,25 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
     }
   }
 
+  if (block.type === 'plan_review') {
+    const key = block.review_key || `${block.task_id ?? ''}:${block.session_id ?? ''}`
+    const existing = blocks.find(
+      (item) =>
+        item.type === 'plan_review' &&
+        (item.review_key || `${item.task_id ?? ''}:${item.session_id ?? ''}`) === key,
+    )
+    if (existing?.type === 'plan_review') {
+      existing.session_id = block.session_id || existing.session_id
+      existing.task_id = block.task_id || existing.task_id
+      existing.review_key = block.review_key || existing.review_key
+      existing.overview = block.overview || existing.overview
+      existing.tasks = block.tasks.length ? block.tasks : existing.tasks
+      existing.waves = block.waves.length ? block.waves : existing.waves
+      existing.status = block.status
+      return
+    }
+  }
+
   if (block.type === 'runtime_status') {
     for (let i = blocks.length - 1; i >= 0; i -= 1) {
       const existing = blocks[i]
@@ -399,13 +485,15 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
 }
 
 function planTask(value: Record<string, unknown>): PlanTask | null {
-  const status = stringField(value, 'status')
+  const status = stringField(value, 'status') || 'pending'
   if (!['pending', 'running', 'completed', 'failed'].includes(status)) return null
   return {
     task_id: stringField(value, 'task_id'),
-    agent: stringField(value, 'agent'),
-    title: stringField(value, 'title'),
+    agent: stringField(value, 'agent') || stringField(value, 'session_id'),
+    title: stringField(value, 'title') || stringField(value, 'content').slice(0, 80),
     status: status as PlanTask['status'],
+    content: optionalStringField(value, 'content'),
+    session_id: optionalStringField(value, 'session_id'),
   }
 }
 
@@ -442,6 +530,14 @@ function finalDetailStatusField(value: Record<string, unknown>): 'completed' | '
   return stringField(value, 'status') === 'failed' ? 'failed' : 'completed'
 }
 
+function planReviewStatusField(
+  value: Record<string, unknown>,
+): 'pending' | 'submitted' | 'approved' {
+  const raw = stringField(value, 'status')
+  if (raw === 'submitted' || raw === 'approved') return raw
+  return 'pending'
+}
+
 function booleanField(value: Record<string, unknown>, key: string, fallback: boolean): boolean {
   const raw = value[key]
   return typeof raw === 'boolean' ? raw : fallback
@@ -460,6 +556,27 @@ function arrayField(value: Record<string, unknown>, key: string): Record<string,
           item !== null && typeof item === 'object' && !Array.isArray(item),
       )
     : []
+}
+
+function unknownArrayField(value: Record<string, unknown>, key: string): unknown[] {
+  const raw = value[key]
+  return Array.isArray(raw) ? raw : []
+}
+
+function arrayValue(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === 'object' && !Array.isArray(item),
+      )
+    : []
+}
+
+function objectField(value: Record<string, unknown>, key: string): Record<string, unknown> {
+  const raw = value[key]
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {}
 }
 
 function parseBlockContent(inner: string): MessageBlock | null {
@@ -497,6 +614,10 @@ function parseBlockContent(inner: string): MessageBlock | null {
     case 'final_summary': {
       const payload = extractJsonPayload(lines)
       return payload ? legacyRuntimeBlock('final_summary', payload) : null
+    }
+    case 'plan_review': {
+      const payload = extractJsonPayload(lines)
+      return payload ? legacyRuntimeBlock('plan_review', payload) : null
     }
     default:
       return null

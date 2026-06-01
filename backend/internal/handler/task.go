@@ -243,6 +243,12 @@ type RunTaskReq struct {
 	SkipUserMessage bool   `json:"skip_user_message"`
 }
 
+type ReviewTaskReq struct {
+	SessionID string `json:"session_id" binding:"required"`
+	Action    string `json:"action" binding:"required"`
+	Content   string `json:"content"`
+}
+
 func (h *TaskHandler) RunTask(c *gin.Context) {
 	taskID := c.Param("taskId")
 
@@ -445,6 +451,76 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		"message_id": messageID,
 		"status":     "streaming",
 	})
+}
+
+func (h *TaskHandler) ReviewTask(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	var req ReviewTaskReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "session_id and action are required")
+		return
+	}
+	if req.Action != "approve" && req.Action != "discuss" && req.Action != "modify" {
+		vo.BadRequest(c, "action must be approve, discuss, or modify")
+		return
+	}
+	if (req.Action == "discuss" || req.Action == "modify") && strings.TrimSpace(req.Content) == "" {
+		vo.BadRequest(c, "content is required for discuss or modify")
+		return
+	}
+
+	var session model.Session
+	if err := db.GetDB().Where("task_id = ? AND session_id = ?", taskID, req.SessionID).First(&session).Error; err != nil {
+		vo.NotFound(c, "session not found")
+		return
+	}
+
+	result, err := h.agentClient.ReviewAgent(agentend_client.ReviewRequest{
+		SessionID: req.SessionID,
+		Action:    req.Action,
+		Content:   req.Content,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "status 404") {
+			vo.Conflict(c, "no pending plan review for this session")
+			return
+		}
+		vo.ServiceUnavailable(c, err.Error())
+		return
+	}
+
+	status := "submitted"
+	if req.Action == "approve" {
+		status = "approved"
+	}
+	markLatestPlanReviewBlock(taskID, req.SessionID, status)
+
+	db.GetDB().Model(&model.Session{}).
+		Where("task_id = ? AND session_id = ?", taskID, req.SessionID).
+		Update("status", "running")
+	vo.OK(c, result)
+}
+
+func markLatestPlanReviewBlock(taskID, sessionID, status string) {
+	var msg model.Message
+	err := db.GetDB().
+		Where("task_id = ? AND session_id = ? AND role = ? AND content LIKE ?", taskID, sessionID, "agent", "%type: plan_review%").
+		Order("id DESC").
+		First(&msg).Error
+	if err != nil {
+		return
+	}
+
+	updated := strings.Replace(msg.Content, `"status":"pending"`, fmt.Sprintf(`"status":"%s"`, status), 1)
+	if updated == msg.Content {
+		return
+	}
+	if err := db.GetDB().Model(&model.Message{}).
+		Where("message_id = ?", msg.MessageID).
+		Update("content", updated).Error; err != nil {
+		slog.Warn("failed to mark plan review block", "message_id", msg.MessageID, "error", err)
+	}
 }
 
 // ValidateRepoPath forwards the validation request to agentend.

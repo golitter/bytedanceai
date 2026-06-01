@@ -12,6 +12,7 @@ interface MessageRendererProps {
   isStreaming: boolean
   avatarUrl?: string
   agentName?: string
+  taskId?: string
   sessionId?: string
   sessionAgentType?: AgentType
   agentSessionLookup?: Map<string, AgentSessionInfo>
@@ -42,6 +43,8 @@ function isLongBlock(block: MessageBlock): boolean {
         block.messages.some((m) => isLongText(m.text))
       )
     case 'plan':
+      return block.tasks.length > MANY_STRUCTURED_BLOCKS || isLongText(block.overview)
+    case 'plan_review':
       return block.tasks.length > MANY_STRUCTURED_BLOCKS || isLongText(block.overview)
     case 'ask_agent':
     case 'task_failure':
@@ -79,6 +82,7 @@ export function MessageRenderer({
   isStreaming,
   avatarUrl,
   agentName,
+  taskId,
   sessionId,
   sessionAgentType,
   agentSessionLookup,
@@ -125,6 +129,7 @@ export function MessageRenderer({
         isLong={isLongMessage(msg, isStreaming)}
         isStructured={isStructuredMessage(msg)}
         blocks={msg.blocks}
+        taskId={taskId}
         sessionId={msgSessionId}
         agentSessionLookup={agentSessionLookup}
       >

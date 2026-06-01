@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -44,6 +45,47 @@ func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 	return c.streamClient.Do(httpReq)
+}
+
+type ReviewRequest struct {
+	SessionID string `json:"session_id"`
+	Action    string `json:"action"`
+	Content   string `json:"content,omitempty"`
+}
+
+func (c *Client) ReviewAgent(req ReviewRequest) (map[string]interface{}, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal review request: %w", err)
+	}
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/v1/agent/review", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create review request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("submit review: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if len(respBody) > 0 {
+			return nil, fmt.Errorf("agent review failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+		return nil, fmt.Errorf("agent review failed: status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if len(respBody) == 0 {
+		return map[string]interface{}{"status": "ok"}, nil
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("decode review response: %w", err)
+	}
+	return result, nil
 }
 
 type ValidateRepoPathResult struct {

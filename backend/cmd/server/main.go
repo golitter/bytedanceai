@@ -81,6 +81,7 @@ func main() {
 		api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
 
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
+		api.POST("/tasks/:taskId/review", taskHandler.ReviewTask)
 		api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
 		api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
 		api.GET("/tasks/:taskId/messages/window", messageHandler.WindowMessages)

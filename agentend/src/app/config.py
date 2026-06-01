@@ -80,6 +80,7 @@ class OrchestratorConfig(BaseModel):
     llm_request_timeout: float = 1200.0
     ask_agent_timeout: float = 180.0
     ask_agent_stream_chunk_timeout: float = 30.0
+    review_timeout: float = 600.0
     reason_max_iterations: int = 10
     replan_max_iterations: int = 3
     skill_execution_timeout: float = 30.0

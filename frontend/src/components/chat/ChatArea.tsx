@@ -167,6 +167,7 @@ export function ChatArea({
           isStreaming={isStreaming}
           avatarUrl={avatarUrl}
           agentName={agentName}
+          taskId={taskId}
           sessionId={sessionId}
           sessionAgentType={agentType}
           agentSessionLookup={agentSessionLookup}

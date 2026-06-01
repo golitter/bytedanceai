@@ -32,6 +32,9 @@ REASON_PROMPT = """\
 
 - 如果用户的问题是闲聊、简单问答、或不需要多 Agent 协作就能回答的问题 → 直接用文本回复
 - 如果用户的请求需要多个 Agent 协作、或涉及代码生成/审查/分析等复杂任务 → 调用 `plan_and_dispatch` 工具
+- 如果用户要求某个可用 Agent 执行实际动作（修改文件、运行命令、提交、检查仓库、生成产物等），
+  即使只需要一个 Agent，也必须调用 `plan_and_dispatch`
+- 如果用户明确提到“规划”“plan”“分派”“执行者/实现者去做”等意图，必须调用 `plan_and_dispatch`，不要只用文字描述“我会调用”
 - 你可以先使用工具（如 read_file、list_dir）收集信息，再决定是直接回复还是编排
 - 当规划需要某个 Agent 的专业判断、代码环境确认或方案建议时，可以先调用 `ask_agent(agent, question)`
   咨询该 Agent；拿到回答后再继续判断是否直接回复或调用 `plan_and_dispatch`

@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from src.adapters.base import BaseAgentAdapter
@@ -28,6 +29,12 @@ from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
+
+
+class ReviewRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    action: str = Field(pattern="^(approve|discuss|modify)$")
+    content: str = ""
 
 
 def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
@@ -237,6 +244,15 @@ async def agent_stream(
             backend_client,
         )
     )
+
+
+@router.post("/review")
+async def submit_review(request: ReviewRequest):
+    from src.orchestrator.planning.graph import submit_plan_review
+
+    if not submit_plan_review(request.session_id, request.action, request.content):
+        raise HTTPException(status_code=404, detail="No pending review for this session")
+    return {"status": "ok"}
 
 
 @router.post("/execute", response_model=AgentResponse)
