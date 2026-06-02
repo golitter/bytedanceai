@@ -17,7 +17,9 @@ from langgraph.graph import END, StateGraph
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
+from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
+from src.orchestrator.memory.pin_memory import PinMemory
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
 from src.orchestrator.planning.prompts import build_reason_prompt
 from src.orchestrator.planning.skill_loader import discover_skills
@@ -90,6 +92,9 @@ class GraphState(TypedDict):
     memory_messages: Annotated[list, _add]
     # skill_prepare intermediate state
     system_prompt: str
+    pin_context: str
+    evolution_context: str
+    orchestrator_context: str
     orchestrator: dict
     task_base_path: str
 
@@ -285,17 +290,34 @@ def skill_prepare_node(state: GraphState) -> dict:
     l1_skills = discover_skills(skills_dir_path)
 
     agents_desc = _build_agents_desc(state["agents"])
+
+    # Compute dynamic context separately (moved from build_reason_prompt)
+    pin_context = ""
+    evolution_context = ""
+    try:
+        pm = PinMemory(common_dir=f"{state['shared_dir']}/memory/common")
+        pin_context = pm.get_context()
+    except Exception:
+        pass
+    try:
+        evo = EvolutionStore(state["shared_dir"])
+        evolution_context = evo.get_recent_experience(5)
+    except Exception:
+        pass
+
+    # System prompt only contains identity + rules + tools (no dynamic context)
     system_prompt = build_reason_prompt(
         agents_desc=agents_desc,
-        message=state["message"],
         shared_dir=state["shared_dir"],
         l1_skills=l1_skills,
-        replan_reason=state.get("replan_reason"),
-        orchestrator_context=state.get("orchestrator_context", ""),
         task_base_path=state.get("task_base_path", ""),
     )
 
-    return {"system_prompt": system_prompt}
+    return {
+        "system_prompt": system_prompt,
+        "pin_context": pin_context,
+        "evolution_context": evolution_context,
+    }
 
 
 # --- REASON Node (LLM tool-calling loop) ---
@@ -499,15 +521,25 @@ async def reason_node(state: GraphState) -> dict:
         system_prompt = state.get("system_prompt", "")
         messages: list = [SystemMessage(content=system_prompt)]
 
-        for msg in state.get("memory_messages", []):
-            messages.append(msg)
-
-        messages.append(HumanMessage(content=state["message"]))
-
+        # Dynamic context messages — freshly injected each turn, NOT persisted
+        if state.get("pin_context"):
+            messages.append(SystemMessage(content=state["pin_context"]))
+        if state.get("evolution_context"):
+            messages.append(SystemMessage(content=state["evolution_context"]))
         if state.get("replan_reason"):
             messages.append(
                 HumanMessage(content=f"[重规划请求] 以下任务执行失败，请重新规划：\n{state['replan_reason']}")
             )
+        if state.get("orchestrator_context"):
+            messages.append(HumanMessage(content=state["orchestrator_context"]))
+
+        # Persisted conversation memory
+        for msg in state.get("memory_messages", []):
+            messages.append(msg)
+
+        # Current user message
+        messages.append(HumanMessage(content=state["message"]))
+
         if state.get("review_message"):
             decision = state.get("review_decision", "")
             if decision == "discuss":
@@ -830,6 +862,14 @@ def evolve_node(state: GraphState) -> dict:
 
 
 def save_mem_node(state: GraphState) -> dict:
+    """Persist memory_messages to file-based store before graph completes."""
+    try:
+        memory_messages = state.get("memory_messages", [])
+        if memory_messages:
+            store = ConversationMemoryStore(state["shared_dir"])
+            store.save_messages(memory_messages)
+    except Exception:
+        logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
 
 
