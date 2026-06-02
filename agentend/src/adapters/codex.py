@@ -21,10 +21,14 @@ class CodexAdapter(BaseAgentAdapter):
         message: str,
         *,
         cwd: str | None = None,
+        system_prompt_append: str | None = None,
         cli_session_id: str | None = None,
         is_resume: bool = False,
         model: str | None = None,
     ) -> list[str]:
+        prompt = message
+        if system_prompt_append:
+            prompt = f"[系统约束: {system_prompt_append}]\n\n{message}"
         if cli_session_id and is_resume:
             cmd = [
                 _CLI_PATH,
@@ -55,7 +59,7 @@ class CodexAdapter(BaseAgentAdapter):
                 cmd.extend(["-C", cwd])
         if model:
             cmd.extend(["-m", model])
-        cmd.append(message)
+        cmd.append(prompt)
         return cmd
 
     def _parse_stream_line(self, line: str) -> StreamEvent | None:
@@ -152,6 +156,7 @@ class CodexAdapter(BaseAgentAdapter):
         cmd = self._build_command(
             message,
             cwd=cwd,
+            system_prompt_append=kwargs.get("system_prompt_append"),
             cli_session_id=kwargs.get("cli_session_id"),
             is_resume=kwargs.get("is_resume", False),
             model=kwargs.get("model"),

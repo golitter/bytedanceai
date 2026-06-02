@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from src.orchestrator.memory.evolution import EvolutionStore
-from src.orchestrator.memory.pin_memory import PinMemory
-
 REASON_PROMPT = """\
-你是一个对话式任务编排器。你可以直接回答用户的问题，也可以协调多个 Agent 来完成复杂任务。
+你是一个对话式任务编排器。你可以直接回答用户的问题，也可以协调多个 Agent 来完成相应任务。
 
 ## 可用 Agents
 
@@ -16,14 +13,6 @@ REASON_PROMPT = """\
 
 {tools_section}
 
-{pin_context}
-
-{evolution_context}
-
-{replan_section}
-
-{orchestrator_context}
-
 {workspace_section}
 
 ## 规则
@@ -34,7 +23,7 @@ REASON_PROMPT = """\
 - 如果用户的请求需要多个 Agent 协作、或涉及代码生成/审查/分析等复杂任务 → 调用 `plan_and_dispatch` 工具
 - 如果用户要求某个可用 Agent 执行实际动作（修改文件、运行命令、提交、检查仓库、生成产物等），
   即使只需要一个 Agent，也必须调用 `plan_and_dispatch`
-- 如果用户明确提到“规划”“plan”“分派”“执行者/实现者去做”等意图，必须调用 `plan_and_dispatch`，不要只用文字描述“我会调用”
+- 如果用户明确提到"规划""plan""分派""执行者/实现者去做"等意图，必须调用 `plan_and_dispatch`，不要只用文字描述"我会调用"
 - 你可以先使用工具（如 read_file、list_dir）收集信息，再决定是直接回复还是编排
 - 当规划需要某个 Agent 的专业判断、代码环境确认或方案建议时，可以先调用 `ask_agent(agent, question)`
   咨询该 Agent；拿到回答后再继续判断是否直接回复或调用 `plan_and_dispatch`
@@ -55,12 +44,12 @@ REASON_PROMPT = """\
 
 - `plan_and_dispatch` 的 `merge_to_main` 参数由你决定，表示所有任务成功后是否请求将
   `task/{{task_id}}` 合入 `main`
-- 只有用户明确要求“合入 main / 提交到 main / 最终合并 / 发布最终结果”，
+- 只有用户明确要求"合入 main / 提交到 main / 最终合并 / 发布最终结果"，
   或你确认本轮目标就是完成并落地到 main 时，才设置 `merge_to_main=true`
 - 如果只是开发、实验、检查、讨论、生成草稿、局部修复，或用户没有明确要求合入 main，
   设置 `merge_to_main=false`
 - sub-agent 只负责把自己的分支合入 task 分支；合入 main 的请求由 orchestrator 决策，AgentEnd 执行
-- 当用户后续只要求“合入 main / 确认合并到 main”且不需要新的代码修改时，
+- 当用户后续只要求"合入 main / 确认合并到 main"且不需要新的代码修改时，
   调用 `plan_and_dispatch(overview, tasks=[], merge_to_main=true)`
 
 ### 通用规则
@@ -70,39 +59,18 @@ REASON_PROMPT = """\
 3. 每个任务的 content 必须具体、可执行，包含明确的输入/输出期望
 4. task_id 格式为 task-NNN（如 task-001, task-002）
 5. session_id 只能使用「可用 Agents」列表中的 id
-
-## 用户需求
-
-{message}
 """
 
 
 def build_reason_prompt(
     agents_desc: str,
-    message: str,
     shared_dir: str,
-    l2_content: dict[str, str] | None = None,
-    replan_reason: str | None = None,
-    orchestrator_context: str = "",
+    l1_skills: list[dict] | None = None,
     task_base_path: str = "",
 ) -> str:
     from pathlib import Path
 
-    pin_context = ""
-    evolution_context = ""
     soul_section = ""
-
-    try:
-        pm = PinMemory(common_dir=f"{shared_dir}/memory/common")
-        pin_context = pm.get_context()
-    except Exception:
-        pass
-
-    try:
-        evo = EvolutionStore(shared_dir)
-        evolution_context = evo.get_recent_experience(5)
-    except Exception:
-        pass
 
     # Load orchestrator's own SOUL.md from shared directory
     try:
@@ -115,29 +83,21 @@ def build_reason_prompt(
     except Exception:
         pass
 
-    if l2_content:
-        skill_parts = []
-        for name, body in l2_content.items():
-            skill_parts.append(f"### {name}\n\n{body}")
-        skills_section = "## 可用 Skills\n\n" + "\n\n".join(skill_parts)
+    if l1_skills:
+        parts = [f"- **{s['name']}**: {s['description']}" for s in l1_skills]
+        skills_section = "## 可用 Skills\n\n" + "\n".join(parts)
     else:
         skills_section = "## 可用 Skills\n\n(无)"
 
     workspace_section = ""
     if task_base_path:
-        from pathlib import Path
-
-        task_base_resolved = str(Path(task_base_path).resolve())
-        shared_resolved = str(Path(shared_dir).resolve())
         workspace_section = (
             "## 工作区目录\n\n"
-            "你可以读取两个目录：\n"
-            f"- **任务代码仓库（只读）**: `{task_base_resolved}`\n"
-            "  这是任务分支 `task/{task_id}` 的 worktree，包含完整的项目代码。"
-            "你可以浏览代码结构、读取源文件来了解项目并做出精准的规划。读取代码时必须使用绝对路径。\n"
-            f"- **共享元数据（可读写）**: `{shared_resolved}`\n"
-            "  包含 plans/、memory/、SOUL.md、.orchestrator/skills/ 等编排相关文件。"
-            "相对路径基于此目录解析。\n\n"
+            "你可以读取两个目录（使用相对路径，通过 `workspace_type` 参数区分）：\n"
+            "- **任务代码仓库（只读）**: `workspace_type='taskbase'`，包含完整项目代码，"
+            "你可以浏览代码结构、读取源文件来了解项目并做出精准的规划\n"
+            "- **共享元数据（可读写）**: `workspace_type='shared'`（默认），"
+            "包含 plans/、memory/、SOUL.md、.orchestrator/skills/ 等编排相关文件\n\n"
             "### 子 Agent 工作流程\n\n"
             "每个子 Agent 拥有独立的代码分支和 worktree 目录（基于任务分支创建，文件结构相同），"
             "它们在各自的 worktree 中修改代码，完成后 merge 回任务分支。\n\n"
@@ -152,29 +112,22 @@ def build_reason_prompt(
         "## 可用工具\n\n"
         "你可以使用以下工具来收集信息：\n"
         "- `current_time()`: 获取当前本地日期和时间；涉及报告日期、今天、明天等时间问题时必须调用\n"
-        "- `read_file(path, start_line=1, line_count=200)`: 读取文件指定行范围（带行号，默认前 200 行，最多 500 行）\n"
+        "- `read_file(path, start_line=1, line_count=200, workspace_type='shared')`: 读取文件指定行范围（带行号）；"
+        "`workspace_type='shared'`（默认）读共享目录，`workspace_type='taskbase'` 读任务代码仓库\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
-        "- `list_dir(path)`: 列出目录内容\n"
+        "- `list_dir(path, workspace_type='shared')`: 列出目录内容；`workspace_type` 同上\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
-        "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
+        "- `load_skill_detail(skill_name, level='l2', resource_path='')`: 加载 skill 详情；"
+        "level='l2' 返回 SKILL.md 完整正文，level='l3' 需配合 resource_path 加载资源文件\n"
         "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
         "- `plan_and_dispatch(overview, tasks, merge_to_main=false)`: 编排多 Agent 任务；"
         "`merge_to_main` 表示任务成功后是否请求合入 main\n"
     )
 
-    replan_section = ""
-    if replan_reason:
-        replan_section = "## 重规划上下文\n\n这是前一次规划的失败反馈，请据此调整规划：\n" + replan_reason
-
     return REASON_PROMPT.format(
         agents_desc=agents_desc,
-        message=message,
-        pin_context=pin_context,
-        evolution_context=evolution_context,
         soul_section=soul_section,
         skills_section=skills_section,
         tools_section=tools_section,
         workspace_section=workspace_section,
-        replan_section=replan_section,
-        orchestrator_context=orchestrator_context,
     )

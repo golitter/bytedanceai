@@ -12,18 +12,17 @@ import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.config import get_config
 from langgraph.graph import END, StateGraph
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
+from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
+from src.orchestrator.memory.pin_memory import PinMemory
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
 from src.orchestrator.planning.prompts import build_reason_prompt
-from src.orchestrator.planning.skill_loader import (
-    discover_skills,
-    load_l2_content,
-    select_skills,
-)
+from src.orchestrator.planning.skill_loader import discover_skills
 from src.orchestrator.planning.tools import build_tools
 from src.schemas.events import EventType, StreamEvent
 
@@ -93,6 +92,9 @@ class GraphState(TypedDict):
     memory_messages: Annotated[list, _add]
     # skill_prepare intermediate state
     system_prompt: str
+    pin_context: str
+    evolution_context: str
+    orchestrator_context: str
     orchestrator: dict
     task_base_path: str
 
@@ -103,9 +105,7 @@ def _build_agents_desc(agents: list[dict]) -> str:
         aid = a.get("id", "unknown")
         agent_type = a.get("type", aid)
         name = a.get("name", aid)
-        caps = a.get("capabilities", [])
-        cap_str = ", ".join(caps) if caps else "通用"
-        lines.append(f"- **{aid}**（{name}，类型: {agent_type}）: {cap_str}")
+        lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
     return "\n".join(lines)
 
 
@@ -285,26 +285,39 @@ def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput:
 
 
 def skill_prepare_node(state: GraphState) -> dict:
-    """L1 → L2 skill discovery + prompt construction. Runs in seconds."""
+    """L1 skill discovery + prompt construction. Runs in seconds."""
     skills_dir_path = _skills_dir(state["shared_dir"])
     l1_skills = discover_skills(skills_dir_path)
 
-    selection_message = state["replan_reason"] if state.get("replan_reason") else state["message"]
-    selected_names = select_skills(l1_skills, selection_message)
-    l2 = load_l2_content(selected_names, skills_dir_path)
-
     agents_desc = _build_agents_desc(state["agents"])
+
+    # Compute dynamic context separately (moved from build_reason_prompt)
+    pin_context = ""
+    evolution_context = ""
+    try:
+        pm = PinMemory(common_dir=f"{state['shared_dir']}/memory/common")
+        pin_context = pm.get_context()
+    except Exception:
+        pass
+    try:
+        evo = EvolutionStore(state["shared_dir"])
+        evolution_context = evo.get_recent_experience(5)
+    except Exception:
+        pass
+
+    # System prompt only contains identity + rules + tools (no dynamic context)
     system_prompt = build_reason_prompt(
         agents_desc=agents_desc,
-        message=state["message"],
         shared_dir=state["shared_dir"],
-        l2_content=l2,
-        replan_reason=state.get("replan_reason"),
-        orchestrator_context=state.get("orchestrator_context", ""),
+        l1_skills=l1_skills,
         task_base_path=state.get("task_base_path", ""),
     )
 
-    return {"system_prompt": system_prompt}
+    return {
+        "system_prompt": system_prompt,
+        "pin_context": pin_context,
+        "evolution_context": evolution_context,
+    }
 
 
 # --- REASON Node (LLM tool-calling loop) ---
@@ -501,22 +514,32 @@ async def reason_node(state: GraphState) -> dict:
             api_key=settings.llm.api_key,
             timeout=settings.orchestrator.llm_request_timeout,
         )
-        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"))
+        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"), state.get("task_base_path"))
         llm_with_tools = llm.bind_tools(tools)
 
         # Use pre-built system prompt from skill_prepare_node
         system_prompt = state.get("system_prompt", "")
         messages: list = [SystemMessage(content=system_prompt)]
 
-        for msg in state.get("memory_messages", []):
-            messages.append(msg)
-
-        messages.append(HumanMessage(content=state["message"]))
-
+        # Dynamic context messages — freshly injected each turn, NOT persisted
+        if state.get("pin_context"):
+            messages.append(SystemMessage(content=state["pin_context"]))
+        if state.get("evolution_context"):
+            messages.append(SystemMessage(content=state["evolution_context"]))
         if state.get("replan_reason"):
             messages.append(
                 HumanMessage(content=f"[重规划请求] 以下任务执行失败，请重新规划：\n{state['replan_reason']}")
             )
+        if state.get("orchestrator_context"):
+            messages.append(HumanMessage(content=state["orchestrator_context"]))
+
+        # Persisted conversation memory
+        for msg in state.get("memory_messages", []):
+            messages.append(msg)
+
+        # Current user message
+        messages.append(HumanMessage(content=state["message"]))
+
         if state.get("review_message"):
             decision = state.get("review_decision", "")
             if decision == "discuss":
@@ -535,8 +558,12 @@ async def reason_node(state: GraphState) -> dict:
         max_iterations = settings.orchestrator.reason_max_iterations
         force_dispatch = _requires_dispatch_intent(state)
         forced_retry_used = False
+        try:
+            llm_config = get_config()
+        except RuntimeError:
+            llm_config = None
         for i in range(max_iterations):
-            response = await llm_with_tools.ainvoke(messages)
+            response = await llm_with_tools.ainvoke(messages, config=llm_config)
 
             if not response.tool_calls:
                 if force_dispatch and not forced_retry_used:
@@ -835,6 +862,14 @@ def evolve_node(state: GraphState) -> dict:
 
 
 def save_mem_node(state: GraphState) -> dict:
+    """Persist memory_messages to file-based store before graph completes."""
+    try:
+        memory_messages = state.get("memory_messages", [])
+        if memory_messages:
+            store = ConversationMemoryStore(state["shared_dir"])
+            store.save_messages(memory_messages)
+    except Exception:
+        logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
 
 

@@ -11,6 +11,7 @@ from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
 from src.clients.backend_client import BackendClient
 from src.orchestrator.execution.engine import ExecutionEngine
+from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, TaskResult
 from src.orchestrator.planning.graph import (
@@ -130,7 +131,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "summary": "",
             "iteration": int(kwargs.get("_replan_iteration", 0)),
             "max_iterations": 3,
-            "memory_messages": [],
+            "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
             "orchestrator_context": orchestrator_context,
         }
 
