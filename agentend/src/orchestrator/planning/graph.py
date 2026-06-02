@@ -20,11 +20,7 @@ from src.app.config import settings
 from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
 from src.orchestrator.planning.prompts import build_reason_prompt
-from src.orchestrator.planning.skill_loader import (
-    discover_skills,
-    load_l2_content,
-    select_skills,
-)
+from src.orchestrator.planning.skill_loader import discover_skills
 from src.orchestrator.planning.tools import build_tools
 from src.schemas.events import EventType, StreamEvent
 
@@ -286,20 +282,16 @@ def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput:
 
 
 def skill_prepare_node(state: GraphState) -> dict:
-    """L1 → L2 skill discovery + prompt construction. Runs in seconds."""
+    """L1 skill discovery + prompt construction. Runs in seconds."""
     skills_dir_path = _skills_dir(state["shared_dir"])
     l1_skills = discover_skills(skills_dir_path)
-
-    selection_message = state["replan_reason"] if state.get("replan_reason") else state["message"]
-    selected_names = select_skills(l1_skills, selection_message)
-    l2 = load_l2_content(selected_names, skills_dir_path)
 
     agents_desc = _build_agents_desc(state["agents"])
     system_prompt = build_reason_prompt(
         agents_desc=agents_desc,
         message=state["message"],
         shared_dir=state["shared_dir"],
-        l2_content=l2,
+        l1_skills=l1_skills,
         replan_reason=state.get("replan_reason"),
         orchestrator_context=state.get("orchestrator_context", ""),
         task_base_path=state.get("task_base_path", ""),

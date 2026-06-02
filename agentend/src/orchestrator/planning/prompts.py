@@ -81,7 +81,7 @@ def build_reason_prompt(
     agents_desc: str,
     message: str,
     shared_dir: str,
-    l2_content: dict[str, str] | None = None,
+    l1_skills: list[dict] | None = None,
     replan_reason: str | None = None,
     orchestrator_context: str = "",
     task_base_path: str = "",
@@ -115,11 +115,9 @@ def build_reason_prompt(
     except Exception:
         pass
 
-    if l2_content:
-        skill_parts = []
-        for name, body in l2_content.items():
-            skill_parts.append(f"### {name}\n\n{body}")
-        skills_section = "## 可用 Skills\n\n" + "\n\n".join(skill_parts)
+    if l1_skills:
+        parts = [f"- **{s['name']}**: {s['description']}" for s in l1_skills]
+        skills_section = "## 可用 Skills\n\n" + "\n".join(parts)
     else:
         skills_section = "## 可用 Skills\n\n(无)"
 
@@ -156,7 +154,8 @@ def build_reason_prompt(
         "- `write_file(path, content)`: 写入文件到共享目录\n"
         "- `list_dir(path)`: 列出目录内容\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
-        "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
+        "- `load_skill_detail(skill_name, level='l2', resource_path='')`: 加载 skill 详情；"
+        "level='l2' 返回 SKILL.md 完整正文，level='l3' 需配合 resource_path 加载资源文件\n"
         "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
         "- `plan_and_dispatch(overview, tasks, merge_to_main=false)`: 编排多 Agent 任务；"
         "`merge_to_main` 表示任务成功后是否请求合入 main\n"

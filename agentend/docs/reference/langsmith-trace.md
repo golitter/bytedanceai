@@ -28,12 +28,15 @@ LANGSMITH_PROJECT=agenthub
 
 ```
 Run: Orchestrator session_id=yyy
-├── skill_prepare (chain)        — 系统提示词构建、技能发现
+├── skill_prepare (chain)        — 系统提示词构建、L1 技能元数据发现（仅 name + description）
 ├── reason (chain)               — LLM 工具调用循环
 │   ├── ChatOpenAI #1 (llm)      — 输入: [SystemMessage, HumanMessage]
+│   │                              输出: AIMessage(tool_calls=[load_skill_detail])
+│   ├── load_skill_detail (tool) — 参数: {skill_name: "render", level: "l2"}
+│   ├── ChatOpenAI #2 (llm)      — 输入: [... + ToolMessage]
 │   │                              输出: AIMessage(tool_calls=[read_file])
 │   ├── read_file (tool)         — 参数: {path: "src/main.py"}
-│   ├── ChatOpenAI #2 (llm)      — 输入: [... + ToolMessage]
+│   ├── ChatOpenAI #3 (llm)      — 输入: [... + ToolMessage]
 │   │                              输出: AIMessage(tool_calls=[plan_and_dispatch])
 │   └── plan_and_dispatch (tool) — 参数: {overview, tasks}
 ├── dispatch (chain)             — 计划分发、拓扑排序

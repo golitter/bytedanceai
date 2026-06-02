@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
-from src.orchestrator.planning.skill_loader import load_skill_resource
+from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_resource
 
 
 def _skills_dir(shared_dir: str) -> Path:
@@ -192,6 +192,31 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         return load_skill_resource(skill_name, resource_path, skills_dir)
 
     @tool
+    def load_skill_detail(
+        skill_name: str,
+        level: str = "l2",
+        resource_path: str = "",
+    ) -> str:
+        """Load detailed content for a skill by name.
+
+        Args:
+            skill_name: Skill name from the 可用 Skills list.
+            level: "l2" returns the full SKILL.md body; "l3" returns a resource file (requires resource_path).
+            resource_path: Required when level="l3". Path relative to the skill directory (e.g. "references/api.md").
+
+        Returns the skill's content text, or an error message.
+        """
+        if level == "l2":
+            body = load_skill_l2(skill_name, skills_dir)
+            return body or f"Error: L2 content not found for skill '{skill_name}'"
+        elif level == "l3":
+            if not resource_path:
+                return "Error: resource_path is required when level='l3'"
+            return load_skill_resource(skill_name, resource_path, skills_dir)
+        else:
+            return "Error: level must be 'l2' or 'l3'"
+
+    @tool
     def ask_agent(agent: str, question: str) -> str:
         """Ask a specific available Agent a question and wait for its streamed answer.
 
@@ -220,6 +245,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         list_dir,
         run_skill,
         load_resource,
+        load_skill_detail,
         ask_agent,
         plan_and_dispatch,
     ]
