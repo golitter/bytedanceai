@@ -8,6 +8,7 @@
 src/
 ├── main.tsx                # 应用入口
 ├── index.css               # 全局样式（Tailwind + shadcn 语义 token）
+├── assets/                  # 静态资源
 ├── components/
 │   ├── chat/               # 聊天模块
 │   ├── im/                 # 会话列表模块

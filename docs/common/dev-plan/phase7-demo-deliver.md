@@ -17,7 +17,7 @@
 
 ### 2. 技术文档
 
-- [x] 三层架构说明（[docs/design/three-tier-design.md](../../design/three-tier-design.md)）
+- [x] 三层架构说明（[docs/design/01-three-tier-design.md](../../design/01-three-tier-design.md)）
 - [x] 契约层使用指南（[docs/guides/contract-layer.md](../../guides/contract-layer.md)）
 - [x] SSE 流式通信方案（Backend RuntimeHub + StreamWriter）
 - [x] Orchestrator 设计文档（[phase5-orchestrator.md](phase5-orchestrator.md)）

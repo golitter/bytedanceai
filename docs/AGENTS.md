@@ -16,11 +16,10 @@ docs/
 ## 本目录文档索引
 
 ### design/
-- [three-tier-design.md](design/three-tier-design.md) — 三层架构设计
-- [planning-context-module.md](design/planning-context-module.md) — Planning ToolMessage 结构化
-- [soul-md-identity-document.md](design/soul-md-identity-document.md) — SOUL.md 身份文档
-- [orchestrator-plan-review.md](design/orchestrator-plan-review.md) — 规划审查机制
-- [group-chat-cross-agent-memory.md](design/group-chat-cross-agent-memory.md) — 跨 Agent 记忆
+- [01-three-tier-design.md](design/01-three-tier-design.md) — 三层架构设计
+- [02-group-chat-cross-agent-memory.md](design/02-group-chat-cross-agent-memory.md) — 跨 Agent 记忆
+- [03-orchestrator-plan-review.md](design/03-orchestrator-plan-review.md) — 规划审查机制
+- [04-soul-md-identity-document.md](design/04-soul-md-identity-document.md) — SOUL.md 身份文档
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明

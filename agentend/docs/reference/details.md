@@ -111,13 +111,18 @@ agentend/
 - [13-preview-server.md](../design/13-preview-server.md) — 工作区预览服务（aiohttp 静态文件服务器）
 - [14-pin-memory.md](../design/14-pin-memory.md) — 约束钉住与上下文注入（PinMemory）
 - [15-merge-conflict-resolution.md](../design/15-merge-conflict-resolution.md) — Orchestrator Merge 冲突处理机制
-- [architecture.md](../design/architecture.md) — 架构总览
-- [skills/taskctl.md](../design/skills/taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
-- [trace-system.md](../design/trace-system.md) — OpenTelemetry Trace 系统设计
+- [16-system-prompt-tuning.md](../design/16-system-prompt-tuning.md) — 系统提示词动态组装
+- [17-conversation-memory.md](../design/17-conversation-memory.md) — Orchestrator 跨轮推理记忆持久化
+- [18-langsmith-trace.md](../design/18-langsmith-trace.md) — LangSmith LLM 调用可观测性
+- [19-skills-taskctl.md](../design/19-skills-taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
+- [20-planning-context-module.md](../design/20-planning-context-module.md) — Planning ToolMessage 结构化
+- [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/
 
 - [adapter-diff.md](adapter-diff.md) — 适配器差异对比
+- [langsmith-trace.md](langsmith-trace.md) — LangSmith Trace 配置与使用
+- [orchestrator-architecture.md](orchestrator-architecture.md) — Orchestrator 架构概览
 
 ### testing/
 
