@@ -11,6 +11,10 @@ export interface PlanReviewPayload {
   review_key?: string
   session_id?: string
   task_id?: string
+  review_type?: 'plan' | 'merge_to_main'
+  source_branch?: string
+  target_branch?: string
+  diff_snapshot_id?: string
   overview: string
   tasks: PlanTask[]
   waves: PlanTask[][]

@@ -154,9 +154,15 @@ export function useChatStream(
                   )
                 : []
               store.streamPlanReviewEvent(sessionId, {
-                review_key: `${taskId}:${(event.content?.session_id as string | undefined) ?? sessionId}`,
+                review_key:
+                  (event.content?.review_key as string | undefined) ??
+                  `${taskId}:${(event.content?.session_id as string | undefined) ?? sessionId}`,
                 session_id: (event.content?.session_id as string | undefined) ?? sessionId,
                 task_id: (event.content?.task_id as string | undefined) ?? taskId,
+                review_type: event.content?.review_type as 'plan' | 'merge_to_main' | undefined,
+                source_branch: event.content?.source_branch as string | undefined,
+                target_branch: event.content?.target_branch as string | undefined,
+                diff_snapshot_id: event.content?.diff_snapshot_id as string | undefined,
                 overview: plan.overview ?? '',
                 tasks: (plan.tasks ?? []).map((task) => ({
                   task_id: task.task_id ?? '',

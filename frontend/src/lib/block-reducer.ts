@@ -229,6 +229,13 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
         review_key: optionalStringField(payload, 'review_key'),
         session_id: optionalStringField(payload, 'session_id'),
         task_id: optionalStringField(payload, 'task_id'),
+        review_type:
+          optionalStringField(payload, 'review_type') === 'merge_to_main'
+            ? 'merge_to_main'
+            : 'plan',
+        source_branch: optionalStringField(payload, 'source_branch'),
+        target_branch: optionalStringField(payload, 'target_branch'),
+        diff_snapshot_id: optionalStringField(payload, 'diff_snapshot_id'),
         overview: stringField(plan, 'overview'),
         tasks: arrayField(plan, 'tasks')
           .map(planTask)

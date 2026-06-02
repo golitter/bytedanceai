@@ -64,6 +64,10 @@ function BlockRenderer({
           reviewKey={block.review_key}
           taskId={block.task_id ?? taskId}
           sessionId={block.session_id ?? sessionId}
+          reviewType={block.review_type}
+          sourceBranch={block.source_branch}
+          targetBranch={block.target_branch}
+          diffSnapshotId={block.diff_snapshot_id}
           overview={block.overview}
           tasks={block.tasks}
           waves={block.waves}

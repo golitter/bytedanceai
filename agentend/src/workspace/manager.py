@@ -159,6 +159,9 @@ class WorkspaceManager:
     async def merge_task_to_main(self, repo_path: str, task_id: str) -> MergeResult:
         return await self._git.merge_branch(repo_path, task_branch_name(task_id), "main")
 
+    async def diff_task_to_main(self, repo_path: str, task_id: str) -> str:
+        return await self._git.diff_between(repo_path, "main", task_branch_name(task_id))
+
     # Inactive cleanup
 
     async def start_inactive_cleanup(self, db_reader: DBReader, interval: int) -> None:

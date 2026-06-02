@@ -11,6 +11,10 @@ class TaskDef(BaseModel):
 class PlanOutput(BaseModel):
     overview: str = Field(description="整体规划概述，描述如何分解用户需求")
     tasks: list[TaskDef] = Field(description="拆解后的任务列表，按执行顺序排列")
+    merge_to_main: bool = Field(
+        default=False,
+        description="任务成功后是否由 orchestrator 请求合并 task 分支到 main",
+    )
 
 
 class TaskResult(BaseModel):

@@ -223,6 +223,26 @@ def _requires_dispatch_intent(state: GraphState) -> bool:
         "修复",
         "实现",
     )
+    code_target_terms = (
+        "readme",
+        ".md",
+        ".py",
+        ".go",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".css",
+        ".html",
+        "文件",
+        "代码",
+        "仓库",
+        "项目",
+    )
+    if any(term in lowered or term in message for term in action_terms) and any(
+        term in lowered or term in message for term in code_target_terms
+    ):
+        return True
     return any(term in lowered or term in message for term in explicit_terms) and any(
         term in lowered or term in message for term in action_terms
     )
@@ -249,6 +269,7 @@ def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput:
         overview_text = f"将用户请求分派给 {agent_id} 执行。"
     return PlanOutput(
         overview=overview_text,
+        merge_to_main=False,
         tasks=[
             TaskDef(
                 task_id="task-001",
@@ -590,6 +611,7 @@ async def reason_node(state: GraphState) -> dict:
             if plan_call is not None:
                 args = plan_call["args"]
                 overview = args.get("overview", "")
+                merge_to_main = bool(args.get("merge_to_main", False))
                 raw_tasks = args.get("tasks", [])
 
                 tasks = []
@@ -604,7 +626,7 @@ async def reason_node(state: GraphState) -> dict:
                             )
                         )
 
-                plan = PlanOutput(overview=overview, tasks=tasks)
+                plan = PlanOutput(overview=overview, tasks=tasks, merge_to_main=merge_to_main)
                 tool_messages = [
                     ToolMessage(content="plan_generated", tool_call_id=plan_call["id"]),
                 ]
@@ -710,6 +732,20 @@ async def human_review_node(state: GraphState) -> dict:
             "review_decision": "approve",
             "review_message": "审查超时，自动继续执行。",
         }
+    finally:
+        _pending_reviews.pop(session_id, None)
+        _review_results.pop(session_id, None)
+
+
+async def wait_for_external_review(session_id: str) -> dict[str, str]:
+    event = asyncio.Event()
+    _pending_reviews[session_id] = event
+    try:
+        await asyncio.wait_for(event.wait(), timeout=settings.orchestrator.review_timeout)
+        return _review_results.get(session_id, {})
+    except asyncio.TimeoutError:
+        logger.warning("External review timed out for session=%s; auto-approving", session_id)
+        return {"action": "approve", "content": "审查超时，自动继续执行。"}
     finally:
         _pending_reviews.pop(session_id, None)
         _review_results.pop(session_id, None)

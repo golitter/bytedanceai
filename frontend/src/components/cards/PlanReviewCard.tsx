@@ -6,10 +6,16 @@ import type { PlanTask } from '@/lib/block-types'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/stores/chat'
 
+import { DiffCard } from './DiffCard'
+
 interface PlanReviewCardProps {
   reviewKey?: string
   taskId?: string
   sessionId?: string
+  reviewType?: 'plan' | 'merge_to_main'
+  sourceBranch?: string
+  targetBranch?: string
+  diffSnapshotId?: string
   overview: string
   tasks: PlanTask[]
   waves: PlanTask[][]
@@ -30,6 +36,10 @@ export function PlanReviewCard({
   reviewKey,
   taskId,
   sessionId,
+  reviewType = 'plan',
+  sourceBranch,
+  targetBranch,
+  diffSnapshotId,
   overview,
   tasks,
   waves,
@@ -80,24 +90,34 @@ export function PlanReviewCard({
   const isReadonlyHistory = stale || (!canSubmit && !isResolved)
   const title =
     effectiveStatus === 'approved'
-      ? '规划已批准'
+      ? reviewType === 'merge_to_main'
+        ? '合并已批准'
+        : '规划已批准'
       : effectiveStatus === 'discussing'
         ? '继续讨论中'
         : effectiveStatus === 'modifying'
           ? '正在修改规划'
           : isReadonlyHistory
-            ? '规划审查记录'
-            : '规划待审查'
+            ? reviewType === 'merge_to_main'
+              ? '合并审查记录'
+              : '规划审查记录'
+            : reviewType === 'merge_to_main'
+              ? '合并 main 待确认'
+              : '规划待审查'
   const subtitle =
     effectiveStatus === 'approved'
-      ? '已开始分派执行'
+      ? reviewType === 'merge_to_main'
+        ? '已开始合并到 main'
+        : '已开始分派执行'
       : effectiveStatus === 'discussing'
         ? '不会执行当前规划，等待 Orchestrator 回复'
         : effectiveStatus === 'modifying'
           ? '不会执行当前规划，等待新规划'
           : isReadonlyHistory
             ? '已离开审查等待点'
-            : '批准后才会开始分派执行'
+            : reviewType === 'merge_to_main'
+              ? '批准后才会执行 task → main 合并'
+              : '批准后才会开始分派执行'
   const badgeText =
     effectiveStatus === 'approved'
       ? '已批准'
@@ -200,6 +220,28 @@ export function PlanReviewCard({
             </div>
           ))}
         </div>
+
+        {reviewType === 'merge_to_main' && (
+          <div className="space-y-2 rounded-lg border border-border bg-background/60 p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Code diff</span>
+              {sourceBranch && <span className="rounded bg-muted px-2 py-0.5">{sourceBranch}</span>}
+              {targetBranch && (
+                <>
+                  <span>→</span>
+                  <span className="rounded bg-muted px-2 py-0.5">{targetBranch}</span>
+                </>
+              )}
+            </div>
+            {diffSnapshotId ? (
+              <DiffCard snapshotId={diffSnapshotId} />
+            ) : (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                没有检测到 task 分支相对 main 的代码差异。
+              </div>
+            )}
+          </div>
+        )}
 
         {displayWaves.length > 0 && (
           <div className="flex flex-wrap gap-2 border-t border-border pt-3">

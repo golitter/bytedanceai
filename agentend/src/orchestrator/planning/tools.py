@@ -203,12 +203,13 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         return "ask_pending"
 
     @tool
-    def plan_and_dispatch(overview: str, tasks: list[dict]) -> str:
+    def plan_and_dispatch(overview: str, tasks: list[dict], merge_to_main: bool = False) -> str:
         """Signal orchestration intent. Call this when the user's request requires multi-agent collaboration.
 
         Args:
             overview: Overall plan summary describing how the request is decomposed.
             tasks: List of task dicts, each with task_id, session_id, title, content.
+            merge_to_main: Whether orchestrator should request merging task/{task_id} into main after all tasks pass.
         """
         return "plan_generated"
 

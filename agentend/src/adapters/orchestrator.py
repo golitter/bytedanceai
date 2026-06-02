@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from src.orchestrator.planning.graph import (
     build_graph,
     reset_reason_runtime_context,
     set_reason_runtime_context,
+    wait_for_external_review,
 )
 from src.orchestrator.prompts.group_chat import build_group_chat_context
 from src.orchestrator.reporting.aggregator import Aggregator
@@ -369,6 +371,26 @@ class OrchestratorAdapter(BaseAgentAdapter):
                             message_id=result.message_id,
                         )
 
+            async for event, merge_result in self._review_and_merge_task_to_main_if_ready(
+                workspace_mgr,
+                repo_path,
+                task_id,
+                task_results,
+                plan.merge_to_main if plan else False,
+                current_state,
+            ):
+                yield event
+                if merge_result is not None:
+                    task_results.append(merge_result)
+                    result_text = _child_result_text(merge_result)
+                    if result_text:
+                        yield StreamEvent.create(
+                            EventType.TEXT,
+                            text=result_text,
+                            agent="Orchestrator",
+                            agent_type="orchestrator",
+                        )
+
         elif execution_waves:
             for dr in dispatch_results:
                 tr = TaskResult(
@@ -466,6 +488,112 @@ class OrchestratorAdapter(BaseAgentAdapter):
             if item is None:
                 break
             yield item
+
+    async def _review_and_merge_task_to_main_if_ready(
+        self,
+        workspace_mgr,
+        repo_path: str,
+        task_id: str,
+        task_results: list[TaskResult],
+        merge_to_main: bool,
+        current_state: dict,
+    ) -> AsyncIterator[tuple[StreamEvent, TaskResult | None]]:
+        if not merge_to_main or not workspace_mgr or not repo_path:
+            return
+        if not all(tr.success for tr in task_results):
+            return
+
+        orchestrator_cfg = current_state.get("orchestrator", {}) or {}
+        session_id = str(orchestrator_cfg.get("session_id") or task_id)
+        review_key = f"{session_id}:merge-main:{uuid.uuid4().hex}"
+        diff_snapshot_id = str(uuid.uuid4())
+        diff = await workspace_mgr.diff_task_to_main(repo_path, task_id)
+
+        yield (
+            StreamEvent.create(
+                EventType.PLAN_REVIEW,
+                session_id=session_id,
+                task_id=task_id,
+                review_key=review_key,
+                plan={
+                    "overview": "确认将 task 分支合并到 main",
+                    "merge_to_main": True,
+                    "tasks": [],
+                },
+                waves=[],
+                review_type="merge_to_main",
+                source_branch=f"task/{task_id}",
+                target_branch="main",
+                diff_snapshot_id=diff_snapshot_id,
+                diff=diff,
+            ),
+            None,
+        )
+
+        review = await wait_for_external_review(session_id)
+        action = review.get("action", "approve")
+        if action != "approve":
+            feedback = review.get("content", "")
+            yield (
+                StreamEvent.create(
+                    EventType.TEXT,
+                    text="已暂停合并到 main，等待调整规划。" + (f"\n\n反馈：{feedback}" if feedback else ""),
+                    agent="Orchestrator",
+                    agent_type="orchestrator",
+                ),
+                TaskResult(
+                    task_id="merge-to-main",
+                    agent="Orchestrator",
+                    success=False,
+                    content="",
+                    error_type="review_rejected",
+                    error_message=feedback or "User did not approve merge to main",
+                ),
+            )
+            return
+
+        result = await workspace_mgr.merge_task_to_main(repo_path, task_id)
+        if result.success:
+            yield (
+                StreamEvent.create(
+                    EventType.TEXT,
+                    text=f"Merged {result.source_branch} into {result.target_branch}.",
+                    agent="Orchestrator",
+                    agent_type="orchestrator",
+                ),
+                TaskResult(
+                    task_id="merge-to-main",
+                    agent="Orchestrator",
+                    success=True,
+                    content=f"Merged {result.source_branch} into {result.target_branch}.",
+                ),
+            )
+            return
+
+        conflict_text = ", ".join(result.conflict_files) if result.conflict_files else "unknown files"
+        yield (
+            StreamEvent.create(
+                EventType.TEXT,
+                text=(
+                    f"Merge {result.source_branch} -> {result.target_branch} failed; "
+                    f"conflict_files=[{conflict_text}]; aborted={result.aborted}; error={result.error}"
+                ),
+                agent="Orchestrator",
+                agent_type="orchestrator",
+            ),
+            TaskResult(
+                task_id="merge-to-main",
+                agent="Orchestrator",
+                success=False,
+                content="",
+                error_type="merge_conflict" if result.conflict_files else "merge_error",
+                error_message=(
+                    f"Merge {result.source_branch} -> {result.target_branch} failed; "
+                    f"conflict_files=[{conflict_text}]; aborted={result.aborted}; error={result.error}"
+                ),
+                conflict_files=result.conflict_files,
+            ),
+        )
 
     def _build_replan_reason(self, current_state: dict) -> str:
         task_results = current_state.get("task_results", [])

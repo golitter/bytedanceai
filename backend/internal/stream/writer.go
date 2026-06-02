@@ -451,12 +451,39 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 }
 
 func (sw *StreamWriter) persistPlanReviewEvent(event generated.StreamEvent) {
+	diffSnapshotID, _ := event.Content["diff_snapshot_id"].(string)
+	diffText, _ := event.Content["diff"].(string)
+	sessionID, _ := event.Content["session_id"].(string)
+	if diffSnapshotID != "" && diffText != "" {
+		snap := model.DiffSnapshot{
+			SnapshotID:  diffSnapshotID,
+			SessionID:   sessionID,
+			DiffContent: diffText,
+			Status:      "pending",
+		}
+		if err := db.GetDB().
+			Where("snapshot_id = ?", diffSnapshotID).
+			Assign(model.DiffSnapshot{
+				SessionID:   sessionID,
+				DiffContent: diffText,
+				Status:      "pending",
+			}).
+			FirstOrCreate(&snap).Error; err != nil {
+			slog.Warn("failed to persist merge diff snapshot", "snapshot_id", diffSnapshotID, "error", err)
+		}
+	}
+
 	payload := map[string]interface{}{
-		"session_id": event.Content["session_id"],
-		"task_id":    event.Content["task_id"],
-		"plan":       event.Content["plan"],
-		"waves":      event.Content["waves"],
-		"status":     "pending",
+		"session_id":       event.Content["session_id"],
+		"task_id":          event.Content["task_id"],
+		"review_key":       event.Content["review_key"],
+		"review_type":      event.Content["review_type"],
+		"source_branch":    event.Content["source_branch"],
+		"target_branch":    event.Content["target_branch"],
+		"diff_snapshot_id": diffSnapshotID,
+		"plan":             event.Content["plan"],
+		"waves":            event.Content["waves"],
+		"status":           "pending",
 	}
 	sw.appendText(legacyRuntimeBlockLine("plan_review", payload))
 	sw.doFlush()

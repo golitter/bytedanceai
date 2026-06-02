@@ -165,6 +165,10 @@ class GitOps:
         await self._run_git("checkout", current.strip(), cwd=repo_path)
         return MergeResult(success=True, source_branch=branch, target_branch=target)
 
+    async def diff_between(self, repo_path: str, base: str, head: str) -> str:
+        ok, out = await self._run_git("diff", f"{base}...{head}", cwd=repo_path)
+        return out if ok else ""
+
     async def get_current_branch(self, path: str) -> str:
         ok, out = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=path)
         return out.strip() if ok else ""

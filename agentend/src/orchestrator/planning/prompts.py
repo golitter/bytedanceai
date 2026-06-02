@@ -51,6 +51,18 @@ REASON_PROMPT = """\
 - 正确示例：`"session_id": "执行者", "content":
   "使用 render skill 的 html-render 命令生成笑脸 HTML 卡片"`
 
+### main 分支合并决策
+
+- `plan_and_dispatch` 的 `merge_to_main` 参数由你决定，表示所有任务成功后是否请求将
+  `task/{{task_id}}` 合入 `main`
+- 只有用户明确要求“合入 main / 提交到 main / 最终合并 / 发布最终结果”，
+  或你确认本轮目标就是完成并落地到 main 时，才设置 `merge_to_main=true`
+- 如果只是开发、实验、检查、讨论、生成草稿、局部修复，或用户没有明确要求合入 main，
+  设置 `merge_to_main=false`
+- sub-agent 只负责把自己的分支合入 task 分支；合入 main 的请求由 orchestrator 决策，AgentEnd 执行
+- 当用户后续只要求“合入 main / 确认合并到 main”且不需要新的代码修改时，
+  调用 `plan_and_dispatch(overview, tasks=[], merge_to_main=true)`
+
 ### 通用规则
 
 1. 直接回复时，用清晰、简洁的中文回答
@@ -146,7 +158,8 @@ def build_reason_prompt(
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
         "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
-        "- `plan_and_dispatch(overview, tasks)`: 编排多 Agent 任务（当需要多 Agent 协作时调用）\n"
+        "- `plan_and_dispatch(overview, tasks, merge_to_main=false)`: 编排多 Agent 任务；"
+        "`merge_to_main` 表示任务成功后是否请求合入 main\n"
     )
 
     replan_section = ""
