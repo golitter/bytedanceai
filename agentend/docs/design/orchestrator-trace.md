@@ -89,9 +89,82 @@ Run: Orchestrator session_id=yyy
 
 ---
 
-## 后续（Phase 5.2）
+## Phase 5.2：CLI Adapter Execution Trace
 
-CLI Adapter Execution Trace — 手动 RunTree 上报 StreamEvent 生命周期。注意事项：
-- 不承诺完整 LLM prompt，只 trace 外部 agent 的 StreamEvent 生命周期
-- text 做聚合，不要每个 chunk 一个 child run
-- pending_tool_runs 用局部变量，避免并发问题
+### Context
+
+Phase 5.1 已通过 LangGraph 自动 trace 覆盖了 Orchestrator 的所有 LLM 调用。但 CLI Adapter（Claude Code / OpenCode / Codex）是通过子进程与外部 CLI 交互的，LangSmith 无法自动感知其内部行为。需要在 `_execute_stream`（所有 Adapter 事件的统一出口）手动构建 RunTree，上报 StreamEvent 生命周期。
+
+**不承诺**完整 LLM prompt（CLI 不暴露），只 trace 外部 agent 的 StreamEvent 生命周期。
+
+### 方案
+
+新增 `src/adapters/trace.py`，提供 `trace_stream_events()` async generator wrapper。在 `_execute_stream` 中用该 wrapper 包裹 `adapter.stream_chat()`，不改任何 Adapter 代码。
+
+#### 事件 → RunTree 映射
+
+```
+StreamEvent lifecycle          →  RunTree 操作
+───────────────────────────────────────────────────────
+流开始                          →  创建 root RunTree (chain)
+TEXT chunk × N                  →  聚合到 text_parts[]（不创建 child）
+TOOL_CALL                       →  ① flush 聚合文本 → 1 个 text child run
+                                   ② 创建 tool:{name} child run (pending)
+TOOL_RESULT                     →  LIFO 匹配 pending tool run → end + patch
+DONE                            →  flush 剩余文本
+ERROR                           →  flush + 标记 root.error
+流结束 (finally)                →  清理残留 pending → root.end() + root.patch()
+```
+
+#### 关键设计点
+
+| 约束 | 实现 |
+|------|------|
+| **不承诺完整 LLM prompt** | 只 trace StreamEvent，不碰 CLI 内部 prompt |
+| **text 做聚合** | `text_parts: list[str]` 累积，按 TOOL_CALL / DONE / ERROR 边界 flush 成一个 child run |
+| **pending_tool_runs 用局部变量** | `pending_tool_runs` 定义在 `trace_stream_events` 函数体内，每次调用独立，无共享状态 |
+
+#### Orchestrator 排除
+
+Orchestrator Adapter 的事件流走 `_handle_execute`（内部用 LangGraph 执行），Phase 5.1 已通过 `get_config()` 自动 trace。`trace_stream_events` 仅作用于 CLI Adapter。
+
+### 关键文件
+
+| 文件 | 操作 |
+|------|------|
+| `agentend/src/adapters/trace.py` | **新建** — `trace_stream_events()` async generator wrapper |
+| `agentend/src/api/v1/agent.py` | **改 1 处** — `_execute_stream` 用 wrapper 包裹 `adapter.stream_chat()` |
+
+### LangSmith 能看到什么
+
+```
+Run: claude-code session_id=abc123
+│   inputs:  {"message": "帮我分析这个文件", "session_id": "abc123"}
+│   outputs: {"status": "completed"}
+│
+├── init (chain)                 — Adapter 启动
+│     outputs: {"cli_session_id": "sess_xyz", "agent_type": "claude-code"}
+├── text (llm)                  — 聚合所有 TEXT chunk
+│     outputs: {"text": "我来帮你分析这个文件...让我先看一下..."}
+├── tool:read_file (tool)       — TOOL_CALL → TOOL_RESULT
+│     inputs:  {"args": {"path": "src/main.py"}}
+│     outputs: {"result": "import os..."}
+├── text (llm)                  — 第二段文本（工具执行后）
+│     outputs: {"text": "这个文件的问题是..."}
+├── done (chain)                 — Adapter 完成
+│     outputs: {"usage": {"input_tokens": 1200, "output_tokens": 800}}
+└── (root end, status=completed)
+```
+
+- **init** child run 展示 adapter 类型、CLI session ID
+- **text** child run 展示聚合后的完整文本（不是每个 chunk 一个 run）
+- **tool:{name}** child run 展示完整的 args 和 result
+- **done** child run 展示 token usage
+
+### 验证方式
+
+1. 确保 `.env` 中 `LANGSMITH_TRACING=true` 已配置（Phase 5.1 已配）
+2. `make run-agentend` 启动服务
+3. 发起一个 claude-code / opencode / codex 类型的任务
+4. 打开 [smith.langchain.com](https://smith.langchain.com)，在 `agenthub` project 下查看 trace
+5. 确认：能看到聚合文本、每个 TOOL_CALL/TOOL_RESULT 对、root run 的总耗时

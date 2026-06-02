@@ -8,6 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
+from src.adapters.trace import trace_stream_events
 from src.api.dependencies import (
     get_adapter_registry,
     get_backend_client,
@@ -166,7 +167,23 @@ async def _execute_stream(
         stream_kwargs["backend_client"] = backend_client
 
     try:
-        async for event in adapter.stream_chat(session_id, request.message, **stream_kwargs):
+        raw_events = adapter.stream_chat(session_id, request.message, **stream_kwargs)
+        # CLI Adapter trace — skip Orchestrator (Phase 5.1 auto-traces via LangGraph).
+        if request.agent_type != AgentType.ORCHESTRATOR:
+            # Build trace inputs: user message + all adapter kwargs (rule results, workspace, etc.)
+            trace_inputs = {
+                "message": request.message,
+                "session_id": session_id,
+                **{k: v for k, v in stream_kwargs.items() if v is not None},
+            }
+            event_stream = trace_stream_events(
+                raw_events,
+                run_name=f"{request.agent_type.value} session_id={session_id}",
+                inputs=trace_inputs,
+            )
+        else:
+            event_stream = raw_events
+        async for event in event_stream:
             if event.type == EventType.INIT.value:
                 real_cli_sid = event.content.get("cli_session_id", "")
                 if real_cli_sid:
