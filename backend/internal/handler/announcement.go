@@ -1,17 +1,24 @@
 package handler
 
 import (
+	"context"
+	"log/slog"
+	"path/filepath"
+
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
+	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
 
 	"github.com/gin-gonic/gin"
 )
 
-type AnnouncementHandler struct{}
+type AnnouncementHandler struct {
+	agentClient *agentend_client.Client
+}
 
-func NewAnnouncementHandler() *AnnouncementHandler {
-	return &AnnouncementHandler{}
+func NewAnnouncementHandler(agentClient *agentend_client.Client) *AnnouncementHandler {
+	return &AnnouncementHandler{agentClient: agentClient}
 }
 
 type CreateAnnouncementReq struct {
@@ -70,14 +77,60 @@ func (h *AnnouncementHandler) CreateAnnouncement(c *gin.Context) {
 }
 
 // DeleteAnnouncement deletes an announcement by ID.
+// If the announcement was pinned, notifies agentend to write an unpin event.
 func (h *AnnouncementHandler) DeleteAnnouncement(c *gin.Context) {
 	id := c.Param("id")
 
-	result := db.GetDB().Where("id = ?", id).Delete(&model.Announcement{})
-	if result.RowsAffected == 0 {
+	// Fetch before deleting so we can check pinned state
+	var announcement model.Announcement
+	if err := db.GetDB().Where("id = ?", id).First(&announcement).Error; err != nil {
 		vo.NotFound(c, "announcement not found")
 		return
 	}
 
+	if err := db.GetDB().Delete(&announcement).Error; err != nil {
+		vo.InternalError(c, "failed to delete announcement")
+		return
+	}
+
+	if announcement.Pinned {
+		h.notifyUnpin(c.Request.Context(), announcement)
+	}
+
 	vo.OK(c, nil)
+}
+
+// notifyUnpin looks up the task's repo_path, derives shared_dir, and fires an async
+// notification to agentend so the Orchestrator knows this constraint was cancelled.
+func (h *AnnouncementHandler) notifyUnpin(_ context.Context, announcement model.Announcement) {
+	go func() {
+		var task model.Task
+		if err := db.GetDB().Where("task_id = ?", announcement.TaskID).First(&task).Error; err != nil {
+			slog.Warn("failed to find task for announcement unpin notification",
+				"task_id", announcement.TaskID, "error", err)
+			return
+		}
+		if task.RepoPath == "" {
+			slog.Warn("task has no repo_path, skipping unpin notification",
+				"task_id", announcement.TaskID)
+			return
+		}
+
+		absRepoPath, err := filepath.Abs(task.RepoPath)
+		if err != nil {
+			slog.Warn("failed to resolve repo_path", "repo_path", task.RepoPath, "error", err)
+			return
+		}
+		sharedDir := filepath.Join(filepath.Dir(absRepoPath), "worktrees", announcement.TaskID, "shared", ".agent")
+
+		err = h.agentClient.NotifyAnnouncementUnpin(agentend_client.AnnouncementUnpinRequest{
+			SharedDir:  sharedDir,
+			Content:    announcement.Content,
+			SenderName: announcement.SenderName,
+		})
+		if err != nil {
+			slog.Warn("failed to notify agentend of announcement unpin",
+				"task_id", announcement.TaskID, "announcement_id", announcement.ID, "error", err)
+		}
+	}()
 }

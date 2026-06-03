@@ -19,6 +19,12 @@ class PinRemoveRequest(BaseModel):
     filename: str = Field(description="Filename to unpin")
 
 
+class AnnouncementUnpinRequest(BaseModel):
+    shared_dir: str = Field(description="Shared directory path")
+    content: str = Field(description="Original announcement content")
+    sender_name: str = Field(description="Who sent the announcement")
+
+
 class PinAddExistingRequest(BaseModel):
     shared_dir: str = Field(description="Shared directory path")
     filename: str = Field(description="Existing filename in common/")
@@ -59,6 +65,24 @@ async def pin_remove(req: PinRemoveRequest):
     )
 
     return {"success": True, "removed": removed}
+
+
+@router.post("/announcement-unpin")
+async def announcement_unpin(req: AnnouncementUnpinRequest):
+    """Write an unpin SystemMessage when a pinned announcement is deleted from Backend."""
+    memory = ConversationMemoryStore(shared_dir=req.shared_dir)
+    memory.save_messages(
+        [
+            SystemMessage(
+                content=(
+                    f"[公告约束已取消] 来自 **{req.sender_name}** 的置顶公告已删除: "
+                    f"\"{req.content[:200]}\" "
+                    f"— 该约束不再生效，后续规划无需遵守。"
+                )
+            )
+        ]
+    )
+    return {"success": True}
 
 
 @router.get("/list")

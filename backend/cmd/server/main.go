@@ -56,7 +56,7 @@ func main() {
 	agentProfileHandler := handler.NewAgentProfileHandler()
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
-	announcementHandler := handler.NewAnnouncementHandler()
+	announcementHandler := handler.NewAnnouncementHandler(agentClient)
 	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 
 	r := gin.New()
