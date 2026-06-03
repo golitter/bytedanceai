@@ -1,3 +1,5 @@
+import { Pin } from 'lucide-react'
+
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { GroupAvatar } from '@/components/chat/GroupAvatar'
 import { useHoverStyle } from '@/hooks/use-hover-style'
@@ -63,6 +65,9 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
           >
             {displayName}
           </span>
+          {conversation.pinnedAt && (
+            <Pin className="h-3 w-3 shrink-0 -rotate-45 text-primary" strokeWidth={1.5} />
+          )}
           <span className="shrink-0 text-[11px] text-tertiary">
             {relativeTime(conversation.lastActiveAt)}
           </span>

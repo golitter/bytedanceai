@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -57,6 +57,7 @@ func main() {
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
 	announcementHandler := handler.NewAnnouncementHandler(agentClient)
+	contactGroupHandler := handler.NewContactGroupHandler()
 	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 
 	r := gin.New()
@@ -78,6 +79,7 @@ func main() {
 		api.GET("/tasks", taskHandler.ListTasks)
 		api.GET("/tasks/:taskId", taskHandler.GetTask)
 		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
+		api.DELETE("/tasks/:taskId/leave", taskHandler.LeaveTask)
 		api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
 
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
@@ -105,6 +107,14 @@ func main() {
 		// Diff snapshot routes
 		api.GET("/diff-snapshots/:snapshotId", diffSnapshotHandler.GetDiffSnapshot)
 		api.PUT("/diff-snapshots/:snapshotId", diffSnapshotHandler.SaveDiffSnapshot)
+
+		// Contact group routes
+		api.GET("/contact-groups", contactGroupHandler.ListGroups)
+		api.POST("/contact-groups", contactGroupHandler.CreateGroup)
+		api.PUT("/contact-groups/:groupId", contactGroupHandler.UpdateGroup)
+		api.DELETE("/contact-groups/:groupId", contactGroupHandler.DeleteGroup)
+		api.POST("/contact-groups/:groupId/items", contactGroupHandler.AddItem)
+		api.DELETE("/contact-groups/:groupId/items/:taskID", contactGroupHandler.RemoveItem)
 
 		ws := api.Group("/workspace")
 		{

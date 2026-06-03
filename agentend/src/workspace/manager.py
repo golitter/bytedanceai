@@ -122,16 +122,40 @@ class WorkspaceManager:
 
     async def cleanup_by_task(self, task_id: str) -> int:
         count = 0
-        repo_path = None
+        repo_paths: set[str] = set()
         for ws in list(self._workspaces.values()):
             if ws.task_id == task_id and ws.status == WorkspaceStatus.ACTIVE:
-                repo_path = ws.repo_path
+                repo_paths.add(ws.repo_path)
                 if await self.cleanup(ws.id):
                     count += 1
-        if count > 0 and repo_path:
+        # Always attempt to clean up task-base worktree and task branch,
+        # even if no active workspaces were found (task may have been created but never run,
+        # or workspaces were already cleaned by inactive cleanup)
+        # Collect repo_path from cleaned workspaces AND from remaining inactive workspaces
+        for ws in list(self._workspaces.values()):
+            if ws.task_id == task_id and ws.repo_path:
+                repo_paths.add(ws.repo_path)
+        for repo_path in repo_paths:
             await self._git.task_base_worktree_remove(repo_path, task_id)
             await self._git.branch_delete(repo_path, task_branch_name(task_id))
         return count
+
+    async def cleanup_task_branches(self, task_id: str, repo_path: str) -> bool:
+        """Force cleanup task-base worktree and task branch using an explicit repo_path.
+        Used when cleanup_by_task finds no active workspaces but branches still exist."""
+        if not repo_path:
+            return False
+        await self._git.task_base_worktree_remove(repo_path, task_id)
+        await self._git.branch_delete(repo_path, task_branch_name(task_id))
+        # Also remove any remaining agent branches for this task
+        try:
+            branches = await self._git.list_branches(repo_path)
+            for branch in branches:
+                if branch.startswith("agent/") and task_id in branch:
+                    await self._git.branch_delete(repo_path, branch)
+        except Exception:
+            pass
+        return True
 
     async def commit(self, workspace_id: str, message: str) -> bool:
         ws = self._workspaces.get(workspace_id)

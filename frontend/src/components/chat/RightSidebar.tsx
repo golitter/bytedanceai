@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ChevronRight,
   Download,
@@ -11,7 +12,9 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
+import { leaveTask, updateTaskPin } from '@/lib/api'
 import { API_BASE, MESSAGE_ROLES } from '@/lib/constants'
+import { useChatNav } from '@/stores/chat'
 
 import { AnnouncementsSection } from './AnnouncementsSection'
 import type { GitGraphData, GitInfoApiResponse } from './git-graph-types'
@@ -28,6 +31,7 @@ export interface RightSidebarProps {
   agentNames: string[]
   sessions: AgentSessionInfo[]
   repoPath?: string
+  pinnedAt?: string | null
   /** Resizable width in px (0 = collapsed) */
   width?: number
   /** Whether user is actively dragging */
@@ -69,12 +73,16 @@ export function RightSidebar({
   agentNames,
   sessions,
   repoPath,
+  pinnedAt,
   width = 300,
   isDragging = false,
   onResizeHandleMouseDown,
   onExpand,
 }: RightSidebarProps) {
   const isCollapsed = width === 0
+  const queryClient = useQueryClient()
+  const { clearNavigation } = useChatNav()
+  const isPinned = !!pinnedAt
   const [pathsOpen, togglePaths] = useCollapsible('paths', false)
 
   // ── Git branch state (shared between GitGraph) ──
@@ -232,17 +240,33 @@ export function RightSidebar({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
+            className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs transition-[transform,opacity] hover:bg-bg-hover ${
+              isPinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={async () => {
+              const newPin = isPinned ? null : new Date().toISOString()
+              await updateTaskPin(taskId, newPin)
+              queryClient.invalidateQueries({ queryKey: ['conversations'] })
+            }}
           >
-            <Pin className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.25} />
-            置顶会话
+            <Pin
+              className={`h-3.5 w-3.5 ${isPinned ? 'text-primary' : 'text-muted-foreground'}`}
+              strokeWidth={1.25}
+            />
+            {isPinned ? '取消置顶' : '置顶会话'}
           </button>
           <button
             type="button"
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[transform,opacity] hover:bg-danger-bg"
-            onClick={() => {
-              if (confirm('确认退出群聊？退出后将无法查看群聊消息。')) {
-                /* TODO: leave group */
+            onClick={async () => {
+              if (!confirm('确认退出群聊？退出后将彻底删除所有消息和工作区数据，且不可恢复。'))
+                return
+              try {
+                await leaveTask(taskId)
+                queryClient.invalidateQueries({ queryKey: ['conversations'] })
+                clearNavigation()
+              } catch (err) {
+                console.error('leave task failed:', err)
               }
             }}
           >

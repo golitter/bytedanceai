@@ -261,6 +261,27 @@ async def list_workspaces(
     return [asdict(ws) for ws in mgr.list()]
 
 
+@router.delete("/task/{task_id}")
+async def cleanup_task(
+    task_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    """Clean up all workspaces and git branches for a task."""
+    count = await mgr.cleanup_by_task(task_id)
+    return {"cleaned": count}
+
+
+@router.post("/task/{task_id}/cleanup-branches")
+async def cleanup_task_branches(
+    task_id: str,
+    repo_path: str = "",
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    """Force cleanup task-base worktree and task branch even without active workspaces."""
+    cleaned = await mgr.cleanup_task_branches(task_id, repo_path)
+    return {"cleaned": cleaned}
+
+
 @router.get("/by-session/{session_id}")
 async def get_workspace_by_session(
     session_id: str,

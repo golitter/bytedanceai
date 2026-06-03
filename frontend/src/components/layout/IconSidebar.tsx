@@ -109,7 +109,6 @@ export function IconSidebar() {
         <NavItem
           tab="contacts"
           label="通讯录"
-          disabled
           icon={<Users className="h-5 w-5" strokeWidth={1.25} />}
         />
         <NavItem

@@ -25,6 +25,7 @@ export interface Task {
   title: string
   repo_path: string
   status: string
+  pinned_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -112,6 +113,7 @@ export interface Conversation {
   status: string
   avatarUrl?: string
   repoPath?: string
+  pinnedAt?: string | null
   isGroupChat?: boolean
   memberCount?: number
   groupAgentTypes?: AgentType[]
@@ -142,6 +144,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
         status: primary.status,
         avatarUrl: primary.avatar_url || undefined,
         repoPath: detail.task.repo_path || undefined,
+        pinnedAt: detail.task.pinned_at || undefined,
         isGroupChat: true,
         memberCount: sessions.length,
         groupAgentTypes: sessions.map((s) => s.agent_type),
@@ -167,10 +170,20 @@ export async function fetchConversations(): Promise<Conversation[]> {
         status: s.status,
         avatarUrl: s.avatar_url || undefined,
         repoPath: detail.task.repo_path || undefined,
+        pinnedAt: detail.task.pinned_at || undefined,
       })
     }
   }
-  convos.sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
+  convos.sort((a, b) => {
+    const aPinned = a.pinnedAt ? 1 : 0
+    const bPinned = b.pinnedAt ? 1 : 0
+    if (aPinned !== bPinned) return bPinned - aPinned
+    if (aPinned && bPinned && a.pinnedAt && b.pinnedAt) {
+      const pinDiff = new Date(b.pinnedAt).getTime() - new Date(a.pinnedAt).getTime()
+      if (pinDiff !== 0) return pinDiff
+    }
+    return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime()
+  })
   return convos
 }
 
@@ -469,6 +482,14 @@ export async function updateTaskPin(
   return handleResponse<{ task_id: string }>(res)
 }
 
+export async function leaveTask(taskId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/leave`, { method: 'DELETE' })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
 export interface MergeResult {
   success: boolean
   source_branch: string
@@ -640,6 +661,77 @@ export function getAdminAvatar(): Promise<{ url: string }> {
   return fetch(`${API_BASE}/admin/avatar`)
     .then((res) => res.json())
     .then((json) => json.data)
+}
+
+// ── Contact Groups ──
+
+export interface ContactGroup {
+  group_id: string
+  name: string
+  sort_order: number
+  items: { task_id: string; sort_order: number }[]
+}
+
+export interface ContactGroupsResponse {
+  groups: ContactGroup[]
+  ungrouped_task_ids: string[]
+}
+
+export async function fetchContactGroups(): Promise<ContactGroupsResponse> {
+  const res = await fetch(`${API_BASE}/contact-groups`)
+  const json = await res.json()
+  return (json as { data: ContactGroupsResponse }).data
+}
+
+export async function createContactGroup(name: string): Promise<ContactGroup> {
+  const res = await fetch(`${API_BASE}/contact-groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  return handleResponse<ContactGroup>(res)
+}
+
+export async function updateContactGroup(groupId: string, name: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/contact-groups/${groupId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
+export async function deleteContactGroup(groupId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/contact-groups/${groupId}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
+export async function addToContactGroup(groupId: string, taskId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/contact-groups/${groupId}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId }),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
+export async function removeFromContactGroup(groupId: string, taskId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/contact-groups/${groupId}/items/${taskId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
 }
 
 export function updateAdminAvatar(url: string): Promise<{ success: boolean }> {

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect } from 'react'
 
 import { ChatArea } from '@/components/chat/ChatArea'
 import { RightSidebar } from '@/components/chat/RightSidebar'
+import { ContactsPage } from '@/components/im/ContactsPage'
 import { ConversationList } from '@/components/im/ConversationList'
 import { AdminMenu } from '@/components/layout/AdminMenu'
 import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
@@ -160,6 +161,7 @@ export function ImPage() {
                 agentNames={active.groupAgentNames}
                 sessions={active.groupSessions}
                 repoPath={active.repoPath}
+                pinnedAt={active.pinnedAt}
                 width={sidebarWidth}
                 isDragging={isDragging}
                 onResizeHandleMouseDown={handleMouseDown}
@@ -176,6 +178,10 @@ export function ImPage() {
             </ErrorBoundary>
           </div>
         </>
+      ) : activeTab === 'contacts' ? (
+        <ErrorBoundary>
+          <ContactsPage />
+        </ErrorBoundary>
       ) : placeholder ? (
         <PlaceholderPage icon={placeholder.icon} title={placeholder.title} />
       ) : null}

@@ -109,7 +109,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 
 func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var tasks []model.Task
-	if err := db.GetDB().Order("created_at DESC").Find(&tasks).Error; err != nil {
+	if err := db.GetDB().Order("pinned_at IS NULL, pinned_at DESC, created_at DESC").Find(&tasks).Error; err != nil {
 		vo.InternalError(c, err.Error())
 		return
 	}
@@ -196,6 +196,69 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		vo.InternalError(c, "failed to delete task")
 		return
 	}
+	vo.OK(c, nil)
+}
+
+// LeaveTask deletes a task and all associated resources:
+// 1. Destroy AgentEnd sessions (best-effort)
+// 2. Cleanup AgentEnd workspaces + git branches (best-effort)
+// 3. Force cleanup task branches using repo_path (best-effort)
+// 4. Cascade delete from database (Task → Session → SessionAgent → Message → Announcement → DiffSnapshot)
+func (h *TaskHandler) LeaveTask(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	// 1. Query all sessions and repo_path for this task
+	var sessionIDs []string
+	db.GetDB().Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs)
+
+	var task model.Task
+	db.GetDB().Where("task_id = ?", taskID).First(&task)
+
+	// 2. Destroy each AgentEnd session process (best-effort)
+	for _, sid := range sessionIDs {
+		if err := h.agentClient.DestroySession(sid); err != nil {
+			slog.Warn("destroy session failed (best-effort)", "session_id", sid, "error", err)
+		}
+	}
+
+	// 3. Cleanup all workspaces and git branches for this task (best-effort)
+	if err := h.agentClient.CleanupByTask(taskID); err != nil {
+		slog.Warn("cleanup task workspaces failed (best-effort)", "task_id", taskID, "error", err)
+	}
+
+	// 4. Force cleanup task branches using repo_path (in case cleanup_by_task found no active workspaces)
+	if task.RepoPath != "" {
+		if err := h.agentClient.CleanupTaskBranches(taskID, task.RepoPath); err != nil {
+			slog.Warn("force cleanup task branches failed (best-effort)", "task_id", taskID, "error", err)
+		}
+	}
+
+	// 4. Cascade delete from database
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("task_id = ?", taskID).Delete(&model.Task{})
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		if len(sessionIDs) > 0 {
+			tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{})
+			tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{})
+			tx.Where("session_id IN ?", sessionIDs).Delete(&model.DiffSnapshot{})
+		}
+		tx.Where("task_id = ?", taskID).Delete(&model.Session{})
+		tx.Where("task_id = ?", taskID).Delete(&model.Announcement{})
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			vo.NotFound(c, "task not found")
+			return
+		}
+		vo.InternalError(c, "failed to leave task")
+		return
+	}
+
+	slog.Info("task left and cleaned up", "task_id", taskID, "sessions_cleaned", len(sessionIDs))
 	vo.OK(c, nil)
 }
 

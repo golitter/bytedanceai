@@ -166,3 +166,47 @@ func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
 	}
 	return nil
 }
+
+// DestroySession terminates an AgentEnd session process (best-effort).
+func (c *Client) DestroySession(sessionID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/session/"+sessionID, nil)
+	if err != nil {
+		return fmt.Errorf("create destroy session request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("destroy session %s: %w", sessionID, err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// CleanupByTask cleans up all workspaces and git branches for a task (best-effort).
+func (c *Client) CleanupByTask(taskID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/task/"+taskID, nil)
+	if err != nil {
+		return fmt.Errorf("create cleanup task request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cleanup task %s workspaces: %w", taskID, err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// CleanupTaskBranches force-cleans task branches even without active workspaces.
+func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
+	body, _ := json.Marshal(map[string]string{"repo_path": repoPath})
+	req, err := http.NewRequest("POST", c.baseURL+"/v1/workspace/task/"+taskID+"/cleanup-branches", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create cleanup branches request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cleanup task %s branches: %w", taskID, err)
+	}
+	resp.Body.Close()
+	return nil
+}
