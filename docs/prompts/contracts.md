@@ -7,9 +7,9 @@
 5. 在 `contracts/logs/` 写入变更记录（格式：`YYYY-MM-DD-<kebab-case>.md`，包含变更原因、变更文件、对比结果、跨端影响）
 6. 执行 `git log --oneline -5` 查看最近提交风格
 7. 根据 [docs/guides/git-conventions.md](../guides/git-conventions.md) 的规范生成 commit message（scope 取 `common`）
-8. `git add` 变更文件（按文件名指定，不要 `git add .`）
-9. 执行提交：
+8. 展示所有待提交的变更文件列表和生成的 commit message，由用户自行决定是否提交（不要执行 `git add` 或 `git commit`）。示例：
 ```shell
+git add <file1> <file2> ...
 git commit -m "$(cat <<'EOF'
 <commit message>
 
