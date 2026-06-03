@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 
@@ -31,10 +32,10 @@ class SessionMappingStore:
     def get_cli_session_id(self, session_id: str, task_id: str = "") -> str | None:
         return self._mappings.get(self._key(session_id, task_id))
 
-    def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None:
+    async def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None:
         self._mappings[self._key(session_id, task_id)] = cli_session_id
-        self._save()
+        await asyncio.to_thread(self._save)
 
-    def delete(self, session_id: str, task_id: str = "") -> None:
+    async def delete(self, session_id: str, task_id: str = "") -> None:
         self._mappings.pop(self._key(session_id, task_id), None)
-        self._save()
+        await asyncio.to_thread(self._save)

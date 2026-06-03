@@ -187,7 +187,7 @@ async def _execute_stream(
             if event.type == EventType.INIT.value:
                 real_cli_sid = event.content.get("cli_session_id", "")
                 if real_cli_sid:
-                    session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
+                    await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
             yield {
                 "event": event.type,
                 "data": event.model_dump_json(),
@@ -206,6 +206,9 @@ async def agent_stream(
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
 ) -> EventSourceResponse:
+    # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
+    pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
+
     workspace_path = await _resolve_workspace(request, workspace_mgr)
 
     # Write SOUL.md for non-orchestrator agents into their worktree
@@ -221,11 +224,18 @@ async def agent_stream(
                 soul_path.parent.mkdir(parents=True, exist_ok=True)
                 soul_path.write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
+    # 等待 pinned_announcements 结果，失败时降级为空列表
+    try:
+        pinned_announcements = await pinned_task
+    except Exception:
+        logger.warning("get_pinned_announcements failed, using []", exc_info=True)
+        pinned_announcements = []
+
     rule_ctx = {
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
-        "pinned_announcements": await backend_client.get_pinned_announcements(request.task_id),
+        "pinned_announcements": pinned_announcements,
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
         "group_chat_messages": request.group_chat_messages or [],
     }
@@ -283,13 +293,22 @@ async def agent_execute(
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
 ) -> AgentResponse:
+    # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
+    pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
     workspace_path = await _resolve_workspace(request, workspace_mgr)
+
+    # 等待 pinned_announcements 结果，失败时降级为空列表
+    try:
+        pinned_announcements = await pinned_task
+    except Exception:
+        logger.warning("get_pinned_announcements failed, using []", exc_info=True)
+        pinned_announcements = []
 
     rule_ctx = {
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
-        "pinned_announcements": await backend_client.get_pinned_announcements(request.task_id),
+        "pinned_announcements": pinned_announcements,
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
         "group_chat_messages": request.group_chat_messages or [],
     }
@@ -334,7 +353,7 @@ async def agent_execute(
             if event.type == EventType.INIT.value:
                 real_cli_sid = event.content.get("cli_session_id", "")
                 if real_cli_sid:
-                    session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
+                    await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
             elif event.type == EventType.TEXT.value:
                 text = event.content.get("text", "")
                 if text:

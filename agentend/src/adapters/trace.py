@@ -17,6 +17,7 @@ Usage::
         ...
 """
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -78,7 +79,7 @@ async def trace_stream_events(
     )
     # post() sends the root run to LangSmith server.
     # Without this, create_child() + patch() operate on a server-side orphan.
-    root.post()
+    await asyncio.to_thread(root.post)
 
     text_parts: list[str] = []
     # Track full output text across all TEXT events for root run outputs.
@@ -86,7 +87,7 @@ async def trace_stream_events(
     # Local variable — each call stack is independent, no concurrency issues.
     pending_tool_runs: list[tuple[str, RunTree]] = []
 
-    def _flush_text() -> None:
+    async def _flush_text() -> None:
         """Flush accumulated text chunks into a single child run."""
         if not text_parts:
             return
@@ -97,7 +98,7 @@ async def trace_stream_events(
             outputs={"text": "".join(text_parts)},
         )
         child.end()
-        child.post()
+        await asyncio.to_thread(child.post)
         text_parts.clear()
 
     try:
@@ -121,7 +122,7 @@ async def trace_stream_events(
                     outputs=init_outputs,
                 )
                 init_run.end()
-                init_run.post()
+                await asyncio.to_thread(init_run.post)
 
             elif etype == EventType.TEXT.value:
                 # Aggregate — do NOT create one child run per chunk.
@@ -130,14 +131,14 @@ async def trace_stream_events(
                 output_parts.append(text)
 
             elif etype == EventType.TOOL_CALL.value:
-                _flush_text()
+                await _flush_text()
                 tool_name = content.get("tool", "unknown")
                 tool_run = root.create_child(
                     name=f"tool:{tool_name}",
                     run_type="tool",
                     inputs={"args": content.get("args", {})},
                 )
-                tool_run.post()
+                await asyncio.to_thread(tool_run.post)
                 pending_tool_runs.append((tool_name, tool_run))
 
             elif etype == EventType.TOOL_RESULT.value:
@@ -151,12 +152,12 @@ async def trace_stream_events(
                 if matched_idx is not None:
                     _, tool_run = pending_tool_runs.pop(matched_idx)
                     tool_run.end(outputs={"result": content.get("result", "")})
-                    tool_run.patch()
+                    await asyncio.to_thread(tool_run.patch)
                 else:
                     logger.warning("TOOL_RESULT for unmatched tool: %s", tool_name)
 
             elif etype == EventType.DONE.value:
-                _flush_text()
+                await _flush_text()
                 usage = content.get("usage", {})
                 if usage:
                     done_run = root.create_child(
@@ -166,23 +167,23 @@ async def trace_stream_events(
                         outputs={"usage": usage},
                     )
                     done_run.end()
-                    done_run.post()
+                    await asyncio.to_thread(done_run.post)
 
             elif etype == EventType.ERROR.value:
-                _flush_text()
+                await _flush_text()
                 root.error = content.get("error", "unknown error")
 
             yield event
 
     except Exception as e:
-        _flush_text()
+        await _flush_text()
         root.error = str(e)
         raise
     finally:
         # Clean up any remaining pending tool runs.
         for tool_name, tool_run in pending_tool_runs:
             tool_run.end(outputs={}, error=f"stream ended before result: {tool_name}")
-            tool_run.patch()
+            await asyncio.to_thread(tool_run.patch)
 
         root.end(
             outputs={
@@ -190,4 +191,4 @@ async def trace_stream_events(
                 "output": "".join(output_parts),
             }
         )
-        root.patch()
+        await asyncio.to_thread(root.patch)
