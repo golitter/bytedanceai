@@ -179,9 +179,11 @@ export function ImPage() {
           </div>
         </>
       ) : activeTab === 'contacts' ? (
-        <ErrorBoundary>
-          <ContactsPage />
-        </ErrorBoundary>
+        <div className="flex-1">
+          <ErrorBoundary>
+            <ContactsPage />
+          </ErrorBoundary>
+        </div>
       ) : placeholder ? (
         <PlaceholderPage icon={placeholder.icon} title={placeholder.title} />
       ) : null}
