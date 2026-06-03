@@ -254,14 +254,16 @@ export function RightSidebar({
                     <span className="truncate">{repoPath}</span>
                   </p>
                 </div>
-                {/* Task path */}
+                {/* Task path — worktrees live in <repo_parent>/worktrees/<taskId> */}
                 <div>
                   <span className="mb-0.5 block text-[11px] text-tertiary">任务路径</span>
                   <p
                     className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
-                    title={`${repoPath}/worktrees/${taskId} — 双击复制`}
+                    title={`${repoPath.replace(/\/[^/]+$/, '')}/worktrees/${taskId} — 双击复制`}
                     onDoubleClick={() => {
-                      navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
+                      navigator.clipboard.writeText(
+                        `${repoPath.replace(/\/[^/]+$/, '')}/worktrees/${taskId}`,
+                      )
                       showCopyToast()
                     }}
                   >
@@ -269,7 +271,7 @@ export function RightSidebar({
                       className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
                       strokeWidth={1.25}
                     />
-                    <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
+                    <span className="truncate">{`${repoPath.replace(/\/[^/]+$/, '')}/worktrees/${taskId}`}</span>
                   </p>
                 </div>
               </div>

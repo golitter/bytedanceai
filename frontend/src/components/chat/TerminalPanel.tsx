@@ -137,7 +137,7 @@ export function TerminalPanel({
               <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" />
               <span className="flex-1 text-center font-mono text-[11px] text-text-tertiary">
                 {gitGraphData.repoPath
-                  ? `${gitGraphData.repoPath}/worktrees/...`
+                  ? `${gitGraphData.repoPath.replace(/\/[^/]+$/, '')}/worktrees/...`
                   : '/workspace/project'}
               </span>
             </div>
