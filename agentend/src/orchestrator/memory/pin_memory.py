@@ -93,13 +93,14 @@ class PinMemory:
         self._save_pins(pins)
         return True
 
-    def unpin(self, filename: str) -> bool:
+    def unpin(self, filename: str) -> dict | None:
+        """Remove pin and return the removed entry, or None if not found."""
         pins = self._load_pins()
-        new_pins = [p for p in pins if p["filename"] != filename]
-        if len(new_pins) == len(pins):
-            return False
-        self._save_pins(new_pins)
-        return True
+        removed = next((p for p in pins if p["filename"] == filename), None)
+        if not removed:
+            return None
+        self._save_pins([p for p in pins if p["filename"] != filename])
+        return removed
 
     def get_context(self) -> str:
         pins = self._load_pins()

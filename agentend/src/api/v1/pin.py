@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from langchain_core.messages import SystemMessage
 from pydantic import BaseModel, Field
 
+from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.pin_memory import PinMemory
 
 router = APIRouter(prefix="/v1/pin", tags=["pin"])
@@ -40,7 +42,23 @@ async def pin_remove(req: PinRemoveRequest):
     removed = pm.unpin(req.filename)
     if not removed:
         raise HTTPException(status_code=404, detail=f"Pin not found: {req.filename}")
-    return {"success": True}
+
+    # Persist unpin event so the LLM knows this constraint is no longer active
+    memory = ConversationMemoryStore(shared_dir=req.shared_dir)
+    memory.save_messages(
+        [
+            SystemMessage(
+                content=(
+                    f"[Pin 约束已取消] **{removed['title']}** "
+                    f"(来源: {removed.get('source', 'unknown')}, "
+                    f"原摘要: {removed.get('summary', '')}) "
+                    f"— 该约束不再生效，后续规划无需遵守。"
+                )
+            )
+        ]
+    )
+
+    return {"success": True, "removed": removed}
 
 
 @router.get("/list")

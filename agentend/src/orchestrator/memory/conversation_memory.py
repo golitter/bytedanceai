@@ -47,6 +47,16 @@ class ConversationMemoryStore:
         trimmed = self._trim_to_turns(combined, _MAX_TURNS)
         self._write(trimmed)
 
+    def replace_messages(self, messages: list) -> None:
+        """Replace the store with exactly *messages* (after trimming).
+
+        Unlike :meth:`save_messages` which reads existing entries and appends,
+        this method writes *messages* directly — no duplication.
+        """
+        entries = messages_to_dict(messages)
+        trimmed = self._trim_to_turns(entries, _MAX_TURNS)
+        self._write(trimmed)
+
     def load_messages(self) -> list:
         """Deserialize stored messages back into LangChain message objects."""
         raw = self._load_raw()

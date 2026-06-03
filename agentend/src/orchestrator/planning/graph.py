@@ -856,12 +856,16 @@ def evolve_node(state: GraphState) -> dict:
 
 
 def save_mem_node(state: GraphState) -> dict:
-    """Persist memory_messages to file-based store before graph completes."""
+    """Persist memory_messages to file-based store before graph completes.
+
+    Uses ``replace_messages`` to write the authoritative state directly,
+    avoiding duplication that ``save_messages`` (load + append) would cause.
+    """
     try:
         memory_messages = state.get("memory_messages", [])
         if memory_messages:
             store = ConversationMemoryStore(state["shared_dir"])
-            store.save_messages(memory_messages)
+            store.replace_messages(memory_messages)
     except Exception:
         logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
