@@ -20,6 +20,7 @@ docs/
 - [02-group-chat-cross-agent-memory.md](design/02-group-chat-cross-agent-memory.md) — 跨 Agent 记忆
 - [03-orchestrator-plan-review.md](design/03-orchestrator-plan-review.md) — 规划审查机制
 - [04-soul-md-identity-document.md](design/04-soul-md-identity-document.md) — SOUL.md 身份文档
+- [06-contacts-pin-leave-group.md](design/06-contacts-pin-leave-group.md) — 通讯录 + 置顶会话 + 退出群聊
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
