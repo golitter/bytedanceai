@@ -44,11 +44,16 @@ export function useChatStream(
               if (textAgent && textAgentType) {
                 store.streamAgentUpdate(sessionId, textAgentType, textAgent, textMessageId)
               }
-              store.streamText(sessionId, (event.content?.text as string) ?? '')
+              store.streamText(sessionId, (event.content?.text as string) ?? '', textMessageId)
               break
             }
             case EventTypeValues.ToolCall:
-              store.streamToolCall(sessionId, (event.content?.name as string) ?? 'unknown')
+              store.streamToolCall(
+                sessionId,
+                (event.content?.tool as string | undefined) ??
+                  (event.content?.name as string | undefined) ??
+                  'unknown',
+              )
               break
             case EventTypeValues.ToolResult:
               store.streamToolResult(sessionId)
@@ -70,6 +75,8 @@ export function useChatStream(
               )
               abortRef.current?.abort()
               abortRef.current = null
+              break
+            case EventTypeValues.Heartbeat:
               break
             case EventTypeValues.RuntimeExecuting:
               store.streamRuntimeEvent(sessionId, {
@@ -234,7 +241,7 @@ export function useChatStream(
       abortRef.current = controller
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, sessionId],
+    [taskId, sessionId, agentType],
   )
 
   const sendMessage = useCallback(
@@ -316,7 +323,7 @@ export function useChatStream(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, sessionId, options.includeTaskMessages, connectToStream])
+  }, [taskId, sessionId, agentType, options.includeTaskMessages, connectToStream])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()

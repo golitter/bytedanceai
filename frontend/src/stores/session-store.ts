@@ -41,6 +41,7 @@ export interface ActiveStream {
 export interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
+  streamingReplay?: { messageId: string; offset: number }
   streamingAgentType?: AgentType
   streamingAgentName?: string
   streamingMessageId?: string
@@ -57,6 +58,7 @@ export interface SessionChatState {
 export const initialSessionState: SessionChatState = {
   messages: [],
   streamingContent: '',
+  streamingReplay: undefined,
   streamingAgentType: undefined,
   streamingAgentName: undefined,
   streamingMessageId: undefined,

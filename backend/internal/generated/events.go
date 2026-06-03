@@ -14,6 +14,7 @@ const (
 	EventTypePlanReview EventType = "plan_review"
 	EventTypeDone EventType = "done"
 	EventTypeError EventType = "error"
+	EventTypeHeartbeat EventType = "heartbeat"
 	EventTypeRuntimeExecuting EventType = "runtime_executing"
 	EventTypeRuntimeText EventType = "runtime_text"
 	EventTypeRuntimeCompleted EventType = "runtime_completed"

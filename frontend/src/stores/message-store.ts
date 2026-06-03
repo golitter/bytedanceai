@@ -285,7 +285,7 @@ interface MessageStoreState {
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
-  streamText: (sessionId: string, text: string) => void
+  streamText: (sessionId: string, text: string, messageId?: string) => void
   streamToolCall: (sessionId: string, toolName: string) => void
   streamToolResult: (sessionId: string) => void
   streamDone: (sessionId: string) => void
@@ -391,6 +391,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           status: 'loading',
           messages: [...(s.sessions[sessionId]?.messages ?? []), message],
           streamingContent: '',
+          streamingReplay: undefined,
           runtimeBlocks: [],
           activePlanReviewKey: undefined,
           error: null,
@@ -406,15 +407,18 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         [sessionId]: {
           ...ensureSession(s, sessionId),
           status: 'streaming',
+          streamingContent: '',
+          streamingReplay: undefined,
           streamingAgentType: agentType,
           streamingAgentName: undefined,
           streamingMessageId: undefined,
+          runtimeBlocks: [],
           activePlanReviewKey: undefined,
         },
       },
     })),
 
-  streamText: (sessionId, text) => {
+  streamText: (sessionId, text, messageId) => {
     if (text.trim()) {
       useSessionStore.setState((s) => {
         const session = ensureSession(s, sessionId)
@@ -429,6 +433,50 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           },
         }
       })
+    }
+    if (messageId) {
+      let textToAppend = text
+      let shouldDrop = false
+      useSessionStore.setState((s) => {
+        const session = ensureSession(s, sessionId)
+        if (session.streamingMessageId && session.streamingMessageId !== messageId) {
+          shouldDrop = true
+          return {}
+        }
+
+        const pending = _textBufs?.get(sessionId)?.join('') ?? ''
+        const current = session.streamingContent + pending
+        const replay =
+          session.streamingReplay?.messageId === messageId
+            ? session.streamingReplay
+            : { messageId, offset: 0 }
+        let nextOffset = replay.offset
+
+        if (current && nextOffset < current.length) {
+          const knownTail = current.slice(nextOffset)
+          if (knownTail.startsWith(text)) {
+            nextOffset += text.length
+            textToAppend = ''
+          } else if (text.startsWith(knownTail)) {
+            textToAppend = text.slice(knownTail.length)
+            nextOffset = current.length
+          }
+        }
+
+        return {
+          sessions: {
+            ...s.sessions,
+            [sessionId]: {
+              ...session,
+              streamingMessageId: messageId,
+              streamingReplay: { messageId, offset: nextOffset },
+            },
+          },
+        }
+      })
+      if (shouldDrop) return
+      if (!textToAppend) return
+      text = textToAppend
     }
     _ensureBuf(sessionId).push(text)
     _scheduleFlush(useSessionStore.setState as SessionSet)
@@ -458,6 +506,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
               ...session,
               messages: [...session.messages, prevMessage],
               streamingContent: '',
+              streamingReplay: undefined,
               streamingAgentType: agentType,
               streamingAgentName: agentName,
               streamingMessageId: messageId,
@@ -475,6 +524,10 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingAgentType: agentType,
             streamingAgentName: agentName,
             streamingMessageId: messageId ?? session.streamingMessageId,
+            streamingReplay:
+              messageId && messageId !== session.streamingReplay?.messageId
+                ? { messageId, offset: 0 }
+                : session.streamingReplay,
           },
         },
       }
@@ -525,6 +578,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             status: 'done',
             messages: newMessages,
             streamingContent: '',
+            streamingReplay: undefined,
             streamingAgentType: undefined,
             streamingAgentName: undefined,
             streamingMessageId: undefined,
@@ -539,21 +593,30 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
 
   streamError: (sessionId, error) => {
     _flushTextBuf(useSessionStore.setState as SessionSet)
-    useSessionStore.setState((s) => ({
-      sessions: {
-        ...s.sessions,
-        [sessionId]: {
-          ...ensureSession(s, sessionId),
-          status: 'error',
-          error,
-          streamingContent: '',
-          streamingMessageId: undefined,
-          runtimeBlocks: [],
-          activePlanReviewKey: undefined,
-          activeStream: null,
+    useSessionStore.setState((s) => {
+      const session = ensureSession(s, sessionId)
+      const messages = [...session.messages]
+      if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
+        messages.push({ ...buildAgentMessage(session, sessionId), status: 'failed' })
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            status: 'error',
+            error,
+            messages,
+            streamingContent: '',
+            streamingReplay: undefined,
+            streamingMessageId: undefined,
+            runtimeBlocks: [],
+            activePlanReviewKey: undefined,
+            activeStream: null,
+          },
         },
-      },
-    }))
+      }
+    })
   },
 
   streamRuntimeEvent: (sessionId, event) =>
@@ -759,6 +822,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
               buildAgentMessage(session, sessionId, { keepRuntimeStreamingText: false }),
             ],
             streamingContent: '',
+            streamingReplay: undefined,
             runtimeBlocks: [],
             activePlanReviewKey: undefined,
           }

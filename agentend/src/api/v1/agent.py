@@ -166,6 +166,7 @@ async def _execute_stream(
     if backend_client and request.agent_type == AgentType.ORCHESTRATOR:
         stream_kwargs["backend_client"] = backend_client
 
+    outcome = SessionState.COMPLETED
     try:
         raw_events = adapter.stream_chat(session_id, request.message, **stream_kwargs)
         # CLI Adapter trace — skip Orchestrator (Phase 5.1 auto-traces via LangGraph).
@@ -188,12 +189,23 @@ async def _execute_stream(
                 real_cli_sid = event.content.get("cli_session_id", "")
                 if real_cli_sid:
                     await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
+            elif event.type == EventType.ERROR.value:
+                outcome = SessionState.ERROR
             yield {
                 "event": event.type,
                 "data": event.model_dump_json(),
             }
+    except asyncio.CancelledError:
+        outcome = SessionState.INTERRUPTED
+        raise
+    except Exception:
+        outcome = SessionState.ERROR
+        raise
     finally:
-        session_mgr.update_state(session_id, SessionState.COMPLETED)
+        try:
+            session_mgr.update_state(session_id, outcome)
+        except ValueError:
+            logger.exception("Failed to update session %s to %s", session_id, outcome.value)
 
 
 @router.post("/stream")

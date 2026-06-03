@@ -15,6 +15,7 @@ class EventType(str, Enum):
     PLAN_REVIEW = "plan_review"
     DONE = "done"
     ERROR = "error"
+    HEARTBEAT = "heartbeat"
     RUNTIME_EXECUTING = "runtime_executing"
     RUNTIME_TEXT = "runtime_text"
     RUNTIME_COMPLETED = "runtime_completed"

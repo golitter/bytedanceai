@@ -189,29 +189,30 @@ func (h *StreamHandler) serveFailed(c *gin.Context, msg *model.Message) {
 // splitContent splits text into chunks of approximately maxLen characters,
 // trying to break at newline boundaries when possible.
 func splitContent(text string, maxLen int) []string {
-	if len(text) <= maxLen {
+	if len([]rune(text)) <= maxLen {
 		return []string{text}
 	}
 
+	runes := []rune(text)
 	var chunks []string
-	for len(text) > 0 {
+	for len(runes) > 0 {
 		end := maxLen
-		if end > len(text) {
-			end = len(text)
+		if end > len(runes) {
+			end = len(runes)
 		}
 		// Try to break at a newline
-		if end < len(text) {
-			if idx := lastIndexByte(text[:end], '\n'); idx > end/2 {
+		if end < len(runes) {
+			if idx := lastIndexRune(runes[:end], '\n'); idx > end/2 {
 				end = idx + 1
 			}
 		}
-		chunks = append(chunks, text[:end])
-		text = text[end:]
+		chunks = append(chunks, string(runes[:end]))
+		runes = runes[end:]
 	}
 	return chunks
 }
 
-func lastIndexByte(s string, c byte) int {
+func lastIndexRune(s []rune, c rune) int {
 	for i := len(s) - 1; i >= 0; i-- {
 		if s[i] == c {
 			return i

@@ -172,4 +172,36 @@ describe('chat store ask-agent cards', () => {
       expect(state.runtimeBlocks[0].target_agent).toBe('aa')
     }
   })
+
+  it('keeps streamed content as a failed message when the stream errors', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'codex')
+    store.streamAgentUpdate(sessionId, 'codex', '执行者', 'worker-message-error')
+    store.streamText(sessionId, '已经输出的内容', 'worker-message-error')
+    store.streamError(sessionId, new Error('stream failed'))
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.status).toBe('error')
+    expect(state.streamingContent).toBe('')
+    expect(state.messages).toHaveLength(1)
+    expect(state.messages[0].content).toBe('已经输出的内容')
+    expect(state.messages[0].status).toBe('failed')
+  })
+
+  it('deduplicates replayed text chunks by message id', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'codex')
+    store.streamAgentUpdate(sessionId, 'codex', '执行者', 'worker-message-replay')
+    store.streamText(sessionId, 'hello world', 'worker-message-replay')
+    store.streamText(sessionId, 'hello', 'worker-message-replay')
+    store.streamText(sessionId, ' world', 'worker-message-replay')
+    store.streamText(sessionId, '!', 'worker-message-replay')
+    store.streamDone(sessionId)
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.messages).toHaveLength(1)
+    expect(state.messages[0].content).toBe('hello world!')
+  })
 })

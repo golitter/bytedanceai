@@ -51,7 +51,7 @@ interface ComposedChatStoreState {
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
-  streamText: (sessionId: string, text: string) => void
+  streamText: (sessionId: string, text: string, messageId?: string) => void
   streamToolCall: (sessionId: string, toolName: string) => void
   streamToolResult: (sessionId: string) => void
   streamDone: (sessionId: string) => void

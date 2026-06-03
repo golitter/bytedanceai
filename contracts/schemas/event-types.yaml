@@ -19,6 +19,7 @@ definitions:
       - plan_review           # Orchestrator 规划审查请求
       - done                  # 流结束
       - error                 # 错误事件
+      - heartbeat             # 保活心跳事件
       - runtime_executing     # Agent 开始执行任务
       - runtime_text          # Orchestrator 透传子 Agent 增量文本
       - runtime_completed     # Agent 完成任务

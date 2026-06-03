@@ -28,6 +28,14 @@ const (
 	textBatchAge     = 500 * time.Millisecond
 )
 
+// RunOutcome is the terminal result of consuming an agentend SSE stream.
+type RunOutcome string
+
+const (
+	RunOutcomeCompleted RunOutcome = "completed"
+	RunOutcomeFailed    RunOutcome = "failed"
+)
+
 // Registry tracks active StreamWriter goroutines by messageID.
 var registry sync.Map
 
@@ -93,8 +101,9 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 }
 
 // Run consumes the agentend response body (SSE lines), publishes to Redis, and flushes to MySQL.
-// This should be called in a goroutine.
-func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
+// This should be called in a goroutine. It returns the terminal outcome so the
+// caller can keep Session status consistent with Message status.
+func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	defer sw.finish()
 
 	sw.wg.Add(1)
@@ -102,7 +111,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 
 	sawError := false
 
-	scanFunc(func(line string) {
+	scanErr := scanFunc(func(line string) {
 		if sw.ctx.Err() != nil {
 			return
 		}
@@ -160,7 +169,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				case generated.EventTypeError:
 					sw.flushTextBuffer()
 					sawError = true
-					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
+					if errMsg := eventErrorMessage(event.Content); errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
 				case generated.EventTypeAskCardStart:
@@ -187,21 +196,29 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 		// Publish non-TEXT lines immediately
 		sw.publishToRedis(line)
 	})
+	if scanErr != nil {
+		sawError = true
+		sw.flushTextBuffer()
+		errMsg := fmt.Sprintf("stream read error: %v", scanErr)
+		sw.appendText("[Error] " + errMsg)
+		sw.publishToRedis(formatErrorSSE(errMsg))
+	}
 
 	// Final flush
 	sw.flushTextBuffer()
 	sw.doFlush()
 
-	status := "completed"
+	outcome := RunOutcomeCompleted
 	if sawError {
-		status = "failed"
+		outcome = RunOutcomeFailed
 	}
 	// Finalize the current (last) sub-message
-	sw.updateMessageStatus(sw.messageID, status)
+	sw.updateMessageStatus(sw.messageID, string(outcome))
 	// Finalize the original message (may be the same if no agent switch happened)
 	if sw.messageID != sw.originalMessageID {
-		sw.updateMessageStatus(sw.originalMessageID, status)
+		sw.updateMessageStatus(sw.originalMessageID, string(outcome))
 	}
+	return outcome
 }
 
 // switchAgent handles agent/message transitions: flushes buffer, finalizes current Message,
@@ -613,14 +630,7 @@ func (sw *StreamWriter) Fail() {
 // Used when agentend fails before/during streaming so the frontend can see the error.
 func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
-	event := map[string]interface{}{
-		"type": "error",
-		"content": map[string]string{
-			"message": errMsg,
-		},
-	}
-	data, _ := json.Marshal(event)
-	sseLine := fmt.Sprintf("data: %s", string(data))
+	sseLine := formatErrorSSE(errMsg)
 
 	// Hot path: push error to hub immediately
 	Hub.Publish(key, sseLine)
@@ -642,6 +652,27 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 
 	// Ensure hub stream is cleaned up so subscribers receive Done event.
 	Hub.Close(key)
+}
+
+func eventErrorMessage(content map[string]interface{}) string {
+	if errMsg, ok := content["error"].(string); ok && errMsg != "" {
+		return errMsg
+	}
+	if errMsg, ok := content["message"].(string); ok && errMsg != "" {
+		return errMsg
+	}
+	return ""
+}
+
+func formatErrorSSE(errMsg string) string {
+	event := map[string]interface{}{
+		"type": "error",
+		"content": map[string]string{
+			"message": errMsg,
+		},
+	}
+	data, _ := json.Marshal(event)
+	return fmt.Sprintf("data: %s", string(data))
 }
 
 // CleanupStaleMessages marks all streaming messages as failed (called at startup).

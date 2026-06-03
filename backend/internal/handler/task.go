@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -524,29 +525,38 @@ func (h *TaskHandler) runStream(agentReq *generated.AgentRequest, taskID, sessio
 
 	sw := stream.NewStreamWriter(context.Background(), taskID, sessionID, messageID, string(agentReq.AgentType))
 
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	sw.Run(func(fn func(string)) {
-		for scanner.Scan() {
-			line := scanner.Text()
-			// Skip SSE event type lines and blank separators —
-			// agentend (sse_starlette) sends "event: <type>\ndata: <json>\n\n"
-			// per event. Only forward data lines to Redis so each SSE event
-			// stays atomic and doesn't get split into separate events.
-			if line == "" || strings.HasPrefix(line, "event:") {
-				continue
+	reader := bufio.NewReaderSize(resp.Body, 64*1024)
+	outcome := sw.Run(func(fn func(string)) error {
+		for {
+			line, readErr := reader.ReadString('\n')
+			if len(line) > 0 {
+				if len(line) > 10*1024*1024 {
+					return fmt.Errorf("SSE line exceeds 10MB")
+				}
+				line = strings.TrimRight(line, "\r\n")
+				// Skip SSE event type lines and blank separators —
+				// agentend (sse_starlette) sends "event: <type>\ndata: <json>\n\n"
+				// per event. Only forward data lines to Redis so each SSE event
+				// stays atomic and doesn't get split into separate events.
+				if line != "" && !strings.HasPrefix(line, "event:") {
+					fn(line)
+				}
 			}
-			fn(line)
+			if readErr != nil {
+				if errors.Is(readErr, io.EOF) {
+					return nil
+				}
+				slog.Warn("SSE reader error", "task_id", taskID, "error", readErr)
+				return readErr
+			}
 		}
-		if scanner.Err() != nil {
-			slog.Warn("SSE scanner error", "task_id", taskID, "error", scanner.Err())
-			sw.Fail()
-			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
-			return
-		}
-		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "completed")
 	})
+	switch outcome {
+	case stream.RunOutcomeFailed:
+		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
+	default:
+		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "completed")
+	}
 }
 
 func (h *TaskHandler) ReviewTask(c *gin.Context) {
