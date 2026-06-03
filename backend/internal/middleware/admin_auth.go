@@ -7,12 +7,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func VerifyAdminPassword(password, stored string) bool {
 	if stored == "" {
 		return false
 	}
+	// If stored looks like a bcrypt hash, use bcrypt comparison.
+	if strings.HasPrefix(stored, "$2a$") || strings.HasPrefix(stored, "$2b$") {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
+	}
+	// Legacy plaintext fallback — admin should update config to a bcrypt hash.
 	return password == stored
 }
 

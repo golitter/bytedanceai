@@ -594,6 +594,19 @@ func (sw *StreamWriter) Fail() {
 	if sw.messageID != sw.originalMessageID {
 		sw.updateMessageStatus(sw.originalMessageID, "failed")
 	}
+
+	// Close hub stream so subscribers receive Done event.
+	Hub.Close(sw.streamKey)
+
+	// Set Redis EXPIRE on the stream.
+	rdb := pkgredis.GetClient()
+	if rdb != nil {
+		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
+			slog.Warn("redis EXPIRE failed in Fail", "key", sw.streamKey, "error", err)
+		}
+	}
+
+	registry.Delete(sw.originalMessageID)
 }
 
 // PublishErrorAndFail writes an error event to Redis Stream and hub, then marks the message as failed.
@@ -626,6 +639,9 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 		rdb.Expire(context.Background(), key, streamExpireTTL)
 	}
 	db.GetDB().Model(&model.Message{}).Where("message_id = ?", messageID).Update("status", "failed")
+
+	// Ensure hub stream is cleaned up so subscribers receive Done event.
+	Hub.Close(key)
 }
 
 // CleanupStaleMessages marks all streaming messages as failed (called at startup).

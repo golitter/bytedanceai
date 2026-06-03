@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"agenthub/backend/internal/conf"
 	"agenthub/backend/internal/handler"
@@ -43,6 +47,7 @@ func main() {
 	defer redis.Close()
 
 	stream.CleanupStaleMessages()
+	stream.Hub.StartClosedKeysCleanup()
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 	qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
@@ -142,8 +147,32 @@ func main() {
 	adminHandler.RegisterRoutes(api)
 
 	slog.Info("server starting", "port", 8080)
-	if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
+
+	srv := &http.Server{Addr: ":8080", Handler: r}
+
+	// Start server in goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("shutting down server...")
+
+	// Give outstanding requests 15 seconds to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("server forced to shutdown", "error", err)
 	}
+
+	// Close Redis connection
+	redis.Close()
+
+	slog.Info("server exited")
 }

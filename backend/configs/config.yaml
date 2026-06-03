@@ -21,6 +21,8 @@ redis:
   db: 0
 
 admin:
+  # Plaintext password. For production, replace with bcrypt hash (prefix $2a$ or $2b$).
+  # Generate: htpasswd -nbBC 10 "" "your-password" | tr -d ':\n' | sed 's/$2y/$2a/'
   password: "123456"
 
 qiniu:

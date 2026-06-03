@@ -69,6 +69,9 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 
 	// Phase 2: Subscribe hub and replay Redis gap
 	ch, _ := stream.Hub.Subscribe(streamKey)
+	if ch != nil {
+		defer stream.Hub.Unsubscribe(streamKey, ch)
+	}
 
 	// Replay Redis gap: events between last_seq and hub's currentSeq
 	rdb := pkgredis.GetClient()

@@ -6,6 +6,7 @@ import (
 	"agenthub/backend/pkg/db"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type DeleteSessionsRequest struct {
@@ -19,20 +20,26 @@ func (h *AdminHandler) DeleteSessions(c *gin.Context) {
 		return
 	}
 
-	database := db.GetDB()
 	deleted := 0
-
-	for _, sid := range req.SessionIDs {
-		if err := database.Where("session_id = ?", sid).Delete(&model.Message{}).Error; err != nil {
-			continue
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		for _, sid := range req.SessionIDs {
+			// Verify session exists
+			var count int64
+			tx.Model(&model.Session{}).Where("session_id = ?", sid).Count(&count)
+			if count == 0 {
+				continue
+			}
+			tx.Where("session_id = ?", sid).Delete(&model.Message{})
+			tx.Where("session_id = ?", sid).Delete(&model.SessionAgent{})
+			tx.Where("session_id = ?", sid).Delete(&model.DiffSnapshot{})
+			tx.Where("session_id = ?", sid).Delete(&model.Session{})
+			deleted++
 		}
-		if err := database.Where("session_id = ?", sid).Delete(&model.SessionAgent{}).Error; err != nil {
-			continue
-		}
-		if err := database.Where("session_id = ?", sid).Delete(&model.Session{}).Error; err != nil {
-			continue
-		}
-		deleted++
+		return nil
+	})
+	if err != nil {
+		vo.InternalError(c, "failed to delete sessions")
+		return
 	}
 
 	vo.OK(c, gin.H{"deleted": deleted})

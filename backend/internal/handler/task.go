@@ -177,15 +177,7 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-
-		var sessionIDs []string
-		tx.Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs)
-
-		if len(sessionIDs) > 0 {
-			tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{})
-			tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{})
-		}
-		tx.Where("task_id = ?", taskID).Delete(&model.Session{})
+		cascadeDeleteByTaskID(tx, taskID)
 		return nil
 	})
 	if err != nil {
@@ -239,14 +231,7 @@ func (h *TaskHandler) LeaveTask(c *gin.Context) {
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-
-		if len(sessionIDs) > 0 {
-			tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{})
-			tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{})
-			tx.Where("session_id IN ?", sessionIDs).Delete(&model.DiffSnapshot{})
-		}
-		tx.Where("task_id = ?", taskID).Delete(&model.Session{})
-		tx.Where("task_id = ?", taskID).Delete(&model.Announcement{})
+		cascadeDeleteByTaskID(tx, taskID)
 		return nil
 	})
 	if err != nil {
@@ -332,28 +317,64 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		agentType = "claude-code"
 	}
 
-	// Save user message to Message table (skip for internal orchestrator dispatches)
-	if !req.SkipUserMessage {
-		userMsg := model.Message{
-			MessageID: uuid.New().String(),
-			TaskID:    taskID,
-			SessionID: req.SessionID,
-			Role:      "user",
-			Content:   req.Message,
-		}
-		if err := db.GetDB().Create(&userMsg).Error; err != nil {
-			vo.InternalError(c, "failed to save user message")
-			return
-		}
+	// Save user message (skip for internal orchestrator dispatches)
+	if err := h.createUserMessage(taskID, &req); err != nil {
+		vo.InternalError(c, "failed to save user message")
+		return
 	}
 
+	// Ensure session exists and is running
+	if err := h.ensureSession(taskID, &req, agentType); err != nil {
+		vo.InternalError(c, "failed to create session")
+		return
+	}
+
+	// Look up agent name from session
+	agentName := h.getAgentName(req.SessionID)
+
+	// Create agent message with streaming status
+	messageID, err := h.createAgentMessage(taskID, &req, agentType, agentName)
+	if err != nil {
+		vo.InternalError(c, "failed to create agent message")
+		return
+	}
+
+	// Build agent request
+	agentReq := h.buildAgentRequest(&task, &req, messageID, agentType, agentName)
+
+	// Launch background goroutine to consume agentend stream
+	go h.runStream(agentReq, taskID, req.SessionID, messageID)
+
+	vo.Accepted(c, gin.H{
+		"message_id": messageID,
+		"status":     "streaming",
+	})
+}
+
+// createUserMessage saves the user message to the Message table.
+// Skipped for internal orchestrator dispatches (req.SkipUserMessage == true).
+func (h *TaskHandler) createUserMessage(taskID string, req *RunTaskReq) error {
+	if req.SkipUserMessage {
+		return nil
+	}
+	userMsg := model.Message{
+		MessageID: uuid.New().String(),
+		TaskID:    taskID,
+		SessionID: req.SessionID,
+		Role:      "user",
+		Content:   req.Message,
+	}
+	return db.GetDB().Create(&userMsg).Error
+}
+
+// ensureSession creates or updates the session for this run.
+func (h *TaskHandler) ensureSession(taskID string, req *RunTaskReq, agentType string) error {
 	var session model.Session
 	result := db.GetDB().Where(model.Session{SessionID: req.SessionID, TaskID: taskID}).
 		Attrs(model.Session{AgentType: agentType, Status: "running"}).
 		FirstOrCreate(&session)
 	if result.Error != nil {
-		vo.InternalError(c, result.Error.Error())
-		return
+		return result.Error
 	}
 	if result.RowsAffected > 0 {
 		db.GetDB().Create(&model.SessionAgent{
@@ -363,15 +384,20 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 	} else {
 		db.GetDB().Model(&session).Update("status", "running")
 	}
+	return nil
+}
 
-	// Create agent message with streaming status
-	// Look up agent name from session
-	var agentSession model.Session
-	agentName := ""
-	if err := db.GetDB().Where("session_id = ?", req.SessionID).First(&agentSession).Error; err == nil {
-		agentName = agentSession.AgentName
+// getAgentName returns the agent name for a given session.
+func (h *TaskHandler) getAgentName(sessionID string) string {
+	var session model.Session
+	if err := db.GetDB().Where("session_id = ?", sessionID).First(&session).Error; err == nil {
+		return session.AgentName
 	}
+	return ""
+}
 
+// createAgentMessage creates a new agent message with streaming status.
+func (h *TaskHandler) createAgentMessage(taskID string, req *RunTaskReq, agentType, agentName string) (string, error) {
 	messageID := uuid.New().String()
 	agentMsg := model.Message{
 		MessageID: messageID,
@@ -384,135 +410,142 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		AgentName: agentName,
 	}
 	if err := db.GetDB().Create(&agentMsg).Error; err != nil {
-		vo.InternalError(c, fmt.Sprintf("create agent message: %v", err))
+		return "", err
+	}
+	return messageID, nil
+}
+
+// buildAgentRequest assembles the AgentRequest for agentend, including config injection.
+func (h *TaskHandler) buildAgentRequest(task *model.Task, req *RunTaskReq, messageID, agentType, agentName string) *generated.AgentRequest {
+	agentReq := &generated.AgentRequest{
+		TaskId:            task.TaskID,
+		SessionId:         req.SessionID,
+		Message:           req.Message,
+		AgentType:         generated.AgentType(agentType),
+		Stream:            true,
+		GroupChatMessages: fetchGroupChatWindow(task.TaskID, req.SessionID),
+	}
+	if req.Cwd != "" {
+		agentReq.WorkspacePath = &req.Cwd
+	} else if task.RepoPath != "" {
+		agentReq.RepoPath = &task.RepoPath
+	}
+
+	// Inject soul_md for non-orchestrator agents
+	if agentType != "orchestrator" {
+		soulMD := ""
+		db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &soulMD)
+		soulConfig := map[string]interface{}{"soul_md": soulMD}
+		soulConfigIface := interface{}(soulConfig)
+		agentReq.Config = &soulConfigIface
+	}
+
+	// For orchestrator, inject agents config from sibling sessions
+	if agentType == "orchestrator" {
+		h.injectOrchestratorConfig(agentReq, task, req, agentType, agentName)
+	}
+
+	return agentReq
+}
+
+// injectOrchestratorConfig adds orchestrator-specific config (agents list, repo_path, shared_dir).
+func (h *TaskHandler) injectOrchestratorConfig(agentReq *generated.AgentRequest, task *model.Task, req *RunTaskReq, agentType, agentName string) {
+	var siblings []model.Session
+	db.GetDB().Where("task_id = ? AND agent_type != ?", task.TaskID, "orchestrator").Find(&siblings)
+
+	orchestratorID := agentName
+	if orchestratorID == "" {
+		orchestratorID = "orchestrator"
+	}
+	orchestratorSoul := ""
+	db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &orchestratorSoul)
+
+	var agents []map[string]interface{}
+	for _, s := range siblings {
+		agentID := s.AgentName
+		if agentID == "" {
+			agentID = s.AgentType
+		}
+		agents = append(agents, map[string]interface{}{
+			"id":         agentID,
+			"type":       s.AgentType,
+			"session_id": s.SessionID,
+			"name":       agentID,
+		})
+	}
+	config := map[string]interface{}{
+		"agents":  agents,
+		"task_id": task.TaskID,
+		"soul_md": orchestratorSoul,
+		"orchestrator": map[string]interface{}{
+			"id":         orchestratorID,
+			"type":       agentType,
+			"session_id": req.SessionID,
+			"name":       orchestratorID,
+		},
+	}
+	if task.RepoPath != "" {
+		repoPath := task.RepoPath
+		if absRepoPath, err := filepath.Abs(task.RepoPath); err == nil {
+			repoPath = absRepoPath
+		}
+		config["repo_path"] = repoPath
+		config["shared_dir"] = filepath.Join(filepath.Dir(repoPath), "worktrees", task.TaskID, "shared", ".agent")
+	}
+	configIface := interface{}(config)
+	agentReq.Config = &configIface
+}
+
+// runStream consumes the SSE stream from agentend in a background goroutine.
+func (h *TaskHandler) runStream(agentReq *generated.AgentRequest, taskID, sessionID, messageID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic in stream goroutine", "task_id", taskID, "session_id", sessionID, "panic", r)
+			stream.PublishErrorAndFail(messageID, sessionID, fmt.Sprintf("internal error: %v", r))
+			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
+		}
+	}()
+
+	resp, err := h.agentClient.StreamAgent(agentReq)
+	if err != nil {
+		slog.Warn("agent stream error", "task_id", taskID, "session_id", sessionID, "error", err)
+		stream.PublishErrorAndFail(messageID, sessionID, fmt.Sprintf("agent service error: %v", err))
+		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("agent returned non-200", "task_id", taskID, "status", resp.StatusCode)
+		stream.PublishErrorAndFail(messageID, sessionID, fmt.Sprintf("agent returned HTTP %d", resp.StatusCode))
+		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
 		return
 	}
 
-	// Launch background goroutine to consume agentend stream
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("panic in stream goroutine", "task_id", taskID, "session_id", req.SessionID, "panic", r)
-				stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("internal error: %v", r))
-				db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
-			}
-		}()
+	sw := stream.NewStreamWriter(context.Background(), taskID, sessionID, messageID, string(agentReq.AgentType))
 
-		agentReq := &generated.AgentRequest{
-			TaskId:            taskID,
-			SessionId:         req.SessionID,
-			Message:           req.Message,
-			AgentType:         generated.AgentType(agentType),
-			Stream:            true,
-			GroupChatMessages: fetchGroupChatWindow(taskID, req.SessionID),
-		}
-		if req.Cwd != "" {
-			agentReq.WorkspacePath = &req.Cwd
-		} else if task.RepoPath != "" {
-			agentReq.RepoPath = &task.RepoPath
-		}
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-		// Inject soul_md for non-orchestrator agents into config
-		if agentType != "orchestrator" {
-			soulMD := ""
-			db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &soulMD)
-			soulConfig := map[string]interface{}{"soul_md": soulMD}
-			soulConfigIface := interface{}(soulConfig)
-			agentReq.Config = &soulConfigIface
+	sw.Run(func(fn func(string)) {
+		for scanner.Scan() {
+			line := scanner.Text()
+			// Skip SSE event type lines and blank separators —
+			// agentend (sse_starlette) sends "event: <type>\ndata: <json>\n\n"
+			// per event. Only forward data lines to Redis so each SSE event
+			// stays atomic and doesn't get split into separate events.
+			if line == "" || strings.HasPrefix(line, "event:") {
+				continue
+			}
+			fn(line)
 		}
-
-		// For orchestrator, inject agents config from sibling sessions
-		if agentType == "orchestrator" {
-			var siblings []model.Session
-			db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
-			orchestratorID := agentName
-			if orchestratorID == "" {
-				orchestratorID = "orchestrator"
-			}
-			orchestratorSoul := ""
-			db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &orchestratorSoul)
-			var agents []map[string]interface{}
-			for _, s := range siblings {
-				agentID := s.AgentName
-				if agentID == "" {
-					agentID = s.AgentType
-				}
-				agents = append(agents, map[string]interface{}{
-					"id":         agentID,
-					"type":       s.AgentType,
-					"session_id": s.SessionID,
-					"name":       agentID,
-				})
-			}
-			config := map[string]interface{}{
-				"agents":  agents,
-				"task_id": taskID,
-				"soul_md": orchestratorSoul,
-				"orchestrator": map[string]interface{}{
-					"id":         orchestratorID,
-					"type":       agentType,
-					"session_id": req.SessionID,
-					"name":       orchestratorID,
-				},
-			}
-			if task.RepoPath != "" {
-				repoPath := task.RepoPath
-				if absRepoPath, err := filepath.Abs(task.RepoPath); err == nil {
-					repoPath = absRepoPath
-				}
-				config["repo_path"] = repoPath
-				config["shared_dir"] = filepath.Join(filepath.Dir(repoPath), "worktrees", taskID, "shared", ".agent")
-			}
-			configIface := interface{}(config)
-			agentReq.Config = &configIface
-		}
-
-		resp, err := h.agentClient.StreamAgent(agentReq)
-		if err != nil {
-			slog.Warn("agent stream error", "task_id", taskID, "session_id", req.SessionID, "error", err)
-			stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("agent service error: %v", err))
-			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
+		if scanner.Err() != nil {
+			slog.Warn("SSE scanner error", "task_id", taskID, "error", scanner.Err())
+			sw.Fail()
+			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "failed")
 			return
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			slog.Warn("agent returned non-200", "task_id", taskID, "status", resp.StatusCode)
-			stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("agent returned HTTP %d", resp.StatusCode))
-			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
-			return
-		}
-
-		sw := stream.NewStreamWriter(context.Background(), taskID, req.SessionID, messageID, agentType)
-
-		scanner := bufio.NewScanner(resp.Body)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-		sw.Run(func(fn func(string)) {
-			for scanner.Scan() {
-				line := scanner.Text()
-				// Skip SSE event type lines and blank separators —
-				// agentend (sse_starlette) sends "event: <type>\ndata: <json>\n\n"
-				// per event. Only forward data lines to Redis so each SSE event
-				// stays atomic and doesn't get split into separate events.
-				if line == "" || strings.HasPrefix(line, "event:") {
-					continue
-				}
-				fn(line)
-			}
-			if scanner.Err() != nil {
-				slog.Warn("SSE scanner error", "task_id", taskID, "error", scanner.Err())
-				sw.Fail()
-				db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
-				return
-			}
-			db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "completed")
-		})
-	}()
-
-	vo.Accepted(c, gin.H{
-		"message_id": messageID,
-		"status":     "streaming",
+		db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Update("status", "completed")
 	})
 }
 

@@ -6,6 +6,7 @@ import (
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/qiniu"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +24,8 @@ func NewAdminHandler(cfg *conf.Config, uploader *qiniu.Uploader, agentClient *ag
 func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	admin := rg.Group("/admin")
 	{
-		admin.POST("/auth", h.Auth)
+		authLimiter := middleware.NewIPRateLimiter(5, time.Minute)
+		admin.POST("/auth", authLimiter.Middleware(), h.Auth)
 		admin.GET("/health", h.HealthCheck)
 		admin.GET("/avatar", h.GetAvatar)
 

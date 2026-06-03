@@ -5,12 +5,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"agenthub/backend/pkg/agentend_client"
 
 	"github.com/gin-gonic/gin"
 )
+
+// sanitizePath rejects paths with ".." path segments to prevent path traversal.
+// Uses path.Clean (not filepath.Clean) because the target is a URL, not a filesystem path.
+func sanitizePath(p string) (string, bool) {
+	cleaned := path.Clean(p)
+	// Reject if the cleaned path resolves to a parent traversal
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", false
+	}
+	// Reject path components that are exactly ".." (e.g. /foo/../bar but not /foo/..bar)
+	for _, seg := range strings.Split(cleaned, "/") {
+		if seg == ".." {
+			return "", false
+		}
+	}
+	return cleaned, true
+}
 
 type WorkspaceHandler struct {
 	agentClient *agentend_client.Client
@@ -58,14 +77,22 @@ func (h *WorkspaceHandler) withResolvedWorkspace(c *gin.Context, fn func(wsID st
 }
 
 func (h *WorkspaceHandler) SessionFileRead(c *gin.Context) {
-	filePath := c.Param("filepath")
+	filePath, ok := sanitizePath(c.Param("filepath"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
+		return
+	}
 	h.withResolvedWorkspace(c, func(wsID string) {
 		h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), nil)
 	})
 }
 
 func (h *WorkspaceHandler) SessionFileWrite(c *gin.Context) {
-	filePath := c.Param("filepath")
+	filePath, ok := sanitizePath(c.Param("filepath"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
+		return
+	}
 	h.withResolvedWorkspace(c, func(wsID string) {
 		h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), c.Request.Body)
 	})
@@ -91,13 +118,21 @@ func (h *WorkspaceHandler) SessionRevert(c *gin.Context) {
 
 func (h *WorkspaceHandler) ReadFile(c *gin.Context) {
 	workspaceID := c.Param("id")
-	filePath := c.Param("filepath")
+	filePath, ok := sanitizePath(c.Param("filepath"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
+		return
+	}
 	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", workspaceID, filePath), nil)
 }
 
 func (h *WorkspaceHandler) WriteFile(c *gin.Context) {
 	workspaceID := c.Param("id")
-	filePath := c.Param("filepath")
+	filePath, ok := sanitizePath(c.Param("filepath"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
+		return
+	}
 	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", workspaceID, filePath), c.Request.Body)
 }
 

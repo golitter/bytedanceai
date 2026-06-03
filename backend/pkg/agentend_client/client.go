@@ -23,9 +23,14 @@ func New(host string, port int) *Client {
 		host = "http://" + host
 	}
 	return &Client{
-		baseURL:      fmt.Sprintf("%s:%d", host, port),
-		httpClient:   &http.Client{Timeout: 60 * time.Second},
-		streamClient: &http.Client{},
+		baseURL:    fmt.Sprintf("%s:%d", host, port),
+		httpClient: &http.Client{Timeout: 60 * time.Second},
+		streamClient: &http.Client{
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 30 * time.Second,
+				ExpectContinueTimeout: 2 * time.Second,
+			},
+		},
 	}
 }
 
