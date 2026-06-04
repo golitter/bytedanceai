@@ -32,7 +32,6 @@ export function ContactsPage() {
   const { setActiveTab } = useActiveTab()
 
   const groups = groupsData?.groups ?? []
-  const _ungroupedIds = groupsData?.ungrouped_task_ids ?? []
   const convMap = buildConvMap(conversations ?? [])
 
   // Split conversations into pinned and non-pinned

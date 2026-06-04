@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
-import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
+import { type AgentSessionInfo, getTaskMessages, type TaskMessage } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -24,6 +24,13 @@ interface ChatAreaProps {
   groupAgentTypes?: AgentType[]
   groupAgentNames?: string[]
   groupSessions?: AgentSessionInfo[]
+}
+
+function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
+  if (message.role === MESSAGE_ROLES.USER) return true
+  if (message.role !== MESSAGE_ROLES.AGENT) return false
+  if (message.session_id !== primarySessionId) return true
+  return !message.agent_type || message.agent_type === AGENT_TYPES.Orchestrator
 }
 
 export function ChatArea({
@@ -60,13 +67,11 @@ export function ChatArea({
         limit: 20,
         before: firstMsg.dbId,
         sessionId: isGroupChat ? undefined : sessionId,
+        mode: isGroupChat ? 'group' : undefined,
+        primarySessionId: isGroupChat ? sessionId : undefined,
       })
       const visibleRows = isGroupChat
-        ? res.data.filter((m) =>
-            m.session_id === sessionId
-              ? m.role !== MESSAGE_ROLES.AGENT || !m.agent_type || m.agent_type === agentType
-              : m.role === MESSAGE_ROLES.AGENT,
-          )
+        ? res.data.filter((m) => isVisibleGroupMessage(m, sessionId))
         : res.data
       const chatMessages: ChatMessage[] = visibleRows.map((m) => ({
         id: `${m.role}-${m.id}`,
@@ -84,15 +89,20 @@ export function ChatArea({
       setLoadingMore(sessionId, false)
       setLoadError('加载历史消息失败')
     }
-  }, [taskId, sessionId, agentType, isGroupChat, state.messages, prependMessages, setLoadingMore])
+  }, [taskId, sessionId, isGroupChat, state.messages, prependMessages, setLoadingMore])
 
   const agentSessionLookup = useMemo(() => {
     if (!groupSessions) return undefined
     const map = new Map<string, AgentSessionInfo>()
     for (const s of groupSessions) {
+      map.set(s.routeId, s)
+      map.set(s.mentionLabel, s)
       map.set(s.agentName, s)
       map.set(s.agentType, s)
       map.set(AGENT_NAMES[s.agentType] ?? s.agentType, s)
+      for (const alias of s.aliases ?? []) {
+        map.set(alias, s)
+      }
     }
     return map
   }, [groupSessions])
@@ -183,6 +193,7 @@ export function ChatArea({
         sendDisabled={isStreaming}
         sendDisabledHint={sendDisabledHint}
         placeholder={`发消息给 ${displayName}...`}
+        mentionSessions={isGroupChat ? groupSessions : undefined}
       />
     </div>
   )

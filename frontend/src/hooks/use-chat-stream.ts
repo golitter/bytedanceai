@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
-import { getTaskMessages, submitMessage } from '@/lib/api'
-import { MESSAGE_ROLES } from '@/lib/constants'
+import { getTaskMessages, submitMessage, type TaskMessage } from '@/lib/api'
+import { AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -12,6 +12,13 @@ import { type ChatMessage, useChatStore } from '@/stores/chat'
 export type { ChatMessage }
 
 const INITIAL_MESSAGE_LIMIT = 60
+
+function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
+  if (message.role === MESSAGE_ROLES.USER) return true
+  if (message.role !== MESSAGE_ROLES.AGENT) return false
+  if (message.session_id !== primarySessionId) return true
+  return !message.agent_type || message.agent_type === AGENT_TYPES.Orchestrator
+}
 
 export function useChatStream(
   taskId: string,
@@ -24,14 +31,18 @@ export function useChatStream(
   const session = store.getSession(sessionId)
 
   const connectToStream = useCallback(
-    (messageId: string) => {
+    (
+      messageId: string,
+      streamSessionId: string = sessionId,
+      streamAgentType: AgentType = agentType,
+    ) => {
       abortRef.current?.abort()
 
-      store.streamStart(sessionId, agentType)
+      store.streamStart(sessionId, streamAgentType)
 
       const controller = connectSSE({
         url: `/api/tasks/${taskId}/stream`,
-        params: { session_id: sessionId, message_id: messageId },
+        params: { session_id: streamSessionId, message_id: messageId },
         reconnect: true,
         onEvent: (event: StreamEvent) => {
           switch (event.type) {
@@ -265,7 +276,11 @@ export function useChatStream(
           agent_type: agentType,
         })
 
-        connectToStream(result.message_id)
+        connectToStream(
+          result.message_id,
+          result.session_id ?? sessionId,
+          result.agent_type as AgentType,
+        )
       } catch (err) {
         store.streamError(sessionId, err instanceof Error ? err : new Error('发送失败'))
       }
@@ -281,18 +296,19 @@ export function useChatStream(
     getTaskMessages(taskId, {
       limit: INITIAL_MESSAGE_LIMIT,
       sessionId: options.includeTaskMessages ? undefined : sessionId,
+      mode: options.includeTaskMessages ? 'group' : undefined,
+      primarySessionId: options.includeTaskMessages ? sessionId : undefined,
     })
       .then((res) => {
         if (cancelled || res.data.length === 0) return
         const visibleRows = options.includeTaskMessages
-          ? res.data.filter((m) =>
-              m.session_id === sessionId
-                ? m.role !== 'agent' || !m.agent_type || m.agent_type === agentType
-                : m.role === 'agent',
-            )
+          ? res.data.filter((m) => isVisibleGroupMessage(m, sessionId))
           : res.data
         const streaming = res.data.find(
-          (m) => m.session_id === sessionId && m.role === 'agent' && m.status === 'streaming',
+          (m) =>
+            m.role === 'agent' &&
+            m.status === 'streaming' &&
+            (!options.includeTaskMessages || isVisibleGroupMessage(m, sessionId)),
         )
         const historyRows = streaming
           ? visibleRows.filter((m) => m.message_id !== streaming.message_id)
@@ -312,7 +328,11 @@ export function useChatStream(
         store.loadHistory(sessionId, chatMessages, res.has_more)
 
         if (streaming && streaming.message_id) {
-          connectToStream(streaming.message_id)
+          connectToStream(
+            streaming.message_id,
+            streaming.session_id || sessionId,
+            (streaming.agent_type as AgentType | undefined) ?? agentType,
+          )
         }
       })
       .catch(() => {

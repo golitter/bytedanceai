@@ -22,6 +22,7 @@ docs/
 - [04-soul-md-identity-document.md](design/04-soul-md-identity-document.md) — SOUL.md 身份文档
 - [06-contacts-pin-leave-group.md](design/06-contacts-pin-leave-group.md) — 通讯录 + 置顶会话 + 退出群聊
 - [07-skills-hub-external-skills.md](design/07-skills-hub-external-skills.md) — SkillsHub 内置与外置 Skills 架构
+- [09-agent-routing-and-dispatch.md](design/09-agent-routing-and-dispatch.md) — Agent 路由与 Orchestrator 自动分派
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明

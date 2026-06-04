@@ -34,6 +34,11 @@ OUTPUT_MAP = {
         "typescript": ROOT / "frontend" / "src" / "generated" / "response.ts",
         "go": ROOT / "backend" / "internal" / "generated" / "response.go",
     },
+    "agent-routing": {
+        "python": ROOT / "agentend" / "src" / "generated" / "agent_routing.py",
+        "typescript": ROOT / "frontend" / "src" / "generated" / "agent-routing.ts",
+        "go": ROOT / "backend" / "internal" / "generated" / "agent_routing.go",
+    },
     "session-state": {
         "python": ROOT / "agentend" / "src" / "generated" / "session.py",
         "typescript": ROOT / "frontend" / "src" / "generated" / "session.ts",

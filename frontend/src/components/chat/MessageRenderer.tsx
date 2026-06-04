@@ -108,6 +108,9 @@ export function MessageRenderer({
             sessionId: msg.sessionId,
             agentType: resolvedAgentType,
             agentName: initialAgentName ?? '',
+            routeId: initialAgentName ?? resolvedAgentType,
+            mentionLabel: initialAgentName ?? resolvedAgentType,
+            avatarUrl: undefined,
           }
         : undefined)
     const displayAgentName =

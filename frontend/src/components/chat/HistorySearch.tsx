@@ -13,6 +13,10 @@ interface SearchResult {
   matchIndex: number
 }
 
+function blockSearchContent(block: NonNullable<ChatMessage['blocks']>[number]): string {
+  return 'content' in block && typeof block.content === 'string' ? block.content : ''
+}
+
 function searchMessages(messages: ChatMessage[], query: string): SearchResult[] {
   const lower = query.toLowerCase()
   const results: SearchResult[] = []
@@ -28,12 +32,7 @@ function searchMessages(messages: ChatMessage[], query: string): SearchResult[] 
     // Check block.content
     if (msg.blocks) {
       for (const block of msg.blocks) {
-        const blockContent =
-          block.type === 'text'
-            ? ((block as { content?: string }).content ?? '')
-            : block.type === 'code'
-              ? ((block as { content?: string }).content ?? '')
-              : ''
+        const blockContent = blockSearchContent(block)
         const blockIdx = blockContent.toLowerCase().indexOf(lower)
         if (blockIdx >= 0) {
           results.push({ message: msg, snippet: blockContent, matchIndex: blockIdx })
@@ -100,7 +99,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
   const [results, setResults] = useState<SearchResult[]>([])
   const [totalMatchCount, setTotalMatchCount] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const doSearch = useCallback(
     (q: string) => {
@@ -119,12 +118,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
         if (msg.content.toLowerCase().includes(lower)) total++
         else if (msg.blocks) {
           for (const block of msg.blocks) {
-            const bc =
-              block.type === 'text'
-                ? ((block as { content?: string }).content ?? '')
-                : block.type === 'code'
-                  ? ((block as { content?: string }).content ?? '')
-                  : ''
+            const bc = blockSearchContent(block)
             if (bc.toLowerCase().includes(lower)) {
               total++
               break

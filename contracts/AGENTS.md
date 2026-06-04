@@ -10,6 +10,7 @@ contracts/
 │   ├── event-types.yaml              #   SSE 事件类型（init/text/tool_call/tool_result/artifact/planning/done/error）+ StreamEvent
 │   ├── agent-request.yaml            #   Agent 请求协议（AgentType 枚举 + 请求结构）
 │   ├── agent-response.yaml           #   Agent 响应协议（session_id + content + artifacts + usage）
+│   ├── agent-routing.yaml            #   Agent 路由协议（route_id + RunTask 路由响应 + group messages query）
 │   ├── session-state.yaml            #   会话状态机（idle/running/completed/interrupted/error/inactive + 合法转换）
 │   ├── message.yaml                  #   持久化消息（role: user/agent + status: streaming/completed/failed + Redis Stream 追踪）
 │   └── validate-repo-path.yaml       #   Repo 路径验证协议（请求/响应结构）
@@ -32,7 +33,10 @@ contracts/
 | event-types.yaml | `agentend/src/generated/events.py` | `frontend/src/generated/events.ts` | `backend/internal/generated/events.go` |
 | agent-request.yaml | `agentend/src/generated/request.py` | `frontend/src/generated/request.ts` | `backend/internal/generated/request.go` |
 | agent-response.yaml | `agentend/src/generated/response.py` | `frontend/src/generated/response.ts` | `backend/internal/generated/response.go` |
+| agent-routing.yaml | `agentend/src/generated/agent_routing.py` | `frontend/src/generated/agent-routing.ts` | `backend/internal/generated/agent_routing.go` |
 | session-state.yaml | `agentend/src/generated/session.py` | `frontend/src/generated/session.ts` | `backend/internal/generated/session.go` |
+| message.yaml | `agentend/src/generated/message.py` | `frontend/src/generated/message.ts` | `backend/internal/generated/message.go` |
+| validate-repo-path.yaml | `agentend/src/generated/validate_repo_path.py` | `frontend/src/generated/validate-repo-path.ts` | `backend/internal/generated/validate_repo_path.go` |
 
 ## 变更日志格式
 

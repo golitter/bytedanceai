@@ -1,3 +1,4 @@
+import type { RunTaskRequest, RunTaskResponse } from '@/generated/agent-routing'
 import type { AgentType } from '@/generated/request'
 import { AGENT_TYPES, API_BASE } from '@/lib/constants'
 
@@ -37,6 +38,9 @@ export interface Session {
   task_id: string
   agent_type: AgentType
   agent_name?: string
+  route_id?: string
+  mention_label?: string
+  aliases?: string[]
   avatar_url?: string
   status: string
   created_at: string
@@ -98,6 +102,9 @@ export interface AgentSessionInfo {
   sessionId: string
   agentType: AgentType
   agentName: string
+  routeId: string
+  mentionLabel: string
+  aliases?: string[]
   avatarUrl?: string
 }
 
@@ -153,6 +160,9 @@ export async function fetchConversations(): Promise<Conversation[]> {
           sessionId: s.session_id,
           agentType: s.agent_type,
           agentName: s.agent_name || s.agent_type,
+          routeId: s.route_id || s.agent_name || s.agent_type,
+          mentionLabel: s.mention_label || s.route_id || s.agent_name || s.agent_type,
+          aliases: s.aliases,
           avatarUrl: s.avatar_url || undefined,
         })),
       })
@@ -239,6 +249,9 @@ export async function createConversation(
           sessionId: s.session_id,
           agentType: s.agent_type,
           agentName: s.agent_name || s.agent_type,
+          routeId: s.route_id || s.agent_name || s.agent_type,
+          mentionLabel: s.mention_label || s.route_id || s.agent_name || s.agent_type,
+          aliases: s.aliases,
           avatarUrl: s.avatar_url || undefined,
         }))
       : undefined,
@@ -263,8 +276,8 @@ export interface TaskMessage {
 // Submit a message and get back the agent message_id for streaming
 export async function submitMessage(
   taskId: string,
-  body: { message: string; session_id: string; agent_type?: string },
-): Promise<{ message_id: string; status: string }> {
+  body: RunTaskRequest,
+): Promise<RunTaskResponse> {
   const res = await fetch(`${API_BASE}/tasks/${taskId}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -302,12 +315,20 @@ export interface TaskMessagesResponse {
 
 export async function getTaskMessages(
   taskId: string,
-  params?: { limit?: number; before?: number; sessionId?: string },
+  params?: {
+    limit?: number
+    before?: number
+    sessionId?: string
+    mode?: 'group'
+    primarySessionId?: string
+  },
 ): Promise<TaskMessagesResponse> {
   const searchParams = new URLSearchParams()
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.before) searchParams.set('before', String(params.before))
   if (params?.sessionId) searchParams.set('session_id', params.sessionId)
+  if (params?.mode) searchParams.set('mode', params.mode)
+  if (params?.primarySessionId) searchParams.set('primary_session_id', params.primarySessionId)
   const qs = searchParams.toString()
   const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
   const res = await fetch(url)

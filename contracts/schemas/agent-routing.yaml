@@ -1,0 +1,126 @@
+# Agent 路由与 RunTask 响应契约
+# 定义群聊 mention 路由、RunTask 路由结果、群聊消息查询参数
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "agent-routing.yaml"
+title: "AgentRouting"
+
+definitions:
+  RouteMode:
+    title: "RouteMode"
+    type: string
+    description: "消息路由模式"
+    enum:
+      - direct        # 显式 @ 单个非 Orchestrator Agent，直达目标 Agent
+      - orchestrator  # 群聊自动编排，交给 Orchestrator
+      - unchanged     # 单聊或内部 dispatch，保持请求中的 session/agent
+
+  AgentRoute:
+    title: "AgentRoute"
+    type: object
+    description: "Agent 路由身份，供 Backend Router、Frontend mention 菜单、Orchestrator config 共用"
+    properties:
+      session_id:
+        type: string
+        description: "DB 真实 session_id"
+      agent_type:
+        type: string
+        description: "Agent 类型，如 claude-code / opencode / orchestrator / codex"
+      agent_name:
+        type: string
+        description: "Agent 展示名称，可为空字符串"
+      route_id:
+        type: string
+        description: "后端生成的唯一路由 ID，用于 mention 解析和 Orchestrator agents[].id"
+      mention_label:
+        type: string
+        description: "前端插入 @ 时使用的展示标签"
+      aliases:
+        type: array
+        description: "可匹配别名；只有唯一命中时可用于路由"
+        items:
+          type: string
+    required:
+      - session_id
+      - agent_type
+      - agent_name
+      - route_id
+      - mention_label
+
+  RunTaskRequest:
+    title: "RunTaskRequest"
+    type: object
+    description: "Backend POST /tasks/:taskId/run 请求体"
+    properties:
+      message:
+        type: string
+        description: "用户发送给 Agent 的消息。显式直达时，Backend 可去掉开头 @ 路由前缀后再转发给 AgentEnd"
+      session_id:
+        type: string
+        description: "请求发起时的当前 session_id；路由后可能被 Backend 改写为实际执行 session"
+      agent_type:
+        type: string
+        description: "请求发起时的 Agent 类型；路由后可能被 Backend 改写为实际执行 Agent 类型"
+      cwd:
+        type: string
+        description: "Agent 执行目录，主要供 Orchestrator 内部分派子 Agent 时使用"
+      skip_user_message:
+        type: boolean
+        default: false
+        description: "内部 dispatch 标记；为 true 时 Backend 不保存 user 消息，也不进行 mention 路由"
+    required:
+      - message
+      - session_id
+
+  RunTaskResponse:
+    title: "RunTaskResponse"
+    type: object
+    description: "Backend POST /tasks/:taskId/run 响应体 data"
+    properties:
+      message_id:
+        type: string
+        description: "本次 Agent 回复的持久化 message_id，用于 SSE 订阅和断线重连"
+      status:
+        type: string
+        description: "流式状态，当前为 streaming"
+      session_id:
+        type: string
+        description: "实际执行并产生 SSE 的 session_id"
+      agent_type:
+        type: string
+        description: "实际执行的 Agent 类型"
+      agent_name:
+        type: string
+        description: "实际执行的 Agent 名称，可为空字符串"
+      route_id:
+        type: string
+        description: "实际命中的 route_id，可为空字符串"
+      route_mode:
+        $ref: "#/definitions/RouteMode"
+        description: "实际路由模式"
+    required:
+      - message_id
+      - status
+      - session_id
+      - agent_type
+      - route_mode
+
+  GroupMessagesQuery:
+    title: "GroupMessagesQuery"
+    type: object
+    description: "Backend GET /tasks/:taskId/messages 的群聊查询参数约定"
+    properties:
+      mode:
+        type: string
+        description: "传 group 时按群聊可见性返回消息"
+      primary_session_id:
+        type: string
+        description: "群聊主 session，通常为 Orchestrator session；用于避免镜像子 Agent 消息重复显示"
+      session_id:
+        type: string
+        description: "非 group 模式下的单 session 过滤参数"
+      limit:
+        type: number
+        description: "分页条数"
+      before:
+        type: number
+        description: "向前分页游标，使用消息表自增 id"

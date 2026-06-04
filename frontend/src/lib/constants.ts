@@ -57,7 +57,7 @@ export const PROJECT_META = {
 } as const
 
 // Set of statuses that indicate an active/streaming state
-export const ACTIVE_STATUSES = new Set([
+export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
   CHAT_STATUSES.LOADING,
   CHAT_STATUSES.STREAMING,
   CHAT_STATUSES.TOOL_RUNNING,

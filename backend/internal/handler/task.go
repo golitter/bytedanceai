@@ -142,18 +142,36 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		agentMap[a.SessionID] = a
 	}
 
+	enrichedSessions := make([]model.Session, 0, len(sessions))
+	for _, s := range sessions {
+		if a, ok := agentMap[s.SessionID]; ok {
+			s.AgentType = a.AgentType
+			s.AgentName = a.AgentName
+		}
+		enrichedSessions = append(enrichedSessions, s)
+	}
+	routeAgents := buildRouteAgents(enrichedSessions)
+	routeMap := make(map[string]routeAgent, len(routeAgents))
+	for _, routeAgent := range routeAgents {
+		routeMap[routeAgent.SessionID] = routeAgent
+	}
+
 	type SessionWithAgent struct {
 		model.Session
-		AgentType string `json:"agent_type"`
-		AgentName string `json:"agent_name"`
-		AvatarURL string `json:"avatar_url,omitempty"`
+		AgentType    string   `json:"agent_type"`
+		AgentName    string   `json:"agent_name"`
+		AvatarURL    string   `json:"avatar_url,omitempty"`
+		RouteID      string   `json:"route_id"`
+		MentionLabel string   `json:"mention_label"`
+		Aliases      []string `json:"aliases,omitempty"`
 	}
 	var result []SessionWithAgent
-	for _, s := range sessions {
-		swa := SessionWithAgent{Session: s}
-		if a, ok := agentMap[s.SessionID]; ok {
-			swa.AgentType = a.AgentType
-			swa.AgentName = a.AgentName
+	for _, s := range enrichedSessions {
+		swa := SessionWithAgent{Session: s, AgentType: s.AgentType, AgentName: s.AgentName}
+		if r, ok := routeMap[s.SessionID]; ok {
+			swa.RouteID = r.RouteID
+			swa.MentionLabel = r.MentionLabel
+			swa.Aliases = r.Aliases
 		}
 		// Prefer avatar from sessions table (updated by UpdateSession)
 		if s.AvatarURL != "" {
@@ -318,8 +336,20 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		agentType = "claude-code"
 	}
 
+	var sessions []model.Session
+	db.GetDB().Where("task_id = ?", taskID).Find(&sessions)
+	route, err := resolveMessageRoute(req, sessions)
+	if err != nil {
+		vo.BadRequest(c, err.Error())
+		return
+	}
+	req.SessionID = route.SessionID
+	req.AgentType = route.AgentType
+	req.Message = route.AgentMessage
+	agentType = route.AgentType
+
 	// Save user message (skip for internal orchestrator dispatches)
-	if err := h.createUserMessage(taskID, &req); err != nil {
+	if err := h.createUserMessage(taskID, &req, route.DisplayMessage); err != nil {
 		vo.InternalError(c, "failed to save user message")
 		return
 	}
@@ -331,7 +361,10 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 	}
 
 	// Look up agent name from session
-	agentName := h.getAgentName(req.SessionID)
+	agentName := route.AgentName
+	if agentName == "" {
+		agentName = h.getAgentName(req.SessionID)
+	}
 
 	// Create agent message with streaming status
 	messageID, err := h.createAgentMessage(taskID, &req, agentType, agentName)
@@ -349,12 +382,17 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 	vo.Accepted(c, gin.H{
 		"message_id": messageID,
 		"status":     "streaming",
+		"session_id": req.SessionID,
+		"agent_type": agentType,
+		"agent_name": agentName,
+		"route_id":   route.RouteID,
+		"route_mode": route.Mode,
 	})
 }
 
 // createUserMessage saves the user message to the Message table.
 // Skipped for internal orchestrator dispatches (req.SkipUserMessage == true).
-func (h *TaskHandler) createUserMessage(taskID string, req *RunTaskReq) error {
+func (h *TaskHandler) createUserMessage(taskID string, req *RunTaskReq, displayMessage string) error {
 	if req.SkipUserMessage {
 		return nil
 	}
@@ -363,7 +401,7 @@ func (h *TaskHandler) createUserMessage(taskID string, req *RunTaskReq) error {
 		TaskID:    taskID,
 		SessionID: req.SessionID,
 		Role:      "user",
-		Content:   req.Message,
+		Content:   displayMessage,
 	}
 	return db.GetDB().Create(&userMsg).Error
 }
@@ -462,16 +500,12 @@ func (h *TaskHandler) injectOrchestratorConfig(agentReq *generated.AgentRequest,
 	db.GetDB().Model(&model.Session{}).Where("session_id = ?", req.SessionID).Pluck("soul_md", &orchestratorSoul)
 
 	var agents []map[string]interface{}
-	for _, s := range siblings {
-		agentID := s.AgentName
-		if agentID == "" {
-			agentID = s.AgentType
-		}
+	for _, agent := range buildRouteAgents(siblings) {
 		agents = append(agents, map[string]interface{}{
-			"id":         agentID,
-			"type":       s.AgentType,
-			"session_id": s.SessionID,
-			"name":       agentID,
+			"id":         agent.RouteID,
+			"type":       agent.AgentType,
+			"session_id": agent.SessionID,
+			"name":       agent.MentionLabel,
 		})
 	}
 	config := map[string]interface{}{
