@@ -260,71 +260,8 @@ export function AgentProfilePage() {
           <AgentMeta detail={detail} />
         </section>
 
-        {/* Skills */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
-              Skills
-            </h2>
-            <span className="text-[11px] text-tertiary">{detail.skills.length} 个技能</span>
-          </div>
-          {detail.skills.length > 0 ? (
-            <div className="space-y-2">
-              {detail.skills.map((s) => (
-                <div key={s.name} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <SkillCard skill={s} />
-                  </div>
-                  {!s.builtin && isAdapterAgent && (
-                    <button
-                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,opacity] hover:bg-destructive/20"
-                      title="移除 Skill"
-                      onClick={async () => {
-                        try {
-                          await removeSkill(s.name, sessionId)
-                          await queryClient.invalidateQueries({
-                            queryKey: ['agent-detail', sessionId],
-                          })
-                        } catch {
-                          /* ignore */
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-tertiary">暂无技能</p>
-          )}
-          {isAdapterAgent && (
-            <button
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] border border-dashed border-border py-2.5 text-[12px] text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary hover:bg-primary/8"
-              onClick={() => setShowImportDialog(true)}
-            >
-              <Plus className="h-4 w-4" />
-              导入外部 Skill
-            </button>
-          )}
-        </section>
-
-        {/* Import Dialog */}
-        {showImportDialog && (
-          <ImportSkillDialog
-            sessionId={sessionId}
-            currentSkills={detail.skills.map((s) => s.name)}
-            onClose={() => setShowImportDialog(false)}
-            onImported={() => {
-              queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
-              setShowImportDialog(false)
-            }}
-          />
-        )}
-
         {/* SOUL.md */}
-        <section className="mt-6">
+        <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
               SOUL.md
@@ -408,6 +345,69 @@ export function AgentProfilePage() {
             </button>
           )}
         </section>
+
+        {/* Skills */}
+        <section className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
+              Skills
+            </h2>
+            <span className="text-[11px] text-tertiary">{detail.skills.length} 个技能</span>
+          </div>
+          {detail.skills.length > 0 ? (
+            <div className="space-y-2">
+              {detail.skills.map((s) => (
+                <div key={s.name} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SkillCard skill={s} />
+                  </div>
+                  {!s.builtin && isAdapterAgent && (
+                    <button
+                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,opacity] hover:bg-destructive/20"
+                      title="移除 Skill"
+                      onClick={async () => {
+                        try {
+                          await removeSkill(s.name, sessionId)
+                          await queryClient.invalidateQueries({
+                            queryKey: ['agent-detail', sessionId],
+                          })
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-tertiary">暂无技能</p>
+          )}
+          {isAdapterAgent && (
+            <button
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] border border-dashed border-border py-2.5 text-[12px] text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary hover:bg-primary/8"
+              onClick={() => setShowImportDialog(true)}
+            >
+              <Plus className="h-4 w-4" />
+              导入外部 Skill
+            </button>
+          )}
+        </section>
+
+        {/* Import Dialog */}
+        {showImportDialog && (
+          <ImportSkillDialog
+            sessionId={sessionId}
+            currentSkills={detail.skills.map((s) => s.name)}
+            onClose={() => setShowImportDialog(false)}
+            onImported={() => {
+              queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
+              setShowImportDialog(false)
+            }}
+          />
+        )}
       </div>
     </div>
   )
