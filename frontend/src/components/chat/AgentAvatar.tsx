@@ -54,7 +54,7 @@ export function AgentAvatar({
 
   const imgSrc =
     avatarUrl ||
-    (sessionId ? diceBearUrl(sessionId) : agentName ? diceBearUrl(agentName) : undefined)
+    (agentName ? diceBearUrl(agentName) : sessionId ? diceBearUrl(sessionId) : undefined)
   const sizeClass = SIZE_CLASSES[size]
   const sizeStyle = sizeClass ? {} : { width: size, height: size }
 
