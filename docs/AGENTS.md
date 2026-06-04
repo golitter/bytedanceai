@@ -50,6 +50,7 @@ docs/
 - [contracts.md](prompts/contracts.md) — 契约层 prompt
 - [前端设计.md](prompts/前端设计.md) — 前端设计 prompt
 - [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
+- [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
 
 ### payloads/
