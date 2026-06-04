@@ -5,28 +5,13 @@ import { useState } from 'react'
 import { type Conversation, deleteAdminSessions, fetchConversations } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  running: {
-    bg: 'color-mix(in srgb, var(--color-success) 10%, transparent)',
-    text: 'var(--color-success)',
-  },
-  streaming: {
-    bg: 'color-mix(in srgb, var(--color-success) 10%, transparent)',
-    text: 'var(--color-success)',
-  },
-  loading: {
-    bg: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
-    text: 'var(--color-warning)',
-  },
-  done: {
-    bg: 'color-mix(in srgb, var(--color-brand) 10%, transparent)',
-    text: 'var(--color-brand)',
-  },
-  error: {
-    bg: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-    text: 'var(--color-error)',
-  },
-  idle: { bg: 'var(--bg-hover)', text: 'var(--text-secondary)' },
+const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
+  running: { bg: 'bg-success/10', text: 'text-success' },
+  streaming: { bg: 'bg-success/10', text: 'text-success' },
+  loading: { bg: 'bg-warning/10', text: 'text-warning' },
+  done: { bg: 'bg-primary/10', text: 'text-primary' },
+  error: { bg: 'bg-destructive/10', text: 'text-destructive' },
+  idle: { bg: 'bg-hover', text: 'text-text-secondary' },
 }
 
 export function SessionCleanupPage() {
@@ -128,10 +113,7 @@ export function SessionCleanupPage() {
           </thead>
           <tbody>
             {filtered.map((s) => {
-              const sc = STATUS_COLORS[s.status] ?? {
-                bg: 'var(--bg-hover)',
-                text: 'var(--text-secondary)',
-              }
+              const sc = STATUS_CLASSES[s.status] ?? { bg: 'bg-hover', text: 'text-text-secondary' }
               return (
                 <tr key={s.sessionId} className="border-b border-border">
                   <td className="px-3 py-2">
@@ -150,8 +132,11 @@ export function SessionCleanupPage() {
                   <td className="px-3 py-2 text-text-secondary">{s.taskTitle}</td>
                   <td className="px-3 py-2">
                     <span
-                      className="inline-block rounded-full px-2 py-0.5 text-[11px]"
-                      style={{ background: sc.bg, color: sc.text }}
+                      className={cn(
+                        'inline-block rounded-full px-2 py-0.5 text-[11px]',
+                        sc.bg,
+                        sc.text,
+                      )}
                     >
                       {s.status}
                     </span>

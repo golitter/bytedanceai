@@ -173,7 +173,7 @@ export function PlanReviewCard({
     <div className="my-2 overflow-hidden rounded-[10px] border border-agent-orchestrator/20 bg-card">
       <div className="flex items-center gap-2 border-b border-border bg-agent-orchestrator/5 px-4 py-3">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-agent-orchestrator/10 text-agent-orchestrator">
-          <PencilLine className="h-4 w-4" strokeWidth={1.5} />
+          <PencilLine className="h-4 w-4" strokeWidth={1.25} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-agent-orchestrator">{title}</div>

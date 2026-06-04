@@ -277,7 +277,7 @@ export function AgentProfilePage() {
                   </div>
                   {!s.builtin && isAdapterAgent && (
                     <button
-                      className="shrink-0 rounded-[6px] border border-red-500/20 bg-red-500/10 p-1.5 text-red-500 transition-[transform,opacity] hover:bg-red-500/20"
+                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,opacity] hover:bg-destructive/20"
                       title="移除 Skill"
                       onClick={async () => {
                         try {
@@ -511,7 +511,7 @@ function ImportSkillDialog({
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="white"
-                      strokeWidth="3"
+                      strokeWidth={2.5}
                       className="h-2.5 w-2.5"
                     >
                       <polyline points="20 6 9 17 4 12" />
@@ -535,7 +535,7 @@ function ImportSkillDialog({
             取消
           </button>
           <button
-            className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground disabled:opacity-50"
             onClick={handleImport}
             disabled={loading || selected.size === 0}
           >

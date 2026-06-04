@@ -129,7 +129,7 @@ export function ContactsPage() {
                   >
                     <ChevronRight
                       className={cn('h-3 w-3 transition-transform', isExpanded ? 'rotate-90' : '')}
-                      strokeWidth={1.5}
+                      strokeWidth={1.25}
                     />
                     📁 {group.name}
                     <span className="rounded-full bg-muted px-1.5 text-[10px] font-normal text-tertiary">
@@ -257,7 +257,7 @@ export function ContactsPage() {
         >
           <Globe className="h-4 w-4" />
           GitHub
-          <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
+          <ExternalLink className="h-3 w-3" strokeWidth={1.25} />
         </a>
 
         {/* Logo */}
@@ -339,7 +339,7 @@ function ContactCard({
           <div className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
             {conv.pinnedAt && (
-              <Pin className="h-3 w-3 shrink-0 -rotate-45 text-primary" strokeWidth={1.5} />
+              <Pin className="h-3 w-3 shrink-0 -rotate-45 text-primary" strokeWidth={1.25} />
             )}
           </div>
           <p className="truncate text-xs text-tertiary">

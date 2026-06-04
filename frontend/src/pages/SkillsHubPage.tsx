@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Star, Trash2, Upload } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Package,
+  Search,
+  Shield,
+  Star,
+  Trash2,
+  Upload,
+  Wrench,
+  XCircle,
+} from 'lucide-react'
+import { type ReactNode, useCallback, useRef, useState } from 'react'
 
 import { confirmSkill, deleteSkill, fetchSkills, type SkillHubItem, uploadSkill } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -51,7 +62,7 @@ export function SkillsHubPage() {
           技能库
         </h2>
         <button
-          className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-3.5 py-2 text-[12px] font-medium text-white transition-[transform,opacity] hover:bg-primary/90"
+          className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-3.5 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,opacity] hover:bg-primary/90"
           onClick={() => setShowUpload(true)}
         >
           <Upload className="h-3.5 w-3.5" />
@@ -80,13 +91,23 @@ export function SkillsHubPage() {
         ) : (
           <>
             {/* Builtin Section */}
-            {builtins.length > 0 && <SectionLabel icon="🛡️" label="内置 Skills" />}
+            {builtins.length > 0 && (
+              <SectionLabel
+                icon={<Shield className="h-3.5 w-3.5" strokeWidth={1.25} />}
+                label="内置 Skills"
+              />
+            )}
             {builtins.map((skill) => (
               <HubSkillCard key={skill.name} skill={skill} onDelete={undefined} />
             ))}
 
             {/* External Section */}
-            {externals.length > 0 && <SectionLabel icon="📦" label="外部 Skills" />}
+            {externals.length > 0 && (
+              <SectionLabel
+                icon={<Package className="h-3.5 w-3.5" strokeWidth={1.25} />}
+                label="外部 Skills"
+              />
+            )}
             {externals.map((skill) => (
               <HubSkillCard
                 key={skill.name}
@@ -132,10 +153,10 @@ export function SkillsHubPage() {
 
 // ── Section Label ──
 
-function SectionLabel({ icon, label }: { icon: string; label: string }) {
+function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <div className="mb-1.5 mt-4 flex items-center gap-1.5 px-0.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-tertiary first:mt-0">
-      <span>{icon}</span>
+      {icon}
       {label}
     </div>
   )
@@ -153,7 +174,11 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
             skill.builtin ? 'bg-success/10' : 'bg-primary/10',
           )}
         >
-          {skill.builtin ? '⚙️' : '📦'}
+          {skill.builtin ? (
+            <Wrench className="h-4 w-4" strokeWidth={1.25} />
+          ) : (
+            <Package className="h-4 w-4" strokeWidth={1.25} />
+          )}
         </div>
         <span className="flex-1 text-[14px] font-semibold">{skill.name}</span>
         <span
@@ -173,7 +198,7 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
           <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
           {onDelete && (
             <button
-              className="inline-flex items-center gap-1 rounded-[6px] border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-500 transition-[transform,opacity] hover:bg-red-500/20"
+              className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,opacity] hover:bg-destructive/20"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()
@@ -282,7 +307,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               if (file) handleFile(file)
             }}
           >
-            <span className="mb-2 text-3xl opacity-60">📦</span>
+            <span className="mb-2 opacity-60">
+              <Package className="h-8 w-8" strokeWidth={1.25} />
+            </span>
             <p className="text-[13px] font-medium text-foreground">点击或拖拽上传 .zip 文件</p>
             <p className="mt-1 text-[11px] text-tertiary">
               支持 .zip 格式，解压后不超过 10MB，文件数不超过 100
@@ -301,8 +328,10 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         )}
 
         {validation && !validation.valid && (
-          <div className="mt-4 rounded-[8px] border border-red-500/20 bg-red-500/5 p-3.5">
-            <p className="mb-2 text-[13px] font-semibold text-red-500">❌ 校验失败</p>
+          <div className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 p-3.5">
+            <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-destructive">
+              <XCircle className="h-4 w-4" strokeWidth={1.25} /> 校验失败
+            </p>
             {validation.errors?.map((err, i) => (
               <p key={i} className="text-[12px] text-text-secondary">
                 ✗ {err}
@@ -314,7 +343,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         {step === 'validate' && validation?.valid && (
           <>
             <div className="mt-4 rounded-[8px] border border-success/20 bg-success/5 p-3.5">
-              <p className="mb-2 text-[13px] font-semibold text-success">✅ 校验通过</p>
+              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-success">
+                <CheckCircle2 className="h-4 w-4" strokeWidth={1.25} /> 校验通过
+              </p>
               <p className="text-[12px] text-text-secondary">✓ SKILL.md 存在</p>
               <p className="text-[12px] text-text-secondary">
                 ✓ frontmatter: name={validation.name}
@@ -347,7 +378,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
           </button>
           {step === 'validate' && (
             <button
-              className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-white transition-[transform,opacity] hover:bg-primary/90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,opacity] hover:bg-primary/90 disabled:opacity-50"
               onClick={handleConfirm}
               disabled={uploading || !confirmName.trim()}
             >
@@ -383,11 +414,13 @@ function DeleteConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 text-[15px] font-semibold">
-          <span className="mr-1.5 text-amber-500">⚠️</span>
+          <span className="mr-1.5 text-amber-500">
+            <AlertTriangle className="h-4 w-4 inline" strokeWidth={1.25} />
+          </span>
           确认删除
         </h3>
         <p className="text-[13px] leading-relaxed text-text-secondary">
-          确定从技能库中删除 <span className="font-medium text-red-500">{name}</span>？
+          确定从技能库中删除 <span className="font-medium text-destructive">{name}</span>？
           <br />
           <span className="text-tertiary">
             此操作仅删除技能库中的源文件，<span className="text-foreground">不影响</span>
@@ -402,7 +435,7 @@ function DeleteConfirmDialog({
             取消
           </button>
           <button
-            className="rounded-[8px] border border-red-500/20 bg-red-500/10 px-4 py-2 text-[12px] font-medium text-red-500 transition-[transform,opacity] hover:bg-red-500/20 disabled:opacity-50"
+            className="rounded-[8px] border border-destructive/20 bg-destructive/10 px-4 py-2 text-[12px] font-medium text-destructive transition-[transform,opacity] hover:bg-destructive/20 disabled:opacity-50"
             onClick={onConfirm}
             disabled={loading}
           >

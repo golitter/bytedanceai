@@ -193,7 +193,7 @@ export function RightSidebar({
           onClick={onExpand}
           title="展开侧栏"
         >
-          <PanelRightOpen className="h-4 w-4" strokeWidth={1.5} />
+          <PanelRightOpen className="h-4 w-4" strokeWidth={1.25} />
         </button>
       </div>
     )
@@ -230,7 +230,7 @@ export function RightSidebar({
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform ${pathsOpen ? 'rotate-90' : ''}`}
-                strokeWidth={1.5}
+                strokeWidth={1.25}
               />
               路径信息
             </button>
