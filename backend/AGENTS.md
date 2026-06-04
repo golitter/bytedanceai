@@ -9,15 +9,15 @@ cmd/server/main.go            # 入口
 configs/config.yaml           # 配置文件
 internal/
 ├── conf/                     # 配置加载
-├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, announcement, admin）
+├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, announcement, skill, contact_group, cascade, task_route, admin）
 ├── stream/                   # SSE 流式写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, admin_auth, cors, logger）
-├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement）
+├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement, skill, contact_group）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 ├── vo/                       # 统一响应封装
-├── controller/impl/          # （预留）
+├── controller/               # （预留）
 ├── dao/                      # DAO 层（gorm/, mock/）
-└── service/impl/             # （预留）
+└── service/                  # 业务逻辑（skill_validator）
 pkg/
 ├── db/                       # MySQL 单例连接
 ├── redis/                    # Redis 客户端

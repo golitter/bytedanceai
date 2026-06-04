@@ -18,6 +18,8 @@ bytedanceai/
 │   ├── guides/    #   操作指南
 │   ├── testing/   #   测试手册
 │   ├── bugfix/    #   历史缺陷修复记录
+│   ├── prompts/   #   Claude Code Skills prompt
+│   ├── payloads/  #   测试数据与 Demo
 │   └── common/    #   开发路线图（dev-plan）
 ├── scripts/       # 工程脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）

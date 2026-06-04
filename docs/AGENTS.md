@@ -12,7 +12,6 @@ docs/
 ├── testing/       # 测试    — 手动测试手册
 └── backlog/       # 接下来  — 待办、设计笔记
 ```
-
 ## 本目录文档索引
 
 ### design/
@@ -22,11 +21,13 @@ docs/
 - [04-soul-md-identity-document.md](design/04-soul-md-identity-document.md) — SOUL.md 身份文档
 - [06-contacts-pin-leave-group.md](design/06-contacts-pin-leave-group.md) — 通讯录 + 置顶会话 + 退出群聊
 - [07-skills-hub-external-skills.md](design/07-skills-hub-external-skills.md) — SkillsHub 内置与外置 Skills 架构
+- [08-skills-db-migration.md](design/08-skills-db-migration.md) — Skills 本地文件存储 → 数据库 blob 迁移
 - [09-agent-routing-and-dispatch.md](design/09-agent-routing-and-dispatch.md) — Agent 路由与 Orchestrator 自动分派
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
 - [codegraph-openspec.md](reference/codegraph-openspec.md) — CodeGraph 代码知识图谱 & OpenSpec SDD 工作流
+- [project-requirements.md](reference/project-requirements.md) — AgentHub 多 Agent 协作平台课题要求
 
 ### guides/
 - [git-conventions.md](guides/git-conventions.md) — Git 提交规范
@@ -34,18 +35,16 @@ docs/
 - [contract-layer.md](guides/contract-layer.md) — 契约层使用指南
 - [setup.md](guides/setup.md) — 环境搭建
 - [monorepo-setup.md](guides/monorepo-setup.md) — Monorepo 配置
-
 ### testing/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
-
 ### bugfix/
 - [multi-agent-message-split.md](bugfix/multi-agent-message-split.md) — 多 Agent 消息拆分修复
 - [message-history-latest-page.md](bugfix/message-history-latest-page.md) — 消息刷新后输出丢失修复
 - [orchestrator-streaming-hang.md](bugfix/orchestrator-streaming-hang.md) — Orchestrator 流式挂起修复
 - [sub-agent-message-persistence-bugs.md](bugfix/sub-agent-message-persistence-bugs.md) — 子 Agent 消息持久化修复
 - [orchestrator-echo-duplicate-messages.md](bugfix/orchestrator-echo-duplicate-messages.md) — 群聊消息重复存储 + 身份伪造修复
-
+- [sse-streaming-performance-and-rendering.md](bugfix/sse-streaming-performance-and-rendering.md) — SSE 流式输出性能优化 + 渲染修复
 ### prompts/
 - [autogit.md](prompts/autogit.md) — 自动 Git 提交
 - [contracts.md](prompts/contracts.md) — 契约层 prompt
@@ -53,23 +52,19 @@ docs/
 - [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
 - [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
-
 ### payloads/
 - [codediff-test.md](payloads/codediff-test.md) — CodeDiff 测试
 - [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — Orchestrator 测试场景
 - [plan-review-demo.html](payloads/plan-review-demo.html) — 规划审查前端 Demo
 - [contacts-pin-leave-demo.html](payloads/contacts-pin-leave-demo.html) — 通讯录 + 置顶 + 退出群聊 Demo
 - [skills-hub-demo.html](payloads/skills-hub-demo.html) — SkillsHub 技能库管理 Demo
-
 ### dev-plan/
-- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）
-- [TODO.md](common/dev-plan/TODO.md) — 未实现功能清单（17 项待收尾，5 项已完成）
+- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）+ [TODO.md](common/dev-plan/TODO.md)
 
 ## 子项目 docs/
 - [frontend/docs/](../frontend/docs/) — 前端设计、组件、数据流
 - [backend/docs/](../backend/docs/) — 后端实现方案、技术栈
 - [agentend/docs/](../agentend/docs/) — Agent 端架构、API 端点
-
 ## 新增规则
 1. 按内容语义放入对应分类，文件名 kebab-case
 2. 子项目文档放子项目 `docs/`，跨端文档放根 `docs/`；添加后在本索引补充条目

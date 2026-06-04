@@ -116,6 +116,7 @@ agentend/
 - [18-langsmith-trace.md](../design/18-langsmith-trace.md) — LangSmith LLM 调用可观测性
 - [19-skills-taskctl.md](../design/19-skills-taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
 - [20-planning-context-module.md](../design/20-planning-context-module.md) — Planning ToolMessage 结构化
+- [21-unpin-history-persistence.md](../design/21-unpin-history-persistence.md) — Pin 取消事件持久化 + save_mem_node 去重
 - [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/
