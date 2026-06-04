@@ -264,6 +264,60 @@ func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
 	return nil
 }
 
+// WorkspaceInfo represents a workspace returned by Agentend.
+type WorkspaceInfo struct {
+	ID           string `json:"id"`
+	TaskID       string `json:"task_id"`
+	AgentName    string `json:"agent_name"`
+	AgentType    string `json:"agent_type"`
+	RepoPath     string `json:"repo_path"`
+	WorktreePath string `json:"worktree_path"`
+	BranchName   string `json:"branch_name"`
+	SessionID    string `json:"session_id"`
+	Status       string `json:"status"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// ListWorkspaces calls Agentend to get all workspaces.
+func (c *Client) ListWorkspaces() ([]WorkspaceInfo, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/v1/workspace")
+	if err != nil {
+		return nil, fmt.Errorf("list workspaces: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list workspaces failed: status %d", resp.StatusCode)
+	}
+
+	var workspaces []WorkspaceInfo
+	if err := json.NewDecoder(resp.Body).Decode(&workspaces); err != nil {
+		return nil, fmt.Errorf("decode workspaces: %w", err)
+	}
+	return workspaces, nil
+}
+
+// CleanupWorkspace calls Agentend to cleanup a single workspace by ID.
+func (c *Client) CleanupWorkspace(workspaceID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/"+workspaceID, nil)
+	if err != nil {
+		return fmt.Errorf("create cleanup workspace request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cleanup workspace %s: %w", workspaceID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("workspace %s not found or already cleaned", workspaceID)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("cleanup workspace %s failed: status %d", workspaceID, resp.StatusCode)
+	}
+	return nil
+}
+
 // InstallSkill sends a zip archive to Agentend to install into the worktree.
 func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
 	req, err := http.NewRequest("POST",
