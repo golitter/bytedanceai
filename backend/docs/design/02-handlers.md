@@ -1,615 +1,389 @@
-# Handlers — HTTP 处理器
+# Controllers / Services / DAOs — 三层架构
 
 ## 实现了什么
 
-基于 Gin 框架实现了 10 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、Agent Profile、头像上传、SSE 流式订阅、Diff 快照、工作区代理和公告管理，构成完整的 RESTful API 层。
+基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 14 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
 
-## 怎么实现的
+## 架构概览
 
-### Task CRUD (`internal/handler/task.go`)
+```
+┌─────────────────────────────────────────────────────┐
+│ Controller (impl/)                                   │
+│  参数绑定 → Service 调用 → vo 响应 / handleBizError  │
+│  每个 Controller 持有一个 Service 接口               │
+├─────────────────────────────────────────────────────┤
+│ Service (impl/)                                      │
+│  纯业务逻辑，接收 DTO，返回业务结果或 BizError        │
+│  每个 Service 持有一个或多个 DAO 接口                 │
+├─────────────────────────────────────────────────────┤
+│ DAO (gorm/)                                          │
+│  纯数据访问，GORM 实现接口                            │
+│  可被 mock/ 替换用于 Service 单测                     │
+└─────────────────────────────────────────────────────┘
+```
 
-`TaskHandler` 通过闭包注入 `agentend_client.Client`，提供任务的创建、列表、详情、删除和运行。
+### 统一错误处理 (`internal/controller/impl/errors.go`)
 
-构造函数与请求结构体：
+Service 层通过 `BizError`（Code + Message）表达业务错误，Controller 层通过 `handleBizError` 统一映射：
 
 ```go
-type TaskHandler struct {
-	agentClient *agentend_client.Client
+type BizError struct {
+    Code    int
+    Message string
 }
 
-func NewTaskHandler(agentClient *agentend_client.Client) *TaskHandler {
-	return &TaskHandler{agentClient: agentClient}
-}
-
-type CreateTaskReq struct {
-	Title    string        `json:"title" binding:"required"`
-	RepoPath string        `json:"repo_path"`
-	Agents   []AgentConfig `json:"agents"`
+func handleBizError(c *gin.Context, err error) {
+    var bizErr *service.BizError
+    if errors.As(err, &bizErr) {
+        switch bizErr.Code {
+        case 400: vo.BadRequest(c, bizErr.Message)
+        case 401: vo.Unauthorized(c, bizErr.Message)
+        case 403: vo.Forbidden(c, bizErr.Message)
+        case 404: vo.NotFound(c, bizErr.Message)
+        case 409: vo.Conflict(c, bizErr.Message)
+        case 503: vo.ServiceUnavailable(c, bizErr.Message)
+        default:  vo.InternalError(c, bizErr.Message)
+        }
+        return
+    }
+    vo.InternalError(c, err.Error())
 }
 ```
 
-**CreateTask** — 在事务中创建 Task 并可选地同时创建 Session 和 SessionAgent：
+## Controller 层 (`internal/controller/impl/`)
+
+每个 Controller 通过构造函数创建 DAO → 组装 Service → 注入自身，实现 `RegisterRoutes(rg *gin.RouterGroup)` 自注册路由。
+
+### TaskController (`task_controller.go`)
 
 ```go
-func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var req CreateTaskReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		vo.BadRequest(c, "title is required")
-		return
-	}
-	var t model.Task
-	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
-		t = model.Task{
-			TaskID:   uuid.New().String(),
-			Title:    req.Title,
-			RepoPath: req.RepoPath,
-			Status:   "active",
-		}
-		if err := tx.Create(&t).Error; err != nil {
-			return err
-		}
-		for _, agent := range req.Agents {
-			sid := uuid.New().String()
-			s := model.Session{
-				SessionID: sid,
-				TaskID:    t.TaskID,
-				AgentType: agent.Type,
-				AgentName: agent.Name,
-				Status:    "active",
-			}
-			sa := model.SessionAgent{
-				SessionID: sid,
-				AgentType: agent.Type,
-				AgentName: agent.Name,
-			}
-			if err := tx.Create(&s).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&sa).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		vo.InternalError(c, "failed to create task")
-		return
-	}
-	vo.Created(c, t)
+type TaskController struct {
+    service     service.TaskService
+    agentClient *agentend_client.Client
 }
 ```
 
-**RunTask** — 核心 handler，启动 Agent 会话并返回流式 message_id（202 Accepted）：
+- `NewTaskController(agentClient)` — 内部创建 TaskDao + SessionDao + MessageDao + DiffDao → TaskService
+- 路由：
+
+```
+POST   /tasks                    CreateTask
+GET    /tasks                    ListTasks
+GET    /tasks/:taskId            GetTask
+DELETE /tasks/:taskId            DeleteTask
+DELETE /tasks/:taskId/leave      LeaveTask
+PATCH  /tasks/:taskId            PatchTask
+POST   /tasks/:taskId/run        RunTask
+POST   /tasks/:taskId/review     ReviewTask
+POST   /validate-repo-path       ValidateRepoPath
+```
+
+Controller 方法示例（仅参数绑定 + Service 调用 + 错误处理）：
 
 ```go
-type RunTaskReq struct {
-	Message         string `json:"message" binding:"required"`
-	AgentType       string `json:"agent_type"`
-	SessionID       string `json:"session_id" binding:"required"`
-	Cwd             string `json:"cwd"`
-	SkipUserMessage bool   `json:"skip_user_message"`
+func (ctrl *TaskController) CreateTask(c *gin.Context) {
+    var req service.CreateTaskInput
+    if err := c.ShouldBindJSON(&req); err != nil {
+        vo.BadRequest(c, "title is required")
+        return
+    }
+    task, err := ctrl.service.CreateTask(req)
+    if err != nil {
+        handleBizError(c, err)
+        return
+    }
+    vo.Created(c, task)
 }
 ```
 
-流程：验证 Task 存在 -> （可选）保存用户消息（`skip_user_message` 时跳过）-> 查找或创建 Session -> 创建 agent Message（status: streaming）-> 启动后台 goroutine 调用 AgentEnd SSE -> 返回 `202 Accepted` + `message_id`。
-
-后台 goroutine 核心逻辑：
+### MessageController (`message_controller.go`)
 
 ```go
-go func() {
-	agentReq := &generated.AgentRequest{
-		TaskId:    taskID,
-		SessionId: req.SessionID,
-		Message:   req.Message,
-		AgentType: generated.AgentType(agentType),
-		Stream:    true,
-	}
-	if req.Cwd != "" {
-		agentReq.WorkspacePath = &req.Cwd
-	} else if task.RepoPath != "" {
-		agentReq.RepoPath = &task.RepoPath
-	}
-	// Orchestrator: inject agents config from sibling sessions
-	if agentType == "orchestrator" {
-		var siblings []model.Session
-		db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
-		// ... build agents config and inject into agentReq.Config
-	}
-	resp, err := h.agentClient.StreamAgent(agentReq)
-	// ...
-	sw := stream.NewStreamWriter(context.Background(), taskID, req.SessionID, messageID, agentType)
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	sw.Run(func(fn func(string)) {
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" || strings.HasPrefix(line, "event:") {
-				continue
-			}
-			fn(line)
-		}
-	})
-}()
-```
-
-**ValidateRepoPath** — 转发仓库路径校验到 AgentEnd：
-
-```go
-func (h *TaskHandler) ValidateRepoPath(c *gin.Context) {
-	var req ValidateRepoPathReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		vo.BadRequest(c, "repo_path is required")
-		return
-	}
-	result, err := h.agentClient.ValidateRepoPath(req.RepoPath)
-	// ...
-	vo.OK(c, result)
+type MessageController struct {
+    service service.MessageService
 }
 ```
 
-**PatchTask** — 部分更新 Task 字段，当前仅支持 `pinned_at`：
+- 路由：
+
+```
+GET /tasks/:taskId/messages         ListMessages（cursor 分页 + session_id + mode 过滤）
+GET /tasks/:taskId/messages/window  WindowMessages（群聊窗口消息）
+```
+
+### SessionController (`session_controller.go`)
 
 ```go
-type PatchTaskReq struct {
-    PinnedAt *string `json:"pinned_at"`
-}
-
-func (h *TaskHandler) PatchTask(c *gin.Context) {
-    // 支持 pinned_at 置空（传 ""）或设置为时间字符串
-    // ...
-    vo.OK(c, gin.H{"task_id": taskID})
+type SessionController struct {
+    service service.SessionService
 }
 ```
 
-**ReviewTask** — 处理 Orchestrator 规划审查的 approve/discuss/modify 操作：
+- 路由：`PATCH /sessions/:sessionId`
+
+### AgentController (`agent_controller.go`)
+
+- 路由：`GET /agent-types`（返回硬编码四种 Agent 类型）
+
+### StreamController (`stream_controller.go`)
 
 ```go
-type ReviewTaskReq struct {
-    SessionID string `json:"session_id" binding:"required"`
-    Action    string `json:"action" binding:"required"`
-    Content   string `json:"content"`
-}
-
-func (h *TaskHandler) ReviewTask(c *gin.Context) {
-    // action: "approve" / "discuss" / "modify"
-    // 代理到 AgentEnd 的 ReviewAgent 接口
-    // 更新最新 plan_review block 的状态
-    // ...
-    vo.OK(c, result)
+type StreamController struct {
+    service service.StreamService
 }
 ```
 
-### Session 管理 (`internal/handler/session.go`)
+- 路由：`GET /tasks/:taskId/stream`（SSE 流式订阅）
 
-`SessionHandler` 提供 Session 状态的 PATCH 更新，当前仅支持停用（`inactive`）。
+### AgentProfileController (`agent_profile_controller.go`)
 
 ```go
-type SessionHandler struct{}
-
-type PatchSessionReq struct {
-	Status string `json:"status" binding:"required"`
-}
-
-func (h *SessionHandler) PatchSession(c *gin.Context) {
-	// 仅允许 status = "inactive"
-	sessionID := c.Param("sessionId")
-	result := db.GetDB().Model(&model.Session{}).Where("session_id = ?", sessionID).Update("status", "inactive")
-	// ...
+type AgentProfileController struct {
+    service service.AgentProfileService
 }
 ```
 
-### 消息查询 (`internal/handler/message.go`)
+- 路由：
 
-`MessageHandler` 按 Task 查询历史消息，支持 cursor 分页加载和 `session_id` 过滤，按创建时间升序排列。
+```
+GET /sessions/:sessionId/profile  GetProfile
+GET /sessions/:sessionId/detail   GetDetail
+GET /sessions/:sessionId/soul     GetSoul
+PUT /sessions/:sessionId/soul     UpdateSoul
+```
+
+### AvatarController (`avatar_controller.go`)
 
 ```go
-type MessageHandler struct{}
-
-type ListMessagesResponse struct {
-	Data    []model.Message `json:"data"`
-	HasMore bool            `json:"has_more"`
-}
-
-func (h *MessageHandler) ListMessages(c *gin.Context) {
-	taskID := c.Param("taskId")
-	var task model.Task
-	if err := db.GetDB().Where("task_id = ?", taskID).First(&task).Error; err != nil {
-		vo.NotFound(c, "task not found")
-		return
-	}
-
-	limitStr := c.Query("limit")
-	beforeStr := c.Query("before")
-	sessionID := c.Query("session_id")
-
-	// No pagination params: return all messages, has_more=false
-	if limitStr == "" && beforeStr == "" {
-		query := db.GetDB().Where("task_id = ?", taskID)
-		if sessionID != "" {
-			query = query.Where("session_id = ?", sessionID)
-		}
-		var messages []model.Message
-		query.Order("created_at ASC").Order("id ASC").Find(&messages)
-		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
-		return
-	}
-
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	query := db.GetDB().Where("task_id = ?", taskID)
-	if sessionID != "" {
-		query = query.Where("session_id = ?", sessionID)
-	}
-	if beforeStr != "" {
-		if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
-			query = query.Where("id < ?", beforeID)
-		}
-	}
-
-	var messages []model.Message
-	query.Order("id DESC").Limit(limit + 1).Find(&messages)
-
-	hasMore := len(messages) > limit
-	if hasMore {
-		messages = messages[:limit]
-	}
-	reverseMessages(messages)
-
-	vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
+type AvatarController struct {
+    service service.AvatarService
 }
 ```
 
-- 无分页参数（`limit` / `before`）时返回全部消息，`has_more=false`
-- `limit` 参数控制每页数量，默认 20；`before` 参数为 cursor（自增 ID），用于向前翻页
-- `session_id` 参数可过滤指定会话的消息（可与分页组合使用）
-- 响应格式为 `{data: [...], has_more: bool}`
+- 路由：
 
-**WindowMessages** — 获取群聊窗口消息（其他 Session 的最近消息），供跨 Agent 上下文供给：
+```
+POST /agents/avatar            UploadAvatar（multipart 文件上传）
+PUT  /sessions/:sessionId      UpdateSession（agent_name + avatar_url）
+```
+
+### DiffSnapshotController (`diff_snapshot_controller.go`)
 
 ```go
-func (h *MessageHandler) WindowMessages(c *gin.Context) {
-    taskID := c.Param("taskId")
-    sessionID := c.Query("session_id")
-    // session_id is required
-    result := fetchGroupChatWindow(taskID, sessionID)
-    vo.OK(c, result)
+type DiffSnapshotController struct {
+    service service.DiffSnapshotService
 }
 ```
 
-`fetchGroupChatWindow` 查询同一 Task 下其他 Session 的消息，每条截断至 2000 字符，去重后返回。
+- 路由：
 
-### Agent 类型枚举 (`internal/handler/agent.go`)
+```
+GET /diff-snapshots/:snapshotId  GetDiffSnapshot
+PUT /diff-snapshots/:snapshotId  SaveDiffSnapshot
+```
 
-返回硬编码的四种 Agent 类型列表。
+### WorkspaceController (`workspace_controller.go`)
 
 ```go
-type AgentHandler struct{}
-
-var agentTypes = []string{"claude-code", "opencode", "orchestrator", "codex"}
-
-func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
-	vo.OK(c, agentTypes)
+type WorkspaceController struct {
+    service     service.TaskService  // 复用 TaskService 的 Agent 路由
+    agentClient *agentend_client.Client
 }
 ```
 
-### Agent Profile (`internal/handler/agent_profile.go`)
+- 路由（直接工作区）：
 
-`AgentProfileHandler` 提供 Agent 档案（Profile）、详情（Detail）和灵魂描述（Soul）管理接口，数据来源为 Session + SessionAgent + Task 表的聚合查询。
-
-```go
-type AgentProfileHandler struct{}
-
-// TODO: fetch skills from agentend when a skills API is available
-var noSkills = []AgentSkill{}
+```
+GET  /workspace/:id/files/*filepath    ReadFile
+PUT  /workspace/:id/files/*filepath    WriteFile
+GET  /workspace/:id/diff               GetDiff
+POST /workspace/:id/commit             Commit
+POST /workspace/:id/revert             Revert
+POST /workspace/:id/preview/start      StartPreview
+POST /workspace/:id/preview/stop       StopPreview
+GET  /workspace/task/:taskId/git-info  TaskGitInfo
 ```
 
-**GetProfile** — 按 session_id 返回 Agent 档案摘要（名称、类型、头像、状态、灵魂描述、技能列表）：
+- 路由（Session 级别代理）：先通过 `resolveWorkspaceID` 查询 AgentEnd 获取 workspace ID，再代理。
 
-```go
-func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
-    sessionID := c.Param("sessionId")
-    var session model.Session
-    db.GetDB().Where("session_id = ?", sessionID).First(&session)
-    vo.OK(c, AgentProfileResponse{..., SoulMD: session.SoulMD, Skills: noSkills})
-}
+```
+GET  /session/:sessionId/files/*filepath  SessionFileRead
+PUT  /session/:sessionId/files/*filepath  SessionFileWrite
+GET  /session/:sessionId/diff             SessionGetDiff
+POST /session/:sessionId/commit           SessionCommit
+POST /session/:sessionId/revert           SessionRevert
 ```
 
-**GetDetail** — 按 session_id 返回 Agent 完整详情（额外包含 task_id、repo_path、workspace_path、soul_md、message_count）：
+### AnnouncementController (`announcement_controller.go`)
 
 ```go
-func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
-    sessionID := c.Param("sessionId")
-    // 查询 Session -> Task -> Message count
-    vo.OK(c, AgentDetailResponse{
-        WorkspacePath: filepath.Join(task.RepoPath, session.TaskID, session.SessionID),
-        SoulMD:        session.SoulMD,
-        MessageCount:  messageCount,
-        ...
-    })
+type AnnouncementController struct {
+    service service.AnnouncementService
 }
 ```
 
-**GetSoul** — 按 session_id 返回 Agent 灵魂描述：
+- 路由：
+
+```
+GET    /tasks/:taskId/announcements    ListAnnouncements
+POST   /tasks/:taskId/announcements    CreateAnnouncement
+DELETE /tasks/:taskId/announcements/:id DeleteAnnouncement
+```
+
+### ContactGroupController (`contact_group_controller.go`)
 
 ```go
-func (h *AgentProfileHandler) GetSoul(c *gin.Context) {
-    // ...
-    vo.OK(c, gin.H{"soul_md": session.SoulMD, "session_id": sessionID})
+type ContactGroupController struct {
+    service service.ContactGroupService
 }
 ```
 
-**UpdateSoul** — 更新 Agent 灵魂描述（去空格后不超过 300 字符）：
+- 路由：
+
+```
+GET    /contact-groups                   ListGroups
+POST   /contact-groups                   CreateGroup
+PUT    /contact-groups/:groupId          UpdateGroup
+DELETE /contact-groups/:groupId          DeleteGroup
+POST   /contact-groups/:groupId/items    AddItem
+DELETE /contact-groups/:groupId/items/:taskId RemoveItem
+```
+
+### SkillController (`skill_controller.go`)
 
 ```go
-type UpdateSoulReq struct {
-    SoulMD string `json:"soul_md"`
-}
-
-func (h *AgentProfileHandler) UpdateSoul(c *gin.Context) {
-    // strip spaces, validate rune count <= 300
-    // ...
-    vo.OK(c, gin.H{"success": true, "session_id": sessionID})
+type SkillController struct {
+    service service.SkillService
 }
 ```
 
-当前 Skills 为空切片（`noSkills`），后续将由 AgentEnd API 统一供给。
+- 路由：
 
-### 头像上传 (`internal/handler/avatar.go`)
+```
+POST   /skills/upload                     Upload（multipart ZIP）
+POST   /skills/confirm                    Confirm（确认上传）
+GET    /skills                            List
+DELETE /skills/:name                      Delete
+POST   /skills/:name/import               Import（导入到 Session）
+DELETE /skills/:name/sessions/:sessionId  Remove（从 Session 移除）
+POST   /internal/builtin-skills           ReportBuiltinSkills（AgentEnd 上报内置技能）
+```
 
-`AvatarHandler` 通过闭包注入七牛云 `Uploader`，处理 multipart 文件上传并更新 Session 元数据。
+### AdminController (`admin_controller.go`)
 
 ```go
-type AvatarHandler struct {
-	uploader *qiniu.Uploader
-}
-
-const maxAvatarSize = 2 << 20 // 2MB
-
-var allowedExtensions = map[string]bool{
-	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
+type AdminController struct {
+    service service.AdminService
+    cfg     *conf.Config
 }
 ```
 
-**UploadAvatar** — 文件校验 -> 上传七牛云 -> 返回 CDN URL：
+- 路由自注册，公开接口与受保护接口分离：
+
+```
+POST /admin/auth           Auth（密码认证，IP 限流 5次/分钟）
+GET  /admin/health         HealthCheck
+GET  /admin/avatar         GetAvatar
+
+--- 以下需要 JWT Bearer Token ---
+
+GET    /admin/resources    GetResources
+DELETE /admin/sessions     DeleteSessions
+GET    /admin/workspaces   GetWorkspaces
+DELETE /admin/workspaces/:id DeleteWorkspace
+GET    /admin/agents       GetAgents
+GET    /admin/services     GetServices
+GET    /admin/statistics   GetStatistics
+PUT    /admin/avatar       UpdateAvatar
+```
+
+## Service 层 (`internal/service/`)
+
+### 接口定义 (`service.go`)
+
+所有 Service 接口定义在 `internal/service/service.go`，无 Gin 依赖，可独立单测。核心接口：
+
+| 接口 | 职责 |
+|------|------|
+| `TaskService` | 任务 CRUD + Run（含 Agent 路由选择）+ Review |
+| `MessageService` | 消息列表分页 + 群聊窗口消息 |
+| `SessionService` | Session 状态管理 |
+| `StreamService` | SSE 流式服务 |
+| `AgentProfileService` | Agent 档案/详情/灵魂描述 |
+| `AvatarService` | 头像上传 + Session 元数据更新 |
+| `DiffSnapshotService` | Diff 快照 Upsert（终态保护） |
+| `AnnouncementService` | 公告 CRUD |
+| `ContactGroupService` | 联系人分组管理 |
+| `SkillService` | 技能上传/确认/导入/删除 |
+| `AdminService` | 管理面板全部功能 |
+
+### DTO 定义 (`service.go`)
+
+Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直接依赖 model：
+
+- `CreateTaskInput` / `PatchTaskInput` / `RunTaskInput` / `ReviewTaskInput` — 任务相关输入
+- `ListMessagesResponse` — 消息列表输出
+- `RunTaskResult` — 运行任务结果
+- `TaskDetailResponse` / `TaskSessionWithAgent` — 任务详情输出
+- `SkillHubItem` / `SkillImportResult` — 技能相关
+- `AgentProfileResponse` / `AgentDetailResponse` — Agent 档案
+- `AuthResponse` / `ResourceSummary` / `StatisticsResponse` / `WorkspaceSummary` — 管理面板
+
+### Service 实现要点
+
+**TaskService** (`service/impl/task_service.go` + `task_route.go`)：
+- `CreateTask` — 事务中创建 Task + Session + SessionAgent
+- `RunTask` — Agent 路由选择（direct / group / broadcast）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
+- `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify
+- `DeleteTask` — 级联删除（调用 DAO cascade）
+- `LeaveTask` — 软删除（标记 inactive）
+
+**TaskRoute** (`service/impl/task_route.go`)：
+- Agent 路由策略：direct（直接发送）、group（群聊）、broadcast（广播）
+- 根据 `MessageRoute` 决定消息分发目标
+
+**MessageService** (`service/impl/message_service.go`)：
+- `ListMessages` — cursor 分页 + session_id 过滤 + mode 可见性控制
+- `WindowMessages` — 群聊窗口消息（聚合同 Task 其他 Session 消息）
+
+**SkillService** (`service/impl/skill_service.go`)：
+- `UploadSkill` — ZIP 校验 + 解压到临时目录
+- `ConfirmSkill` — 从临时目录读取内容，存入 DB blob
+- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理
+- `ReportBuiltinSkills` — AgentEnd 上报内置技能列表
+
+**StreamService** (`service/impl/stream_service.go`)：
+- `ServeStream` — 三阶段 SSE 分发（MySQL 历史 → Redis 缺口 → Hub 实时）
+
+## DAO 层 (`internal/dao/`)
+
+### 接口定义 (`dao.go`)
+
+| 接口 | 职责 |
+|------|------|
+| `TaskDao` | Task + Session + SessionAgent 联表操作 |
+| `MessageDao` | Message 查询/创建/更新（含群聊窗口） |
+| `SessionDao` | Session 状态/字段更新 |
+| `DiffSnapshotDao` | DiffSnapshot Upsert + 终态保护 |
+| `AnnouncementDao` | Announcement CRUD |
+| `ContactGroupDao` | ContactGroup + Item CRUD |
+| `SkillDao` | SkillHub + AgentSkill 关联 |
+| `AdminDao` | AdminSetting KV + 统计查询 |
+
+### GORM 实现 (`dao/gorm/`)
+
+每个 DAO 通过 `db.GetDB()` 获取 GORM 实例，实现对应接口。构造函数模式：
 
 ```go
-func (h *AvatarHandler) UploadAvatar(c *gin.Context) {
-	file, header, err := c.Request.FormFile("avatar")
-	// 文件大小校验（2MB）、扩展名校验
-	key := "avatars/" + uuid.New().String() + ext
-	data, _ := io.ReadAll(file)
-	avatarURL, err := h.uploader.UploadBytes(c.Request.Context(), key, data)
-	vo.OK(c, gin.H{"avatar_url": avatarURL})
+func NewTaskDao() dao.TaskDao {
+    return &taskDao{}
 }
 ```
 
-**UpdateSession** — 更新 Session 的 `agent_name` 和 `avatar_url`（直接更新 sessions 表）：
+### 级联删除 (`dao/gorm/cascade.go`)
 
-```go
-type UpdateSessionReq struct {
-	AgentName string `json:"agent_name"`
-	AvatarURL string `json:"avatar_url"`
-}
+`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → Session → Announcement → ContactGroupItem → Task。
 
-func (h *AvatarHandler) UpdateSession(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	updates := map[string]interface{}{}
-	if req.AgentName != "" { updates["agent_name"] = req.AgentName }
-	if req.AvatarURL != "" { updates["avatar_url"] = req.AvatarURL }
+### Mock 实现 (`dao/mock/`)
 
-	var session model.Session
-	if err := db.GetDB().Where("session_id = ?", sessionID).First(&session).Error; err != nil {
-		vo.NotFound(c, "session not found")
-		return
-	}
-	db.GetDB().Model(&session).Updates(updates)
-}
-```
-
-### SSE 流式订阅 (`internal/handler/stream.go`)
-
-`StreamHandler` 实现前端 SSE 订阅，支持 streaming / completed / failed 三种消息状态的分发。
-
-```go
-type StreamHandler struct{}
-
-func (h *StreamHandler) ServeStream(c *gin.Context) {
-	sessionID := c.Query("session_id")
-	messageID := c.Query("message_id")
-	// ...
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
-	c.Writer.Flush()
-
-	switch msg.Status {
-	case "streaming":
-		h.serveStreaming(c, &msg)
-	case "completed":
-		h.serveCompleted(c, &msg)
-	case "failed":
-		h.serveFailed(c, &msg)
-	default:
-		h.serveCompleted(c, &msg)
-	}
-}
-```
-
-**serveStreaming** 的三阶段分发：
-
-```go
-func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
-	// Phase 1: 从 MySQL 读取已刷写的历史文本
-	if msg.Content != "" {
-		chunks := splitContent(msg.Content, 500)
-		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName, msg.MessageID))
-		}
-	}
-	// Phase 2: 订阅 Hub 并重放 Redis 缺口（last_seq → Hub currentSeq）
-	// Phase 3: 从 Hub channel 实时消费事件，附带 15s 心跳和 10s 停滞检测
-	// 当 StreamWriter goroutine 结束后发送 done/error 事件并退出
-}
-```
-
-`splitContent` 将长文本按 500 字符分块，优先在换行符处断开：
-
-```go
-func splitContent(text string, maxLen int) []string {
-	if len(text) <= maxLen {
-		return []string{text}
-	}
-	var chunks []string
-	for len(text) > 0 {
-		end := maxLen
-		if end > len(text) { end = len(text) }
-		if end < len(text) {
-			if idx := lastIndexByte(text[:end], '\n'); idx > end/2 {
-				end = idx + 1
-			}
-		}
-		chunks = append(chunks, text[:end])
-		text = text[end:]
-	}
-	return chunks
-}
-```
-
-### Diff 快照 (`internal/handler/diff_snapshot.go`)
-
-`DiffSnapshotHandler` 管理 Diff 快照的读取和 Upsert。
-
-```go
-type DiffSnapshotHandler struct{}
-```
-
-**GetDiffSnapshot** — 按 snapshot_id 查询快照，前端 DiffCard 加载时调用：
-
-```go
-func (h *DiffSnapshotHandler) GetDiffSnapshot(c *gin.Context) {
-	snapshotID := c.Param("snapshotId")
-	var snap model.DiffSnapshot
-	if err := db.GetDB().Where("snapshot_id = ?", snapshotID).First(&snap).Error; err != nil {
-		vo.NotFound(c, "snapshot not found")
-		return
-	}
-	vo.OK(c, snap)
-}
-```
-
-**SaveDiffSnapshot** — Upsert 保存快照。终态（committed/reverted/cancelled）的快照不可覆盖（返回 409）。同一 session 新建 pending 快照时自动取消同 session 的其他 pending 快照：
-
-```go
-if req.Status == "pending" {
-	d.Model(&model.DiffSnapshot{}).
-		Where("session_id = ? AND snapshot_id != ? AND status = ?", req.SessionID, snapshotID, "pending").
-		Update("status", "cancelled")
-}
-```
-
-### 工作区代理 (`internal/handler/workspace.go`)
-
-`WorkspaceHandler` 通过闭包注入 `agentend_client.Client`，将前端请求代理到 AgentEnd 的工作区 API。内部使用自定义 `httpClient`（30s 超时）代替 `http.DefaultClient`。提供两类路由：
-
-```go
-type WorkspaceHandler struct {
-	agentClient *agentend_client.Client
-	httpClient  *http.Client
-}
-
-func NewWorkspaceHandler(agentClient *agentend_client.Client) *WorkspaceHandler {
-	return &WorkspaceHandler{
-		agentClient: agentClient,
-		httpClient:  &http.Client{Timeout: 30 * time.Second},
-	}
-}
-```
-
-**直接工作区路由**（`/api/workspace/:id/...`）— 直接使用 workspace ID：
-
-```go
-ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
-ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
-ws.GET("/:id/diff", workspaceHandler.GetDiff)
-ws.POST("/:id/commit", workspaceHandler.Commit)
-ws.POST("/:id/revert", workspaceHandler.Revert)
-ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
-ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
-ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
-```
-
-**Session 路由**（`/api/session/:sessionId/...`）— 先通过 `resolveWorkspaceID` 查询 AgentEnd 获取 workspace ID，再代理：
-
-```go
-func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) {
-	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", h.agentClient.BaseURL(), sessionID)
-	resp, err := h.httpClient.Get(url)
-	// ...
-	var ws struct { ID string `json:"id"` }
-	json.NewDecoder(resp.Body).Decode(&ws)
-	return ws.ID, nil
-}
-```
-
-`proxy` 方法为通用代理函数，转发请求到 AgentEnd 并流式回传响应（通过 `io.Copy`）。
-
-**TaskGitInfo** — 按 task_id 代理获取 Git 信息（分支、最近提交等）：
-
-```go
-func (h *WorkspaceHandler) TaskGitInfo(c *gin.Context) {
-	taskID := c.Param("taskId")
-	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/task/%s/git-info", taskID), nil)
-}
-```
-
-### 公告管理 (`internal/handler/announcement.go`)
-
-`AnnouncementHandler` 管理任务级别的公告消息，支持置顶排序。
-
-```go
-type AnnouncementHandler struct{}
-
-type CreateAnnouncementReq struct {
-    SenderID   string `json:"sender_id" binding:"required"`
-    SenderName string `json:"sender_name" binding:"required"`
-    Content    string `json:"content" binding:"required"`
-    Pinned     bool   `json:"pinned"`
-}
-```
-
-**ListAnnouncements** — 按 Task 查询公告列表，置顶优先、时间倒序：
-
-```go
-func (h *AnnouncementHandler) ListAnnouncements(c *gin.Context) {
-    taskID := c.Param("taskId")
-    // ORDER BY pinned DESC, created_at DESC
-    vo.OK(c, announcements)
-}
-```
-
-**CreateAnnouncement** — 创建公告：
-
-```go
-func (h *AnnouncementHandler) CreateAnnouncement(c *gin.Context) {
-    taskID := c.Param("taskId")
-    // ...
-    vo.Created(c, announcement)
-}
-```
-
-**DeleteAnnouncement** — 按 ID 删除公告：
-
-```go
-func (h *AnnouncementHandler) DeleteAnnouncement(c *gin.Context) {
-    id := c.Param("id")
-    // ...
-    vo.OK(c, nil)
-}
-```
+用于 Service 层单元测试，当前提供 `SessionDao` 和 `DiffSnapshotDao` 的 mock。

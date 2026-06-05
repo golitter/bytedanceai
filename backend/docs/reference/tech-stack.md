@@ -76,20 +76,28 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 backend/
 ├── cmd/
 │   └── server/
-│       └── main.go          # 入口
+│       └── main.go          # 入口（DI 组装 + 优雅关闭）
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── internal/
 │   ├── conf/                # 配置加载
-│   ├── handler/             # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, announcement, admin*）
-│   ├── stream/              # SSE 流式写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
-│   ├── middleware/           # 中间件（auth, admin_auth, cors, logger）
-│   ├── model/               # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement）
+│   ├── controller/          # Controller 层
+│   │   ├── controller.go    # 接口定义
+│   │   └── impl/            # 14 组 Controller 实现
+│   ├── service/             # Service 层
+│   │   ├── service.go       # 接口定义 + DTO
+│   │   ├── bizerr.go        # 统一业务错误
+│   │   ├── skill_validator.go
+│   │   └── impl/            # 14 组 Service 实现
+│   ├── dao/                 # DAO 层
+│   │   ├── dao.go           # 接口定义
+│   │   ├── gorm/            # GORM 实现
+│   │   └── mock/            # Mock 实现
+│   ├── stream/              # SSE 流式写入（RuntimeHub + StreamWriter）
+│   ├── middleware/           # 中间件（auth, admin_auth, cors, logger, rate_limit）
+│   ├── model/               # 数据模型（11 个核心模型）
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
-│   ├── vo/                  # 统一响应封装
-│   ├── controller/impl/     # （预留）
-│   ├── dao/                 # DAO 层（gorm/, mock/）
-│   └── service/impl/        # （预留）
+│   └── vo/                  # 统一响应封装
 ├── pkg/
 │   ├── db/                  # MySQL 单例连接（sync.Once）
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
@@ -110,6 +118,7 @@ backend/
 | 已接受 | 202 | 0 | `{"code":0,"data":{"message_id":"..."}}` |
 | 请求错误 | 400 | 400 | `{"code":400,"msg":"invalid"}` |
 | 未授权 | 401 | 401 | `{"code":401,"msg":"missing authorization header"}` |
+| 禁止 | 403 | 403 | `{"code":403,"msg":"forbidden"}` |
 | 未找到 | 404 | 404 | `{"code":404,"msg":"not found"}` |
 | 冲突 | 409 | 409 | `{"code":409,"msg":"conflict"}` |
 | 服务不可用 | 503 | 503 | `{"code":503,"msg":"service unavailable"}` |
@@ -117,9 +126,11 @@ backend/
 
 ## 关键设计决策
 
-- **分层架构**：handler / stream / model / vo 四层，职责清晰，每层可独立测试（interface/impl 预留目录已创建）
+- **三层架构**：Controller → Service → DAO，职责清晰。Controller 仅做参数绑定/响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）
+- **BizError 统一错误**：Service 层通过 `BizError{Code, Message}` 表达业务错误，Controller 层 `handleBizError` 自动映射为 HTTP 状态码
+- **自注册路由**：每个 Controller 实现 `RegisterRoutes(rg *gin.RouterGroup)` 接口，路由注册内聚到 Controller
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
-- **SSE 流式**：StreamWriter 通过双层通道（内存 Hub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
-- **JWT Auth**：中间件预置但 ping 接口不挂，后续业务接口按需启用
-- **请求日志**：使用标准库 slog，按状态码分级（>=500 ERROR, >=400 WARN, 其余 INFO）
+- **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
+- **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待
+- **IP 限流**：Admin auth 路由使用 `IPRateLimiter`（5 次/分钟）防止暴力破解

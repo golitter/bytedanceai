@@ -2,11 +2,26 @@
 
 ## 实现了什么
 
-`GET /api/tasks/:taskId/messages` 接口支持 **cursor 分页** 和 **session_id 过滤**，前端通过自增 ID 向前翻页加载历史消息，可选按会话过滤。
+`GET /api/tasks/:taskId/messages` 接口支持 **cursor 分页**、**session_id 过滤** 和 **mode 可见性控制**，前端通过自增 ID 向前翻页加载历史消息，可选按会话过滤和群聊可见性模式。
 
 ## 怎么实现的
 
-### 响应结构 (`internal/handler/message.go`)
+### 三层架构
+
+```
+MessageController.ListMessages()
+    │ 参数绑定（limit / before / session_id / mode）
+    ▼
+MessageService.ListMessages()
+    │ 业务逻辑（分页策略、mode 可见性过滤）
+    ▼
+MessageDao.ListByTask()
+    │ GORM 查询
+    ▼
+MySQL
+```
+
+### 响应结构 (`internal/service/service.go`)
 
 ```go
 type ListMessagesResponse struct {
@@ -15,65 +30,58 @@ type ListMessagesResponse struct {
 }
 ```
 
-### Handler 实现
+### Service 接口 (`internal/service/service.go`)
 
 ```go
-func (h *MessageHandler) ListMessages(c *gin.Context) {
-    taskID := c.Param("taskId")
+type MessageService interface {
+    ListMessages(taskID, sessionID, mode, primarySessionID string, limit int, beforeID *uint64, paginated bool) (*ListMessagesResponse, error)
+    WindowMessages(taskID, sessionID string) ([]map[string]interface{}, error)
+}
+```
 
-    // 1. 验证 task 存在
-    var task model.Task
-    if err := db.GetDB().Where("task_id = ?", taskID).First(&task).Error; err != nil {
-        vo.NotFound(c, "task not found")
-        return
-    }
+### Controller 实现 (`internal/controller/impl/message_controller.go`)
+
+Controller 仅做参数绑定和 Service 调用：
+
+```go
+func (ctrl *MessageController) ListMessages(c *gin.Context) {
+    taskID := c.Param("taskId")
+    sessionID := c.Query("session_id")
+    mode := c.Query("mode")
+    primarySessionID := c.Query("primary_session_id")
 
     limitStr := c.Query("limit")
     beforeStr := c.Query("before")
-    sessionID := c.Query("session_id")
 
-    // 2. 无分页参数：返回全部消息，has_more=false
-    if limitStr == "" && beforeStr == "" {
-        query := db.GetDB().Where("task_id = ?", taskID)
-        if sessionID != "" {
-            query = query.Where("session_id = ?", sessionID)
-        }
-        var messages []model.Message
-        query.Order("created_at ASC").Order("id ASC").Find(&messages)
-        vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
-        return
-    }
-
-    // 3. 有分页参数
     limit := 20
+    paginated := limitStr != "" || beforeStr != ""
     if limitStr != "" {
         if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
             limit = l
         }
     }
-
-    query := db.GetDB().Where("task_id = ?", taskID)
-    if sessionID != "" {
-        query = query.Where("session_id = ?", sessionID)
-    }
-
+    var beforeID *uint64
     if beforeStr != "" {
-        if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
-            query = query.Where("id < ?", beforeID)
+        if id, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
+            beforeID = &id
         }
     }
 
-    // 4. 多查一条判断 has_more
-    var messages []model.Message
-    query.Order("id DESC").Limit(limit + 1).Find(&messages)
-
-    hasMore := len(messages) > limit
-    if hasMore {
-        messages = messages[:limit]
+    result, err := ctrl.service.ListMessages(taskID, sessionID, mode, primarySessionID, limit, beforeID, paginated)
+    if err != nil {
+        handleBizError(c, err)
+        return
     }
-    reverseMessages(messages)
+    vo.OK(c, result)
+}
+```
 
-    vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
+### DAO 接口 (`internal/dao/dao.go`)
+
+```go
+type MessageDao interface {
+    ListByTask(taskID, sessionID, mode, primarySessionID string, limit int, beforeID *uint64) ([]model.Message, error)
+    // ...
 }
 ```
 
@@ -83,15 +91,26 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 |------|------|
 | 无 `limit`/`before` | 返回全部消息，`has_more=false` |
 | `session_id=xxx` | 按 session 过滤（可与分页组合使用） |
+| `mode=xxx` | 消息可见性控制（群聊 mode 下按可见性过滤） |
+| `primary_session_id=xxx` | 主 Session ID（群聊 mode 下用于确定可见性范围） |
 | `limit=20` | 返回最近 20 条，多查一条判断 `has_more` |
 | `limit=20&before=100` | 返回 `id < 100` 的最近 20 条 |
 | `before=100` | 默认 `limit=20`，返回 `id < 100` 的最近 20 条 |
 
-Cursor 使用自增主键 `id`（非 `message_id`），保证时间有序且唯一。查询按 `id DESC` 排序（新 -> 旧），取出后通过 `reverseMessages` 原地反转为时间升序（旧 -> 新），前端接收后直接 prepend 到数组头部。
+Cursor 使用自增主键 `id`（非 `message_id`），保证时间有序且唯一。查询按 `id DESC` 排序（新 → 旧），取出后反转（旧 → 新），前端接收后直接 prepend 到数组头部。
 
-### 路由注册 (`cmd/server/main.go`)
+### 路由注册
 
 ```
-GET /api/tasks/:taskId/messages        -> MessageHandler.ListMessages
-GET /api/tasks/:taskId/messages/window -> MessageHandler.WindowMessages
+GET /api/tasks/:taskId/messages        -> MessageController.ListMessages
+GET /api/tasks/:taskId/messages/window -> MessageController.WindowMessages
 ```
+
+每个 Controller 通过 `RegisterRoutes(rg *gin.RouterGroup)` 自注册路由。
+
+### 群聊窗口消息
+
+`WindowMessages` 查询同一 Task 下其他 Session 的消息，每条截断至 2000 字符，去重后返回。供跨 Agent 上下文供给使用。
+
+- Service: `MessageService.WindowMessages(taskID, sessionID)`
+- DAO: `MessageDao.ListGroupChatWindowMessages(taskID, sessionID, afterCreatedAt)`

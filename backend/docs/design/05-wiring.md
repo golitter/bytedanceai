@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移、Handler 依赖注入、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。
+`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移、Controller 依赖注入（内部组装 DAO → Service → Controller）、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。支持优雅关闭（SIGINT/SIGTERM 信号处理）。
 
 ## 怎么实现的
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 -> MySQL -> AutoMigrate -> Redis -> 清理残留消息。
+按依赖顺序依次初始化：配置 → MySQL → AutoMigrate → Redis → 清理残留消息。
 
 ```go
 func main() {
@@ -23,7 +23,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}); err != nil {
+	if err := db.GetDB().AutoMigrate(
+		&model.Session{}, &model.Task{}, &model.Message{},
+		&model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{},
+		&model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{},
+		&model.SkillHub{}, &model.AgentSkill{},
+	); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -34,38 +39,60 @@ func main() {
 	}
 	defer redis.Close()
 
-	stream.CleanupStaleMessages()
+	stream.CleanupStaleMessages(gormdao.NewMessageDao())
+	stream.Hub.StartClosedKeysCleanup()
 	// ...
 }
 ```
 
 ### 依赖注入
 
-通过构造函数闭包注入外部依赖（AgentEnd Client、七牛云 Uploader）到各 Handler：
+每个 Controller 的构造函数内部自行创建 DAO 实例并组装 Service，最终返回完整的 Controller。Controller 层对外仅暴露 `NewXxxController(外部依赖)` 接口：
 
 ```go
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
 
-taskHandler := handler.NewTaskHandler(agentClient)
-agentHandler := handler.NewAgentHandler()
-sessionHandler := handler.NewSessionHandler()
-messageHandler := handler.NewMessageHandler()
-avatarHandler := handler.NewAvatarHandler(qiniuUploader)
-streamHandler := handler.NewStreamHandler()
-agentProfileHandler := handler.NewAgentProfileHandler()
-workspaceHandler := handler.NewWorkspaceHandler(agentClient)
-diffSnapshotHandler := handler.NewDiffSnapshotHandler()
-announcementHandler := handler.NewAnnouncementHandler()
-adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
+taskController := ctrlimpl.NewTaskController(agentClient)
+agentController := ctrlimpl.NewAgentController()
+sessionController := ctrlimpl.NewSessionController()
+messageController := ctrlimpl.NewMessageController()
+avatarController := ctrlimpl.NewAvatarController(qiniuUploader)
+streamController := ctrlimpl.NewStreamController()
+agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
+workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
+diffSnapshotController := ctrlimpl.NewDiffSnapshotController()
+announcementController := ctrlimpl.NewAnnouncementController(agentClient)
+contactGroupController := ctrlimpl.NewContactGroupController()
+skillController := ctrlimpl.NewSkillController(agentClient)
+adminController := ctrlimpl.NewAdminController(cfg, qiniuUploader, agentClient)
 ```
 
-- `TaskHandler` 依赖 `agentend_client.Client`（转发 run、review 和 validate-repo-path）
-- `AvatarHandler` 依赖 `qiniu.Uploader`（头像上传）
-- `AgentProfileHandler` 无外部依赖（读取 Session/Task/Message 表）
-- `WorkspaceHandler` 依赖 `agentend_client.Client`（代理工作区操作到 AgentEnd）
-- `AdminHandler` 依赖 `Config`（密码验证）+ `qiniu.Uploader`（头像管理）+ `agentend_client.Client`（代理资源/健康请求）
-- 其余 Handler（Session、Message、Agent、Stream、DiffSnapshot、Announcement）无外部依赖
+以 `TaskController` 为例，内部组装链为：
+
+```go
+func NewTaskController(agentClient *agentend_client.Client) *TaskController {
+	taskDao := gormdao.NewTaskDao()
+	sessionDao := gormdao.NewSessionDao()
+	messageDao := gormdao.NewMessageDao()
+	diffDao := gormdao.NewDiffSnapshotDao()
+	taskService := svcimpl.NewTaskService(taskDao, sessionDao, messageDao, diffDao, agentClient)
+	return &TaskController{service: taskService, agentClient: agentClient}
+}
+```
+
+外部依赖说明：
+
+| Controller | 外部依赖 | 说明 |
+|------------|---------|------|
+| TaskController | `agentend_client.Client` | 转发 run、review 和 validate-repo-path |
+| AvatarController | `qiniu.Uploader` | 头像上传 |
+| AgentProfileController | `agentend_client.Client` | 技能查询 |
+| WorkspaceController | `agentend_client.Client` | 代理工作区操作到 AgentEnd |
+| AnnouncementController | `agentend_client.Client` | Agent 通知 |
+| SkillController | `agentend_client.Client` | 技能同步到 AgentEnd |
+| AdminController | `Config` + `qiniu.Uploader` + `agentend_client.Client` | 认证/头像/代理 |
+| 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
 ### 中间件
 
@@ -91,74 +118,37 @@ func CORS(origins []string) gin.HandlerFunc {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	})
-}
+})
 ```
 
 ### 路由注册
 
-所有业务路由挂载在 `/api` Group 下：
+每个 Controller 通过 `RegisterRoutes(api)` 自注册路由，替代旧版 main.go 中的手动注册：
 
 ```go
 api := r.Group("/api")
 {
-	api.POST("/tasks", taskHandler.CreateTask)
-	api.GET("/tasks", taskHandler.ListTasks)
-	api.GET("/tasks/:taskId", taskHandler.GetTask)
-	api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
-	api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
+	taskController.RegisterRoutes(api)
+	streamController.RegisterRoutes(api)
+	messageController.RegisterRoutes(api)
 
-	api.POST("/tasks/:taskId/run", taskHandler.RunTask)
-	api.POST("/tasks/:taskId/review", taskHandler.ReviewTask)
-	api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
-	api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
-	api.GET("/tasks/:taskId/messages/window", messageHandler.WindowMessages)
+	agentController.RegisterRoutes(api)
 
-	api.GET("/agent-types", agentHandler.ListAgentTypes)
+	announcementController.RegisterRoutes(api)
 
-	api.GET("/tasks/:taskId/announcements", announcementHandler.ListAnnouncements)
-	api.POST("/tasks/:taskId/announcements", announcementHandler.CreateAnnouncement)
-	api.DELETE("/tasks/:taskId/announcements/:id", announcementHandler.DeleteAnnouncement)
+	sessionController.RegisterRoutes(api)
+	avatarController.RegisterRoutes(api)
+	agentProfileController.RegisterRoutes(api)
 
-	api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
-	api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
-	api.GET("/sessions/:sessionId/profile", agentProfileHandler.GetProfile)
-	api.GET("/sessions/:sessionId/detail", agentProfileHandler.GetDetail)
-	api.GET("/sessions/:sessionId/soul", agentProfileHandler.GetSoul)
-	api.PUT("/sessions/:sessionId/soul", agentProfileHandler.UpdateSoul)
+	diffSnapshotController.RegisterRoutes(api)
 
-	api.POST("/agents/avatar", avatarHandler.UploadAvatar)
-	api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+	contactGroupController.RegisterRoutes(api)
 
-	// Diff snapshot routes
-	api.GET("/diff-snapshots/:snapshotId", diffSnapshotHandler.GetDiffSnapshot)
-	api.PUT("/diff-snapshots/:snapshotId", diffSnapshotHandler.SaveDiffSnapshot)
-
-	// Workspace proxy routes (by workspace ID)
-	ws := api.Group("/workspace")
-	{
-		ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
-		ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
-		ws.GET("/:id/diff", workspaceHandler.GetDiff)
-		ws.POST("/:id/commit", workspaceHandler.Commit)
-		ws.POST("/:id/revert", workspaceHandler.Revert)
-		ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
-		ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
-		ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
-	}
-
-	// Session-level workspace proxy routes
-	ss := api.Group("/session")
-	{
-		ss.GET("/:sessionId/files/*filepath", workspaceHandler.SessionFileRead)
-		ss.PUT("/:sessionId/files/*filepath", workspaceHandler.SessionFileWrite)
-		ss.GET("/:sessionId/diff", workspaceHandler.SessionGetDiff)
-		ss.POST("/:sessionId/commit", workspaceHandler.SessionCommit)
-		ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
-	}
+	skillController.RegisterRoutes(api)
+	workspaceController.RegisterRoutes(api)
 }
 
-	// Admin panel routes (self-registered via RegisterRoutes)
-	adminHandler.RegisterRoutes(api)
+adminController.RegisterRoutes(api)
 ```
 
 健康检查端点：
@@ -173,12 +163,31 @@ r.GET("/health", func(c *gin.Context) {
 })
 ```
 
-服务监听：
+### 优雅关闭
+
+使用 `http.Server` + signal handling 实现 15 秒优雅关闭：
 
 ```go
-slog.Info("server starting", "port", 8080)
-if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {
-	slog.Error("server failed", "error", err)
-	os.Exit(1)
+srv := &http.Server{Addr: ":8080", Handler: r}
+
+go func() {
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
+	}
+}()
+
+quit := make(chan os.Signal, 1)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+<-quit
+slog.Info("shutting down server...")
+
+ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+defer cancel()
+if err := srv.Shutdown(ctx); err != nil {
+	slog.Error("server forced to shutdown", "error", err)
 }
+
+redis.Close()
+slog.Info("server exited")
 ```

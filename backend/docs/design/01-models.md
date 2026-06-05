@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了七个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置和任务公告系统。
+使用 GORM 定义了十一个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组和技能仓库系统。
 
 ## 怎么实现的
 
@@ -150,6 +150,77 @@ type Announcement struct {
 - `SenderID` / `SenderName`：发送者标识
 - `Pinned`：是否置顶，列表查询时置顶公告优先排列
 
+### ContactGroup — 联系人分组 (`internal/model/contact_group.go`)
+
+ContactGroup 存储用户自定义的会话分组，支持排序和拖拽排列。
+
+```go
+type ContactGroup struct {
+    ID        uint      `gorm:"primarykey" json:"id"`
+    GroupID   string    `gorm:"uniqueIndex;size:36" json:"group_id"`
+    Name      string    `gorm:"size:128;not null" json:"name"`
+    SortOrder int       `gorm:"default:0" json:"sort_order"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+### ContactGroupItem — 分组项 (`internal/model/contact_group.go`)
+
+ContactGroupItem 是分组与任务的多对多关联表。
+
+```go
+type ContactGroupItem struct {
+    ID        uint      `gorm:"primarykey" json:"id"`
+    GroupID   string    `gorm:"index;size:36;not null" json:"group_id"`
+    TaskID    string    `gorm:"index;size:36;not null" json:"task_id"`
+    SortOrder int       `gorm:"default:0" json:"sort_order"`
+    CreatedAt time.Time `json:"created_at"`
+}
+```
+
+### SkillHub — 技能仓库 (`internal/model/skill.go`)
+
+SkillHub 统一存储 builtin 和 external 技能，external 技能的 ZIP 包以 blob 形式存储在 `Content` 字段。
+
+```go
+type SkillHub struct {
+    ID          uint      `gorm:"primarykey" json:"id"`
+    Name        string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
+    Builtin     bool      `gorm:"not null;default:false" json:"builtin"`
+    StoragePath string    `gorm:"size:512" json:"-"` // Deprecated: 迁移后不再使用
+    Description string    `gorm:"type:text" json:"description"`
+    FileCount   int       `gorm:"default:0" json:"file_count"`
+    TotalSize   int64     `gorm:"default:0" json:"total_size"`
+    Content     []byte    `gorm:"type:longblob" json:"-"` // zip blob，external skill 专用
+    UploadedBy  string    `gorm:"size:64" json:"uploaded_by,omitempty"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+```
+
+- `Name`：技能名称，唯一索引
+- `Builtin`：区分内置/外部技能
+- `Content`：external 技能的 ZIP 包二进制数据（`longblob`）
+- `StoragePath`：已废弃，技能文件已从本地文件系统迁移到 DB blob
+
+### AgentSkill — Agent 技能关联 (`internal/model/skill.go`)
+
+AgentSkill 记录 Session 与 external 技能的多对多关联。
+
+```go
+type AgentSkill struct {
+    ID         uint      `gorm:"primarykey" json:"id"`
+    SessionID  string    `gorm:"size:128;not null" json:"session_id"`
+    SkillName  string    `gorm:"size:128;not null" json:"skill_name"`
+    AgentType  string    `gorm:"size:32;not null" json:"agent_type"`
+    ImportedAt time.Time `json:"imported_at"`
+}
+```
+
+- 仅 external skills 需要关联记录
+- 同一 Session 可导入多个技能，同一技能可被多个 Session 导入
+
 ### 实体关系
 
 ```
@@ -167,6 +238,11 @@ Task 1:N Session 1:N Message
 Session 1:N SessionAgent (session_id 关联)
 Session 1:N DiffSnapshot (session_id 关联)
 Task 1:N Announcement (task_id 关联)
+Task 1:N ContactGroupItem (task_id 关联，通过 ContactGroup 分组)
+Session 1:N AgentSkill (session_id 关联，通过 SkillHub 引用技能)
+
+ContactGroup 1:N ContactGroupItem (group_id 关联)
+SkillHub 1:N AgentSkill (skill_name 关联)
 
 AdminSetting（独立 KV 存储，无外键关联）
 ```

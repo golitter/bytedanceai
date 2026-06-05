@@ -1,44 +1,59 @@
 # AGENTS.md — backend
 
-基于 Go Gin + GORM + MySQL 的后端服务，采用分层架构（handler / model / stream / vo），YAML 配置加载，JWT 认证中间件，Redis Stream 实时消息中转，七牛云存储头像上传。Go >=1.26，热重载使用 Air。
+基于 Go Gin + GORM + MySQL 的后端服务，采用 **Controller → Service → DAO 三层架构**。Go >=1.26，Air 热重载。
 
 ## 目录结构
 
 ```
-cmd/server/main.go            # 入口
+cmd/server/main.go            # 入口（DI 组装 + 优雅关闭）
 configs/config.yaml           # 配置文件
 internal/
-├── conf/                     # 配置加载
-├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, announcement, skill, contact_group, cascade, task_route, admin）
-├── stream/                   # SSE 流式写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
-├── middleware/                # 中间件（auth, admin_auth, cors, logger）
-├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement, skill, contact_group）
+├── conf/                     # 配置加载（YAML + .env overlay）
+├── controller/               # Controller 层
+│   ├── controller.go         # 接口定义（统一 RegisterRoutes）
+│   └── impl/                 # 14 组实现（task, session, message, stream, agent_profile, avatar, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent）
+│       └── errors.go         # BizError → HTTP 响应映射
+├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
+│   ├── service.go            # 接口定义 + DTO
+│   ├── bizerr.go             # 统一业务错误（Code + Message）
+│   └── impl/                 # 14 组实现 + task_route.go（Agent 路由） + group_chat_window.go
+├── dao/                      # DAO 层（接口可 Mock 替换）
+│   ├── dao.go                # 8 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, AdminDao）
+│   ├── gorm/                 # GORM 实现 + cascade.go（级联删除）
+│   └── mock/                 # 测试替身
+├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
+├── middleware/                # 中间件（auth, admin_auth, cors, logger, rate_limit）
+├── model/                    # 11 个数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement, contact_group/item, skill_hub, agent_skill）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
-├── vo/                       # 统一响应封装
-├── controller/               # （预留）
-├── dao/                      # DAO 层（gorm/, mock/）
-└── service/                  # 业务逻辑（skill_validator）
+└── vo/                       # 统一响应封装
 pkg/
-├── db/                       # MySQL 单例连接
-├── redis/                    # Redis 客户端
+├── db/                       # MySQL 单例（sync.Once）
+├── redis/                    # Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
 └── qiniu/                    # 七牛云上传
 ```
 
-## 常用命令
+## 架构分层
 
-> 通过根目录 Makefile 统一管理，需在项目根目录执行。
-
-```bash
-make run-backend            # 启动（Air 热重载）
-make stop-backend           # 停止
-make restart-backend        # 重启
-make status                 # 查看状态
-make tidy                   # go mod tidy
+```
+Controller（参数绑定 + vo 响应） → Service（纯业务逻辑 + BizError） → DAO（纯数据访问） → MySQL/Redis
 ```
 
-- Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
-- 排查问题查看 `../logs/backend.log`
+- **Controller**：仅做参数绑定/校验和 HTTP 响应，通过构造函数内部组装 DAO→Service
+- **Service**：接收 DTO，返回业务结果或 `BizError`，可独立单测（注入 mock DAO）
+- **DAO**：接口在 `dao.go`，GORM 实现在 `gorm/`，mock 在 `mock/`
+
+## 常用命令
+
+> 根目录 Makefile 执行，排查看 `../logs/backend.log`
+
+```bash
+make run-backend       # 启动（Air 热重载）
+make stop-backend      # 停止
+make restart-backend   # 重启
+make status            # 查看状态
+make tidy              # go mod tidy
+```
 
 ## 详细文档
 

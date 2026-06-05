@@ -2,56 +2,101 @@
 
 ## 实现了什么
 
-管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询和头像管理 8 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。公开接口（auth/health/avatar GET）和受保护接口分离。
+管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询和头像管理 8 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。公开接口（auth/health/avatar GET）和受保护接口分离。采用 Controller → Service → DAO 三层架构。
 
 ## 怎么实现的
 
-### 路由注册 (`internal/handler/admin.go`)
+### 三层架构
 
-`AdminHandler` 通过 `RegisterRoutes` 方法自注册路由，公开接口（auth/health）和受保护接口分离：
+```
+AdminController
+    │ 参数绑定 → AdminService 调用 → vo 响应
+    ▼
+AdminService
+    │ 业务逻辑（认证/资源聚合/统计）
+    ▼
+AdminDao + SessionDao + agentend_client
+    │ 数据访问
+    ▼
+MySQL + AgentEnd API
+```
+
+### Controller 层 (`internal/controller/impl/admin_controller.go`)
+
+`AdminController` 通过构造函数注入 `Config`、`AdminService`：
 
 ```go
-func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
+type AdminController struct {
+    service service.AdminService
+    cfg     *conf.Config
+}
+
+func NewAdminController(cfg *conf.Config, _ *qiniu.Uploader, agentClient *agentend_client.Client) *AdminController {
+    adminDao := gormdao.NewAdminDao()
+    sessionDao := gormdao.NewSessionDao()
+    adminService := svcimpl.NewAdminService(cfg, adminDao, sessionDao, agentClient)
+    return &AdminController{service: adminService, cfg: cfg}
+}
+```
+
+`RegisterRoutes` 自注册路由，公开接口和受保护接口分离，auth 路由带 IP 限流（5 次/分钟）：
+
+```go
+func (ctrl *AdminController) RegisterRoutes(rg *gin.RouterGroup) {
     admin := rg.Group("/admin")
     {
-        admin.POST("/auth", h.Auth)
-        admin.GET("/health", h.HealthCheck)
-        admin.GET("/avatar", h.GetAvatar)
+        authLimiter := middleware.NewIPRateLimiter(5, time.Minute)
+        admin.POST("/auth", authLimiter.Middleware(), ctrl.Auth)
+        admin.GET("/health", ctrl.HealthCheck)
+        admin.GET("/avatar", ctrl.GetAvatar)
 
         protected := admin.Group("")
-        protected.Use(middleware.AdminAuth(h.cfg.JWT.Secret))
+        protected.Use(middleware.AdminAuth(ctrl.cfg.JWT.Secret))
         {
-            protected.GET("/resources", h.GetResources)
-            protected.DELETE("/sessions", h.DeleteSessions)
-            protected.GET("/workspaces", h.GetWorkspaces)
-            protected.DELETE("/workspaces/:id", h.DeleteWorkspace)
-            protected.GET("/agents", h.GetAgents)
-            protected.GET("/services", h.GetServices)
-            protected.GET("/statistics", h.GetStatistics)
-            protected.PUT("/avatar", h.UpdateAvatar)
+            protected.GET("/resources", ctrl.GetResources)
+            protected.DELETE("/sessions", ctrl.DeleteSessions)
+            protected.GET("/workspaces", ctrl.GetWorkspaces)
+            protected.DELETE("/workspaces/:id", ctrl.DeleteWorkspace)
+            protected.GET("/agents", ctrl.GetAgents)
+            protected.GET("/services", ctrl.GetServices)
+            protected.GET("/statistics", ctrl.GetStatistics)
+            protected.PUT("/avatar", ctrl.UpdateAvatar)
         }
     }
 }
 ```
 
-构造函数注入 `Config`（密码验证）、`Uploader`（头像上传）和 `agentend_client.Client`（代理请求）。
+### Service 接口 (`internal/service/service.go`)
 
-### 认证 (`internal/handler/admin.go` + `internal/middleware/admin_auth.go`)
+```go
+type AdminService interface {
+    Auth(password string) (*AuthResponse, error)
+    GetAvatar() (string, error)
+    UpdateAvatar(url string) error
+    GetAgents() ([]AgentInfo, error)
+    GetServices() []ServiceInfo
+    GetResources() (*ResourceSummary, error)
+    DeleteSessions(sessionIDs []string) (int, error)
+    GetStatistics() (*StatisticsResponse, error)
+    GetWorkspaces() (*WorkspaceSummary, error)
+    DeleteWorkspace(id string) error
+}
+```
+
+### 认证 (`AdminService.Auth` + `internal/middleware/admin_auth.go`)
 
 **Auth** — 密码验证，成功后返回 JWT（1 小时有效）：
 
 ```go
-func (h *AdminHandler) Auth(c *gin.Context) {
-    if !middleware.VerifyAdminPassword(req.Password, h.cfg.Admin.Password) {
-        vo.Unauthorized(c, "密码错误")
-        return
+func (s *adminService) Auth(password string) (*service.AuthResponse, error) {
+    if !middleware.VerifyAdminPassword(password, s.cfg.Admin.Password) {
+        return nil, service.ErrUnauthorized("密码错误")
     }
-    token, err := middleware.GenerateAdminToken(h.cfg.JWT.Secret)
+    token, err := middleware.GenerateAdminToken(s.cfg.JWT.Secret)
     if err != nil {
-        vo.InternalError(c, "failed to generate token")
-        return
+        return nil, service.ErrInternal("failed to generate token")
     }
-    vo.OK(c, gin.H{"token": token, "expires_in": 3600})
+    return &service.AuthResponse{Token: token, ExpiresIn: 3600}, nil
 }
 ```
 
@@ -73,11 +118,25 @@ func AdminAuth(jwtSecret string) gin.HandlerFunc {
 
 密码存储在 `configs/config.yaml` 的 `admin.password` 字段。
 
-### 系统资源 (`internal/handler/admin_resource.go`)
+### DAO 接口 (`internal/dao/dao.go`)
 
-`GetResources` 聚合两路数据源：
+```go
+type AdminDao interface {
+    GetAdminSetting(key string) (*model.AdminSetting, error)
+    ReplaceAdminSetting(key, value string) error
+    DeleteSessions(sessionIDs []string) (int, error)
+    CountSessionsByDate(date string) (int64, error)
+    CountSessionsBetween(start, end time.Time) (int64, error)
+    CountMessages() (int64, error)
+    CountMessagesByAgent() (map[string]int64, error)
+}
+```
+
+### 各功能模块
+
+**系统资源 (`GetResources`)** — 聚合两路数据源：
 - **磁盘/内存**：代理到 AgentEnd 的 `/v1/admin/resources` 接口
-- **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`（默认 512MB）
+- **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`
 
 ```go
 type ResourceInfo struct {
@@ -87,9 +146,7 @@ type ResourceInfo struct {
 }
 ```
 
-### 服务健康 (`internal/handler/admin_health.go`)
-
-`GetServices` 检测三个服务的 HTTP 可达性（3s 超时）：
+**服务健康 (`GetServices`)** — 检测三个服务的 HTTP 可达性（3s 超时）：
 
 | 服务 | 检测 URL |
 |------|---------|
@@ -97,27 +154,15 @@ type ResourceInfo struct {
 | Backend | `http://localhost:8080/ping` |
 | AgentEnd | `http://localhost:{port}/health` |
 
-返回 `ServiceInfo` 列表，包含名称、状态（Running/Down）、运行时间、端口、最后检查时间。
+**会话清理 (`DeleteSessions`)** — 批量删除指定 session_id 列表的会话记录，通过 `AdminDao.DeleteSessions` 执行。
 
-### 会话清理 (`internal/handler/admin_session.go`)
+**工作区管理 (`GetWorkspaces` / `DeleteWorkspace`)** — 查询 MySQL sessions 表（`status = "running"`）构造工作区列表。`DeleteWorkspace` 将对应 Session 状态更新为 `cleaned`。
 
-`DeleteSessions` 批量删除指定 session_id 列表的会话记录。
+**Agent 概览 (`GetAgents`)** — 读取本地文件系统中的 Agent 配置文件（`~/.claude/settings.json`、`~/.opencode/config.json` 等），返回 Agent 信息列表，敏感字段自动脱敏。
 
-### 工作区管理 (`internal/handler/admin_workspace.go`)
+**统计数据 (`GetStatistics`)** — 聚合 MySQL 统计（Task/Session/Message 计数）和 AgentEnd 代理数据。通过 `AdminDao` 的 `CountSessionsByDate` / `CountMessages` / `CountMessagesByAgent` 等方法获取。
 
-`GetWorkspaces` 直接查询 MySQL sessions 表（`status = "running"`），构造工作区列表返回。`DeleteWorkspace` 将对应 Session 状态更新为 `cleaned`。
-
-### Agent 概览 (`internal/handler/admin_agent.go`)
-
-`GetAgents` 读取本地文件系统中的 Agent 配置文件（`~/.claude/settings.json`、`~/.opencode/config.json` 等），返回 Agent 信息列表，敏感字段自动脱敏。
-
-### 统计数据 (`internal/handler/admin_stats.go`)
-
-`GetStatistics` 聚合 MySQL 统计（Task/Session/Message 计数）和 AgentEnd 代理数据。
-
-### 头像管理 (`internal/handler/admin_avatar.go`)
-
-`GetAvatar` / `UpdateAvatar` 管理管理员头像，使用七牛云存储。
+**头像管理 (`GetAvatar` / `UpdateAvatar`)** — 管理管理员头像，通过 `AdminDao.GetAdminSetting` / `ReplaceAdminSetting` 存储头像 URL。
 
 ### Admin 配置 (`internal/conf/conf.go`)
 
@@ -127,4 +172,4 @@ type AdminConfig struct {
 }
 ```
 
-Config 结构体新增 `Admin AdminConfig` 字段。
+Config 结构体包含 `Admin AdminConfig` 字段。

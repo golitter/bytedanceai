@@ -2,7 +2,9 @@
 
 ## 实现了什么
 
-`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 Hub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
+`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 RuntimeHub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
+
+> **注意**：Stream 包（`internal/stream/`）保持独立，未纳入 Controller/Service/DAO 三层架构。`StreamWriter` 直接使用 DAO 接口（`dao.MessageDao`）进行数据写入，`CleanupStaleMessages` 接受 `dao.MessageDao` 参数。
 
 ## 怎么实现的
 
@@ -55,24 +57,27 @@ const (
 
 ### 双层通道：RuntimeHub + Redis Stream
 
-`RuntimeHub`（`internal/stream/hub.go`）是一个内存发布/订阅中心，用于低延迟 SSE 推送：
+`RuntimeHub`（`internal/stream/hub.go`）是一个内存发布/订阅中心，用于低延迟 SSE 推送。支持 `closedKeys` 防止已关闭 stream 被重新创建，定期清理（10 分钟）：
 
 ```go
-// Hub is the global RuntimeHub instance.
-var Hub = &RuntimeHub{streams: make(map[string]*RuntimeStream)}
+type RuntimeHub struct {
+    mu         sync.RWMutex
+    streams    map[string]*RuntimeStream
+    closedKeys map[string]struct{} // 防止已关闭 stream 被重新创建
+}
 
-// Publish sends an event to all subscribers of the given stream key.
+var Hub = &RuntimeHub{streams: make(map[string]*RuntimeStream), closedKeys: make(map[string]struct{})}
+
 func (h *RuntimeHub) Publish(key, data string)
-
-// Subscribe returns a channel for consuming events and the current sequence number.
 func (h *RuntimeHub) Subscribe(key string) (<-chan HubEvent, uint64)
-
-// Close marks the stream as done and removes it from the hub.
+func (h *RuntimeHub) Unsubscribe(key string, ch <-chan HubEvent)
 func (h *RuntimeHub) Close(key string)
+func (h *RuntimeHub) StartClosedKeysCleanup() // 后台定时清理 closedKeys（10 分钟）
 ```
 
 - **Hot path**：`Hub.Publish()` 立即推送到 SSE 订阅者（内存 channel，无网络延迟）
 - **Cold path**：Redis Stream `XADD` 持久化存储，用于断线重连和数据恢复
+- **closedKeys**：`Close()` 后记录 key，防止客户端重连时创建新 stream；`StartClosedKeysCleanup()` 定期清理（启动时在 `main.go` 调用）
 
 ### 创建与注册
 
@@ -351,15 +356,19 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 **CleanupStaleMessages** — 服务启动时将所有残留的 `streaming` 状态消息标记为 `failed`：
 
 ```go
-func CleanupStaleMessages() {
-	result := db.GetDB().Model(&model.Message{}).
-		Where("status = ?", "streaming").
-		Update("status", "failed")
-	if result.RowsAffected > 0 {
-		slog.Info("cleaned up stale streaming messages", "count", result.RowsAffected)
+func CleanupStaleMessages(messageDao dao.MessageDao) {
+	affected, err := messageDao.FailStaleStreamingMessages()
+	if err != nil {
+		slog.Error("failed to clean up stale streaming messages", "error", err)
+		return
+	}
+	if affected > 0 {
+		slog.Info("cleaned up stale streaming messages", "count", affected)
 	}
 }
 ```
+
+> `CleanupStaleMessages` 接受 `dao.MessageDao` 参数（通过 DAO 接口而非直接调用 `db.GetDB()`），在 `main.go` 中传入 `gormdao.NewMessageDao()`。
 
 ### 运行时块事件持久化
 
@@ -399,7 +408,7 @@ func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
 AgentEnd (FastAPI :8001)
     │ SSE response body
     ▼
-RunTask handler goroutine
+TaskService.RunTask goroutine
     │ bufio.Scanner 逐行读取
     ├──────────────────────────────────┐
     ▼                                  ▼
@@ -410,7 +419,7 @@ publishToRedis()                  appendText()
 RuntimeHub (内存)                     │ UPDATE content, last_seq
     │ 1024-buffered channel            ▼
     ▼                          MySQL messages 表
-StreamHandler.serveStreaming()
+StreamController → StreamService
     │ Hub.Subscribe() (实时)
     │ XREAD (Redis 缺口重放)
     ▼
