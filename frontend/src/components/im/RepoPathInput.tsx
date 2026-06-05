@@ -67,6 +67,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
             onValidationChange(e.target.value.trim(), false)
           }}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return
             if (e.key === 'Enter') handleValidate()
           }}
         />

@@ -220,6 +220,7 @@ export function AgentProfilePage() {
                   value={nameDraft}
                   onChange={(e) => setNameDraft(e.target.value)}
                   onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return
                     if (e.key === 'Enter') saveName()
                     if (e.key === 'Escape') setEditingName(false)
                   }}

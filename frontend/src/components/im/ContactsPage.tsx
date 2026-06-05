@@ -211,7 +211,9 @@ export function ContactsPage() {
                   type="text"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
+                  onKeyDown={(e) =>
+                    !e.nativeEvent.isComposing && e.key === 'Enter' && handleCreateGroup()
+                  }
                   placeholder={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
                   className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-primary"
                   autoFocus

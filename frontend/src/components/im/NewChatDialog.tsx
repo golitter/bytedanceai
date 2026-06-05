@@ -136,6 +136,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               }}
               onAnimationEnd={() => setGroupTitleError(false)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return
                 if (e.key === 'Enter') handleSubmit()
               }}
             />
