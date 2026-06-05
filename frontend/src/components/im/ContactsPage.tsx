@@ -13,6 +13,7 @@ import {
 import { useConversations } from '@/hooks/use-conversations'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
+import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useActiveTab, useChatNav } from '@/stores/chat'
 
@@ -69,7 +70,7 @@ export function ContactsPage() {
       <div className="flex h-full w-[420px] shrink-0 flex-col border-r border-border">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold text-foreground">通讯录</h2>
+          <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
         </div>
 
         {/* Search */}
@@ -78,7 +79,7 @@ export function ContactsPage() {
             <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
             <input
               type="text"
-              placeholder="搜索会话..."
+              placeholder={UI_PLACEHOLDERS.SEARCH_CONTACTS}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-transparent text-xs text-foreground outline-none"
@@ -93,7 +94,7 @@ export function ContactsPage() {
             <div className="mb-4">
               <div className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
                 <Pin className="h-3 w-3" />
-                置顶会话
+                {UI_LABELS.PIN_CHAT}
                 <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] font-normal">
                   {filteredPinned.length}
                 </span>
@@ -140,7 +141,7 @@ export function ContactsPage() {
                       type="button"
                       className="rounded p-1 text-tertiary transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
                       onClick={() => handleDeleteGroup(group.group_id, group.name)}
-                      title="删除分组"
+                      title={UI_ACTIONS.DELETE}
                     >
                       ×
                     </button>
@@ -159,7 +160,9 @@ export function ContactsPage() {
                         />
                       ))
                     ) : (
-                      <p className="px-3 py-2 text-xs text-tertiary">暂无会话</p>
+                      <p className="px-3 py-2 text-xs text-tertiary">
+                        {UI_MESSAGES.NO_CONVERSATIONS}
+                      </p>
                     )}
                   </div>
                 )}
@@ -182,7 +185,7 @@ export function ContactsPage() {
             return (
               <div className="mb-4">
                 <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
-                  未分组
+                  {UI_MISC.UNGROUPED}
                   <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-normal">
                     {displayedUngrouped.length}
                   </span>
@@ -209,7 +212,7 @@ export function ContactsPage() {
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
-                  placeholder="输入分组名称..."
+                  placeholder={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
                   className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-primary"
                   autoFocus
                 />
@@ -218,7 +221,7 @@ export function ContactsPage() {
                   className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
                   onClick={handleCreateGroup}
                 >
-                  确定
+                  {UI_MISC.OK}
                 </button>
                 <button
                   type="button"
@@ -228,7 +231,7 @@ export function ContactsPage() {
                     setNewGroupName('')
                   }}
                 >
-                  取消
+                  {UI_ACTIONS.CANCEL}
                 </button>
               </div>
             ) : (
@@ -238,7 +241,7 @@ export function ContactsPage() {
                 onClick={() => setShowNewGroup(true)}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-                新建分组
+                {UI_MISC.NEW_GROUP}
               </button>
             )}
           </div>
@@ -361,7 +364,7 @@ function ContactCard({
             e.target.selectedIndex = 0
           }}
         >
-          <option value="">移至分组</option>
+          <option value="">{UI_MESSAGES.MOVE_TO_GROUP}</option>
           {groups.map((g) => (
             <option key={g.group_id} value={g.group_id}>
               {g.name}
@@ -376,7 +379,7 @@ function ContactCard({
           type="button"
           className="shrink-0 rounded p-1 text-xs text-tertiary transition-opacity hover:bg-bg-hover hover:text-foreground"
           onClick={() => onRemove({ groupId: isInGroup, taskId: conv.taskId })}
-          title="移出分组"
+          title={UI_MISC.MOVE_OUT_GROUP}
         >
           ×
         </button>

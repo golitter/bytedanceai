@@ -2,6 +2,7 @@ import { Send } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { AgentSessionInfo } from '@/lib/api'
+import { UI_PLACEHOLDERS } from '@/lib/ui-text'
 
 const MAX_INPUT_HEIGHT = 200
 const MIN_INPUT_HEIGHT = 48
@@ -21,7 +22,7 @@ export function MessageInput({
   disabled = false,
   sendDisabled = false,
   sendDisabledHint,
-  placeholder = '输入消息...',
+  placeholder = UI_PLACEHOLDERS.MESSAGE_INPUT,
   mentionSessions,
 }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)

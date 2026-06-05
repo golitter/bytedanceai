@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { updateSession, uploadAvatar } from '@/lib/api'
+import { UI_ACTIONS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
 
 interface AgentEditDialogProps {
   open: boolean
@@ -73,8 +74,8 @@ export function AgentEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-foreground">编辑 Agent</DialogTitle>
-          <DialogDescription className="sr-only">编辑 Agent 名称和头像</DialogDescription>
+          <DialogTitle className="text-foreground">{UI_LABELS.EDIT_AGENT}</DialogTitle>
+          <DialogDescription className="sr-only">{UI_LABELS.EDIT_AGENT_DESC}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -92,7 +93,7 @@ export function AgentEditDialog({
               className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground"
               onClick={() => fileRef.current?.click()}
             >
-              上传头像
+              {UI_LABELS.UPLOAD_AVATAR}
             </button>
             <input
               ref={fileRef}
@@ -104,7 +105,7 @@ export function AgentEditDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-tertiary">名称</label>
+            <label className="mb-1 block text-xs text-tertiary">{UI_LABELS.NAME}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -117,7 +118,7 @@ export function AgentEditDialog({
             onClick={handleSave}
             disabled={saving || !name.trim()}
           >
-            {saving ? '保存中...' : '保存'}
+            {saving ? UI_STATUS.SAVING : UI_ACTIONS.SAVE}
           </button>
         </div>
       </DialogContent>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { getAdminAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
+import { UI_LABELS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { type AdminMenuKey, useAdminMenu, useAdminStore } from '@/stores/admin'
 
@@ -15,23 +16,39 @@ interface MenuItemProps {
 const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] = [
   {
     icon: <LayoutDashboard className="h-4 w-4" strokeWidth={1.25} />,
-    label: '总览仪表盘',
+    label: UI_LABELS.DASHBOARD,
     key: 'dashboard',
   },
-  { icon: <Trash2 className="h-4 w-4" strokeWidth={1.25} />, label: '会话清理', key: 'sessions' },
+  {
+    icon: <Trash2 className="h-4 w-4" strokeWidth={1.25} />,
+    label: UI_LABELS.SESSION_CLEANUP,
+    key: 'sessions',
+  },
   {
     icon: <FolderOpen className="h-4 w-4" strokeWidth={1.25} />,
-    label: '工作区管理',
+    label: UI_LABELS.WORKSPACE_MANAGE,
     key: 'workspaces',
   },
-  { icon: <Bot className="h-4 w-4" strokeWidth={1.25} />, label: 'Agent 概览', key: 'agents' },
-  { icon: <Heart className="h-4 w-4" strokeWidth={1.25} />, label: '服务健康', key: 'services' },
+  {
+    icon: <Bot className="h-4 w-4" strokeWidth={1.25} />,
+    label: UI_LABELS.AGENT_OVERVIEW,
+    key: 'agents',
+  },
+  {
+    icon: <Heart className="h-4 w-4" strokeWidth={1.25} />,
+    label: UI_LABELS.SERVICE_HEALTH,
+    key: 'services',
+  },
   {
     icon: <BarChart3 className="h-4 w-4" strokeWidth={1.25} />,
-    label: '数据统计',
+    label: UI_LABELS.STATISTICS,
     key: 'statistics',
   },
-  { icon: <UserCog className="h-4 w-4" strokeWidth={1.25} />, label: '用户管理', key: 'users' },
+  {
+    icon: <UserCog className="h-4 w-4" strokeWidth={1.25} />,
+    label: UI_LABELS.USER_MANAGEMENT,
+    key: 'users',
+  },
 ]
 
 function MenuItem({ icon, label, menuKey }: MenuItemProps) {

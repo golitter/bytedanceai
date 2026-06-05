@@ -1,5 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 
+import { UI_CARD_STATUS } from '@/lib/ui-text'
+
 interface PreviewCardProps {
   url: string
 }
@@ -15,7 +17,7 @@ export function PreviewCard({ url }: PreviewCardProps) {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-[transform,opacity] hover:text-foreground"
         >
-          在新标签页打开
+          {UI_CARD_STATUS.OPEN_IN_NEW_TAB}
           <ExternalLink className="h-3 w-3" strokeWidth={1.25} />
         </a>
       </div>

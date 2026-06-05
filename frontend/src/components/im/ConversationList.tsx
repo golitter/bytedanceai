@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { useConversations } from '@/hooks/use-conversations'
 import { useHoverStyle } from '@/hooks/use-hover-style'
+import { UI_MESSAGES, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
 import { ConversationItem } from './ConversationItem'
@@ -29,7 +30,7 @@ export function ConversationList() {
           <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
           <input
             type="text"
-            placeholder="搜索对话..."
+            placeholder={UI_PLACEHOLDERS.SEARCH_CONVERSATION}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-transparent text-xs text-foreground outline-none"
@@ -47,12 +48,12 @@ export function ConversationList() {
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto px-2">
         {isLoading ? (
-          <div className="px-2 py-4 text-xs text-tertiary">加载中...</div>
+          <div className="px-2 py-4 text-xs text-tertiary">{UI_STATUS.LOADING}</div>
         ) : !filtered?.length ? (
           <div className="flex flex-col items-center gap-2 px-2 py-8">
             <MessageSquare className="h-6 w-6 text-tertiary" strokeWidth={1.25} />
             <p className="text-center text-xs text-tertiary">
-              {search ? '没有找到对话' : '还没有对话，点击 + 开始新对话'}
+              {search ? UI_MESSAGES.NO_MATCHING_MESSAGES : '还没有对话，点击 + 开始新对话'}
             </p>
           </div>
         ) : (

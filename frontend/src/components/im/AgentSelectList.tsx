@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import type { AgentType } from '@/generated/request'
 import { AGENT_TYPES } from '@/lib/constants'
+import { UI_ACTIONS, UI_ERRORS, UI_PLACEHOLDERS } from '@/lib/ui-text'
 
 export interface AgentEntry {
   type: AgentType
@@ -93,7 +94,7 @@ export function AgentSelectList({
               <AgentAvatar agentType={addingType} status="ready" />
               <input
                 value={inputName}
-                placeholder="输入 Agent 名称"
+                placeholder={UI_PLACEHOLDERS.AGENT_NAME_INPUT}
                 className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
                 style={{
                   borderColor: nameError ? 'var(--destructive)' : 'var(--border)',
@@ -115,7 +116,7 @@ export function AgentSelectList({
                 className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground"
                 onClick={handleAddAgent}
               >
-                添加
+                {UI_ACTIONS.ADD}
               </button>
               <button
                 className="text-xs text-muted-foreground hover:text-foreground"
@@ -125,7 +126,7 @@ export function AgentSelectList({
                   setNameError(false)
                 }}
               >
-                取消
+                {UI_ACTIONS.CANCEL}
               </button>
             </div>
           ) : (
@@ -146,7 +147,7 @@ export function AgentSelectList({
               ))}
             </div>
           )}
-          {nameError && <p className="mt-1 text-xs text-destructive">请输入不重复的 Agent 名称</p>}
+          {nameError && <p className="mt-1 text-xs text-destructive">{UI_ERRORS.DUPLICATE_NAME}</p>}
           {ruleError && <p className="mt-1 text-xs text-destructive">{ruleError}</p>}
         </div>
       )}

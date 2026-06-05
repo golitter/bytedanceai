@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { adminAuth } from '@/lib/api'
+import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 import { useAdminStore } from '@/stores/admin'
 
 export function AdminPasswordDialog() {
@@ -35,7 +36,7 @@ export function AdminPasswordDialog() {
       hidePasswordDialog()
       setPassword('')
     } catch {
-      setError('密码错误')
+      setError(UI_MESSAGES.PASSWORD_ERROR)
     } finally {
       setLoading(false)
     }
@@ -55,19 +56,21 @@ export function AdminPasswordDialog() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="h-4 w-4" strokeWidth={1.25} />
-            {passwordDialogPurpose === 'login' ? '管理员验证' : '敏感操作确认'}
+            {passwordDialogPurpose === 'login'
+              ? UI_LABELS.ADMIN_VERIFY
+              : UI_LABELS.SENSITIVE_CONFIRM}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {passwordDialogPurpose === 'login'
-              ? '请输入管理密码以进入管理面板'
-              : '查看敏感信息需要再次验证密码'}
+              ? UI_LABELS.ADMIN_VERIFY
+              : UI_LABELS.SENSITIVE_CONFIRM}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <p className="text-sm text-text-secondary">
             {passwordDialogPurpose === 'login'
-              ? '请输入管理密码以进入管理面板'
-              : '查看敏感信息需要再次验证密码'}
+              ? UI_LABELS.ADMIN_VERIFY
+              : UI_LABELS.SENSITIVE_CONFIRM}
           </p>
           <input
             type="password"
@@ -76,7 +79,7 @@ export function AdminPasswordDialog() {
               setPassword(e.target.value)
               setError('')
             }}
-            placeholder="请输入密码"
+            placeholder={UI_PLACEHOLDERS.PASSWORD}
             className="h-9 rounded-md px-3 text-sm outline-none"
             style={{
               border: '1px solid var(--border)',
@@ -96,7 +99,7 @@ export function AdminPasswordDialog() {
             className="h-9 rounded-md text-sm font-medium transition-[transform,opacity] disabled:opacity-50"
             style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
           >
-            {loading ? '验证中...' : '确认'}
+            {loading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
           </button>
         </form>
       </DialogContent>

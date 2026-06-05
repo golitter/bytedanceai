@@ -14,6 +14,7 @@ import {
 import { type ReactNode, useCallback, useRef, useState } from 'react'
 
 import { confirmSkill, deleteSkill, fetchSkills, type SkillHubItem, uploadSkill } from '@/lib/api'
+import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 // ── Types ──
@@ -77,7 +78,7 @@ export function SkillsHubPage() {
           <Search className="h-3.5 w-3.5 text-tertiary" />
           <input
             type="text"
-            placeholder="搜索技能..."
+            placeholder={UI_PLACEHOLDERS.SEARCH_SKILLS}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="flex-1 border-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-tertiary"
@@ -94,7 +95,7 @@ export function SkillsHubPage() {
             {builtins.length > 0 && (
               <SectionLabel
                 icon={<Shield className="h-3.5 w-3.5" strokeWidth={1.25} />}
-                label="内置 Skills"
+                label={UI_LABELS.INNER_SKILLS}
               />
             )}
             {builtins.map((skill) => (
@@ -105,7 +106,7 @@ export function SkillsHubPage() {
             {externals.length > 0 && (
               <SectionLabel
                 icon={<Package className="h-3.5 w-3.5" strokeWidth={1.25} />}
-                label="外部 Skills"
+                label={UI_LABELS.EXTERNAL_SKILLS}
               />
             )}
             {externals.map((skill) => (
@@ -119,7 +120,7 @@ export function SkillsHubPage() {
             {filtered.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-tertiary">
                 <Star className="mb-3 h-8 w-8 opacity-40" />
-                <p className="text-[13px] font-medium">暂无技能</p>
+                <p className="text-[13px] font-medium">{UI_MESSAGES.NO_SKILLS}</p>
                 <p className="text-[12px]">点击右上角「上传 Skill」添加</p>
               </div>
             )}
@@ -205,7 +206,7 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
               }}
             >
               <Trash2 className="h-3 w-3" />
-              删除
+              {UI_ACTIONS.DELETE}
             </button>
           )}
         </div>
@@ -374,7 +375,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,opacity] hover:bg-hover hover:text-foreground"
             onClick={onClose}
           >
-            取消
+            {UI_ACTIONS.CANCEL}
           </button>
           {step === 'validate' && (
             <button
@@ -432,7 +433,7 @@ function DeleteConfirmDialog({
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,opacity] hover:bg-hover"
             onClick={onCancel}
           >
-            取消
+            {UI_ACTIONS.CANCEL}
           </button>
           <button
             className="rounded-[8px] border border-destructive/20 bg-destructive/10 px-4 py-2 text-[12px] font-medium text-destructive transition-[transform,opacity] hover:bg-destructive/20 disabled:opacity-50"

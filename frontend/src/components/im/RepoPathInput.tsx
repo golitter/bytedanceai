@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { validateRepoPath } from '@/lib/api'
+import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
 
 interface RepoPathInputProps {
   onValidationChange: (path: string, validated: boolean) => void
@@ -15,7 +16,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
   const handleValidate = async () => {
     const path = repoPath.trim()
     if (!path) {
-      setError('请输入仓库路径')
+      setError(UI_ERRORS.REPO_PATH_REQUIRED)
       setValidated(false)
       onValidationChange('', false)
       return
@@ -35,7 +36,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
       }
     } catch {
       setValidated(false)
-      setError('校验失败，请检查 Agent 服务是否可用')
+      setError(UI_ERRORS.VALIDATE_FAILED)
       onValidationChange(path, false)
     } finally {
       setValidating(false)
@@ -44,7 +45,9 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
 
   return (
     <div className="mb-3">
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">仓库路径</label>
+      <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        {UI_LABELS.REPO_PATH}
+      </label>
       <div className="flex items-center gap-2">
         <input
           value={repoPath}
@@ -73,7 +76,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
           onClick={handleValidate}
           disabled={validating}
         >
-          {validating ? '校验中...' : '校验'}
+          {validating ? UI_STATUS.VALIDATING : UI_ACTIONS.VALIDATE}
         </button>
       </div>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}

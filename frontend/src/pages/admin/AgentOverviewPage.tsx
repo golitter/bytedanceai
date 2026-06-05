@@ -3,6 +3,7 @@ import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 import { adminAuth, getAdminAgents } from '@/lib/api'
+import { UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function AgentOverviewPage() {
@@ -134,7 +135,7 @@ export function AgentOverviewPage() {
                   setReauthPassword(e.target.value)
                   setReauthError('')
                 }}
-                placeholder="请输入密码"
+                placeholder={UI_PLACEHOLDERS.PASSWORD}
                 className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none"
                 autoFocus
               />

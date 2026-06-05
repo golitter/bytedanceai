@@ -14,6 +14,7 @@ import type { AgentType } from '@/generated/request'
 import { useCreateConversation } from '@/hooks/use-conversations'
 import { fetchAgentTypes } from '@/lib/api'
 import { AGENT_DESCRIPTIONS, AGENT_TYPES } from '@/lib/constants'
+import { UI_ERRORS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
 interface NewChatDialogProps {
@@ -96,8 +97,10 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm border-border bg-card">
         <DialogHeader>
-          <DialogTitle className="text-foreground">新建对话</DialogTitle>
-          <DialogDescription className="sr-only">选择 Agent 并创建新对话</DialogDescription>
+          <DialogTitle className="text-foreground">{UI_LABELS.NEW_CHAT}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {UI_LABELS.NEW_CHAT} - 选择 Agent
+          </DialogDescription>
         </DialogHeader>
 
         <RepoPathInput
@@ -121,7 +124,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
             </label>
             <input
               value={groupTitle}
-              placeholder="为群聊起个名字"
+              placeholder={UI_PLACEHOLDERS.GROUP_NAME}
               className="w-full rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
               style={{
                 borderColor: groupTitleError ? 'var(--destructive)' : 'var(--border)',
@@ -136,7 +139,9 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 if (e.key === 'Enter') handleSubmit()
               }}
             />
-            {groupTitleError && <p className="mt-1 text-xs text-destructive">群聊必须填写名称</p>}
+            {groupTitleError && (
+              <p className="mt-1 text-xs text-destructive">{UI_ERRORS.GROUP_NAME_REQUIRED}</p>
+            )}
           </div>
         )}
 
@@ -157,7 +162,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           disabled={!canSubmit}
         >
           {createMutation.isPending
-            ? '创建中...'
+            ? UI_STATUS.CREATING
             : agents.length > 1
               ? `创建群聊（${agents.length} 个 Agent）`
               : agents.length === 1

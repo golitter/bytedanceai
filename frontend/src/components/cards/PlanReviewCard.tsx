@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 
 import { submitPlanReview } from '@/lib/api'
 import type { PlanTask } from '@/lib/block-types'
+import { UI_ERRORS, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/stores/chat'
 
@@ -135,7 +136,7 @@ export function PlanReviewCard({
     if (!taskId || !sessionId) return
     const trimmed = content.trim()
     if ((action === 'discuss' || action === 'modify') && !trimmed) {
-      setError('请先写下你的反馈。')
+      setError(UI_ERRORS.FEEDBACK_REQUIRED)
       return
     }
     setSubmitting(action)
@@ -154,7 +155,7 @@ export function PlanReviewCard({
       })
       if (action !== 'approve') setContent('')
     } catch (err) {
-      const message = err instanceof Error ? err.message : '提交审查失败'
+      const message = err instanceof Error ? err.message : UI_ERRORS.SUBMIT_REVIEW_FAILED
       if (message.includes('no pending plan review')) {
         setStale(true)
         setPlanReviewStatus(sessionId, resolvedReviewKey, 'stale')
@@ -269,7 +270,7 @@ export function PlanReviewCard({
             <textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
-              placeholder="有修改意见或想继续讨论，可以写在这里..."
+              placeholder={UI_PLACEHOLDERS.FEEDBACK_PLACEHOLDER}
               className="min-h-20 w-full resize-none rounded-[8px] border border-border/80 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-tertiary focus:border-agent-orchestrator/40"
               disabled={disabled}
             />

@@ -17,6 +17,14 @@ import {
   uploadAvatar,
 } from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
+import {
+  UI_ACTIONS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+  UI_PROFILE,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
@@ -223,7 +231,7 @@ export function AgentProfilePage() {
                   disabled={saving || !nameDraft.trim()}
                   className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
-                  {saving ? '...' : '保存'}
+                  {saving ? '...' : UI_ACTIONS.SAVE}
                 </button>
               </div>
             ) : (
@@ -288,7 +296,7 @@ export function AgentProfilePage() {
                   if (e.key === 'Escape') setEditingSoul(false)
                 }}
                 className="min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
-                placeholder="描述这个 Agent 的身份和性格（不超过 300 字，不含空格）"
+                placeholder={UI_PLACEHOLDERS.SOUL_DESCRIPTION}
                 maxLength={330}
                 disabled={soulSaving}
               />
@@ -310,14 +318,14 @@ export function AgentProfilePage() {
                       setSoulError('')
                     }}
                   >
-                    取消
+                    {UI_ACTIONS.CANCEL}
                   </button>
                   <button
                     className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
                     onClick={saveSoul}
                     disabled={soulSaving || countChars(soulDraft) > 300}
                   >
-                    {soulSaving ? '保存中...' : '保存'}
+                    {soulSaving ? UI_STATUS.SAVING : UI_ACTIONS.SAVE}
                   </button>
                 </div>
               </div>
@@ -332,7 +340,7 @@ export function AgentProfilePage() {
                   className="text-xs text-destructive/60 hover:text-destructive"
                   onClick={clearSoul}
                 >
-                  清除
+                  {UI_ACTIONS.CLEAR}
                 </button>
               </div>
             </div>
@@ -364,7 +372,7 @@ export function AgentProfilePage() {
                   {!s.builtin && isAdapterAgent && (
                     <button
                       className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,opacity] hover:bg-destructive/20"
-                      title="移除 Skill"
+                      title={UI_PROFILE.REMOVE_SKILL}
                       onClick={async () => {
                         try {
                           await removeSkill(s.name, sessionId)
@@ -383,7 +391,7 @@ export function AgentProfilePage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-tertiary">暂无技能</p>
+            <p className="text-sm text-tertiary">{UI_MESSAGES.NO_SKILLS}</p>
           )}
           {isAdapterAgent && (
             <button
@@ -391,7 +399,7 @@ export function AgentProfilePage() {
               onClick={() => setShowImportDialog(true)}
             >
               <Plus className="h-4 w-4" />
-              导入外部 Skill
+              {UI_PROFILE.IMPORT_SKILL}
             </button>
           )}
         </section>
@@ -473,7 +481,7 @@ function ImportSkillDialog({
       >
         <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
           <Plus className="h-[18px] w-[18px] text-primary" />
-          导入外部 Skill
+          {UI_PROFILE.IMPORT_SKILL}
         </h3>
         <p className="mb-4 text-[13px] text-text-secondary">
           从技能库中选择要导入到此 Agent 的外部 Skill。
@@ -481,7 +489,9 @@ function ImportSkillDialog({
 
         <div className="flex max-h-[300px] flex-col gap-1.5 overflow-auto">
           {externals.length === 0 && (
-            <p className="py-8 text-center text-[12px] text-tertiary">技能库中暂无外部 Skill</p>
+            <p className="py-8 text-center text-[12px] text-tertiary">
+              {UI_MESSAGES.NO_EXTERNAL_SKILLS}
+            </p>
           )}
           {externals.map((skill) => {
             const imported = alreadyImported.has(skill.name)
@@ -520,7 +530,7 @@ function ImportSkillDialog({
                 </div>
                 <span className="text-[13px] font-medium">{skill.name}</span>
                 <span className="ml-auto shrink-0 text-[10px] text-tertiary">
-                  {imported ? '已导入' : ''}
+                  {imported ? UI_MISC.IMPORTED : ''}
                 </span>
               </button>
             )
@@ -532,7 +542,7 @@ function ImportSkillDialog({
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary hover:bg-hover"
             onClick={onClose}
           >
-            取消
+            {UI_ACTIONS.CANCEL}
           </button>
           <button
             className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground disabled:opacity-50"

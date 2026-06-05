@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, CURRENT_USER_NAME } from '@/lib/constants'
+import { UI_LABELS, UI_MISC } from '@/lib/ui-text'
 import { useAdminStore } from '@/stores/admin'
 import { useChatStore } from '@/stores/chat'
 
@@ -54,7 +55,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
         onClick={toggleOpen}
       >
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
-          群成员
+          {UI_LABELS.GROUP_MEMBERS}
           <span className="rounded-full bg-accent px-1.5 py-px text-[11px] font-normal tracking-normal text-tertiary">
             {members.length + 1}
           </span>
@@ -92,7 +93,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">{CURRENT_USER_NAME}</div>
-              <div className="text-[11px] text-tertiary">用户</div>
+              <div className="text-[11px] text-tertiary">{UI_MISC.USER}</div>
             </div>
           </div>
 

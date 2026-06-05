@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleAlert, ListChecks } from 'lucide-react'
 
 import type { FinalSummaryDetail } from '@/lib/block-types'
+import { UI_CARD_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 interface FinalSummaryCardProps {
@@ -12,9 +13,13 @@ interface FinalSummaryCardProps {
 }
 
 const statusCopy = {
-  success: { label: '已完成', color: 'text-success', bg: 'bg-success/10' },
-  partial: { label: '部分完成', color: 'text-warning', bg: 'bg-warning/10' },
-  failed: { label: '执行失败', color: 'text-destructive', bg: 'bg-destructive/10' },
+  success: { label: UI_CARD_STATUS.COMPLETED, color: 'text-success', bg: 'bg-success/10' },
+  partial: { label: UI_CARD_STATUS.PARTIAL, color: 'text-warning', bg: 'bg-warning/10' },
+  failed: {
+    label: UI_CARD_STATUS.EXECUTION_FAILED,
+    color: 'text-destructive',
+    bg: 'bg-destructive/10',
+  },
 }
 
 export function FinalSummaryCard({
@@ -44,13 +49,13 @@ export function FinalSummaryCard({
           {copy.label}
         </span>
         <span className="text-xs text-muted-foreground">
-          完成 {completed} 个，失败 {failed} 个
+          {`${completed} ${UI_CARD_STATUS.COMPLETED}，${failed} ${UI_CARD_STATUS.FAILED}`}
         </span>
       </div>
 
       {nextAction && (
         <p className="mb-3 rounded-[8px] border border-border/70 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-          下一步：{nextAction}
+          {`下一步：${nextAction}`}
         </p>
       )}
 
@@ -80,7 +85,7 @@ export function FinalSummaryCard({
                       : 'bg-success/10 text-success',
                   )}
                 >
-                  {detail.status === 'failed' ? '失败' : '完成'}
+                  {detail.status === 'failed' ? UI_CARD_STATUS.FAILED : UI_CARD_STATUS.DONE}
                 </span>
               </div>
             ))}

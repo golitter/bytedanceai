@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { MESSAGE_ROLES } from '@/lib/constants'
+import { UI_PLACEHOLDERS } from '@/lib/ui-text'
 import type { ChatMessage } from '@/stores/chat'
 import { useChatStore } from '@/stores/chat'
 
@@ -173,7 +174,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
         </span>
         <input
           className="w-full rounded-md border border-border bg-accent py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-[transform,opacity] placeholder:text-tertiary focus:border-ring"
-          placeholder="搜索历史消息..."
+          placeholder={UI_PLACEHOLDERS.SEARCH_HISTORY}
           value={query}
           onChange={(e) => handleInput(e.target.value)}
           onFocus={() => query.length >= 1 && setShowDropdown(true)}

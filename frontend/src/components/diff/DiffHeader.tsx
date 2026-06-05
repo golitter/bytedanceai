@@ -2,6 +2,7 @@ import { clsx } from 'clsx'
 import { Check, Columns2, Pencil, RotateCcw, Rows, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
@@ -113,7 +114,7 @@ export function DiffHeader({
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
               <Check className="h-3 w-3" strokeWidth={1.25} />
-              {actionStatus === 'committing' ? '提交中...' : '接受变更'}
+              {actionStatus === 'committing' ? UI_STATUS.COMMITTING : '接受变更'}
             </button>
             <button
               onClick={onReject}
@@ -121,7 +122,7 @@ export function DiffHeader({
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
               <RotateCcw className="h-3 w-3" strokeWidth={1.25} />
-              {actionStatus === 'reverting' ? '撤销中...' : '拒绝变更'}
+              {actionStatus === 'reverting' ? UI_STATUS.REVERTING : '拒绝变更'}
             </button>
           </>
         )}

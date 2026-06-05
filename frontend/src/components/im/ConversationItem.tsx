@@ -5,6 +5,7 @@ import { GroupAvatar } from '@/components/chat/GroupAvatar'
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
+import { UI_TIME } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 interface ConversationItemProps {
@@ -16,12 +17,12 @@ interface ConversationItemProps {
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins}分钟前`
+  if (mins < 1) return UI_TIME.JUST_NOW
+  if (mins < 60) return `${mins}${UI_TIME.MINUTES_AGO}`
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}小时前`
+  if (hours < 24) return `${hours}${UI_TIME.HOURS_AGO}`
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}天前`
+  if (days < 7) return `${days}${UI_TIME.DAYS_AGO}`
   return new Date(dateStr).toLocaleDateString()
 }
 

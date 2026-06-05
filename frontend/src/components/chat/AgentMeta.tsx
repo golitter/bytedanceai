@@ -1,4 +1,5 @@
 import type { AgentDetail } from '@/lib/api'
+import { UI_LABELS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function AgentMeta({ detail }: { detail: AgentDetail }) {
@@ -8,8 +9,11 @@ export function AgentMeta({ detail }: { detail: AgentDetail }) {
       <MetaItem label="Task ID" value={detail.task_id} mono />
       {detail.repo_path && <MetaItem label="Repo Path" value={detail.repo_path} />}
       {detail.workspace_path && <MetaItem label="Workspace" value={detail.workspace_path} />}
-      <MetaItem label="创建时间" value={new Date(detail.created_at).toLocaleString('zh-CN')} />
-      <MetaItem label="消息数" value={String(detail.message_count)} />
+      <MetaItem
+        label={UI_LABELS.CREATED_AT}
+        value={new Date(detail.created_at).toLocaleString('zh-CN')}
+      />
+      <MetaItem label={UI_LABELS.MESSAGE_COUNT} value={String(detail.message_count)} />
     </div>
   )
 }

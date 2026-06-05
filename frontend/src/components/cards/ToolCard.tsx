@@ -6,7 +6,7 @@ interface ToolCardProps {
 
 export function ToolCard({ name, input, output }: ToolCardProps) {
   return (
-    <div className="my-1 min-w-0 rounded-lg border border-border bg-secondary px-3 py-2 text-[13px]">
+    <div className="my-1 min-w-0 rounded-lg border border-border bg-bg-card px-3 py-2 text-[13px]">
       {name && <div className="mb-1 text-xs text-muted-foreground">{name}</div>}
       {input && (
         <code className="block break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">

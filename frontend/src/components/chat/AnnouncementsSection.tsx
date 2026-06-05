@@ -2,6 +2,14 @@ import { ChevronDown, Pin, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { MESSAGE_ROLES } from '@/lib/constants'
+import {
+  UI_ACTIONS,
+  UI_CONFIRMS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_PLACEHOLDERS,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { useChatStore } from '@/stores/chat'
 
 import { useCollapsible } from './RightSidebar'
@@ -57,7 +65,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
         onClick={toggleOpen}
       >
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
-          群公告
+          {UI_LABELS.ANNOUNCEMENTS}
           <span className="rounded-full bg-accent px-1.5 py-px text-[11px] font-normal tracking-normal text-tertiary">
             {announcements.length}
           </span>
@@ -74,11 +82,13 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
       >
         <div className="px-4 pb-3.5">
           {loading && announcements.length === 0 && (
-            <div className="py-3 text-center text-xs text-tertiary">加载中...</div>
+            <div className="py-3 text-center text-xs text-tertiary">{UI_STATUS.LOADING}</div>
           )}
 
           {!loading && announcements.length === 0 && (
-            <div className="py-3 text-center text-xs text-tertiary">暂无公告</div>
+            <div className="py-3 text-center text-xs text-tertiary">
+              {UI_MESSAGES.NO_ANNOUNCEMENTS}
+            </div>
           )}
 
           {sorted.map((ann) => (
@@ -90,9 +100,9 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
               <button
                 type="button"
                 className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-0 transition-[transform,opacity] hover:bg-danger-bg hover:text-destructive group-hover:opacity-100"
-                title="删除公告"
+                title={UI_LABELS.DELETE_ANNOUNCEMENT}
                 onClick={() => {
-                  if (confirm('确认删除此公告？')) handleDelete(ann.id)
+                  if (confirm(UI_CONFIRMS.DELETE_ANNOUNCEMENT)) handleDelete(ann.id)
                 }}
               >
                 <Trash2 className="h-3 w-3" strokeWidth={1.25} />
@@ -122,13 +132,13 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
               className="mt-2 w-full rounded-md border border-dashed border-primary-border py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:border-primary hover:bg-primary-soft hover:text-primary"
               onClick={() => setShowCreateForm(true)}
             >
-              + 发布新公告
+              {UI_LABELS.NEW_ANNOUNCEMENT}
             </button>
           ) : (
             <div className="mt-2 rounded-md border border-border bg-card p-3">
               <textarea
                 className="mb-2 w-full resize-none rounded-md border border-border bg-background p-2 text-xs text-foreground outline-none placeholder:text-tertiary focus:border-ring"
-                placeholder="输入公告内容..."
+                placeholder={UI_PLACEHOLDERS.ANNOUNCEMENT_INPUT}
                 rows={3}
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
@@ -142,7 +152,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                     onChange={(e) => setNewPinned(e.target.checked)}
                     className="rounded"
                   />
-                  置顶
+                  {UI_ACTIONS.PIN}
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -154,7 +164,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                       setNewPinned(false)
                     }}
                   >
-                    取消
+                    {UI_ACTIONS.CANCEL}
                   </button>
                   <button
                     type="button"
@@ -162,7 +172,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                     disabled={!newContent.trim()}
                     onClick={handleCreate}
                   >
-                    发布
+                    {UI_ACTIONS.PUBLISH}
                   </button>
                 </div>
               </div>

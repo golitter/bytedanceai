@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { AGENT_COLORS, AGENT_TYPES } from '@/lib/constants'
+import { UI_CARD_STATUS, UI_MESSAGES } from '@/lib/ui-text'
 
 import { AgentAvatar } from './AgentAvatar'
 
@@ -122,17 +123,17 @@ export function AskAgentCard({
           {answered ? (
             <>
               <Check className="h-3 w-3" strokeWidth={1.5} />
-              已回答
+              {UI_CARD_STATUS.ANSWERED}
             </>
           ) : failed ? (
             <>
               <AlertCircle className="h-3 w-3" strokeWidth={1.5} />
-              未回答
+              {UI_CARD_STATUS.UNANSWERED}
             </>
           ) : (
             <>
               <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
-              等待回答
+              {UI_CARD_STATUS.PENDING_ANSWER}
             </>
           )}
         </span>
@@ -155,7 +156,9 @@ export function AskAgentCard({
         </div>
       )}
       {!expanded && hasLongQuestion && (
-        <div className="px-3 pb-2 text-[11px] text-muted-foreground">点击查看完整 query</div>
+        <div className="px-3 pb-2 text-[11px] text-muted-foreground">
+          {UI_MESSAGES.CLICK_TO_VIEW_FULL_QUERY}
+        </div>
       )}
     </div>
   )

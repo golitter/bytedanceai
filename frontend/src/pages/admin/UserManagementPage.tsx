@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 
 import { getAdminAvatar, updateAdminAvatar, uploadAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
+import { UI_STATUS } from '@/lib/ui-text'
 import { useAdminStore } from '@/stores/admin'
 
 export function UserManagementPage() {
@@ -39,7 +40,7 @@ export function UserManagementPage() {
   if (isLoading && !localAvatarUrl) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="text-sm text-tertiary">加载中...</span>
+        <span className="text-sm text-tertiary">{UI_STATUS.LOADING}</span>
       </div>
     )
   }

@@ -6,6 +6,7 @@ import type { AgentType } from '@/generated/request'
 import { getTaskMessages, submitMessage } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
+import { UI_MESSAGES } from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 // Re-export ChatMessage for consumers
@@ -278,7 +279,10 @@ export function useChatStream(
           result.agent_type as AgentType,
         )
       } catch (err) {
-        store.streamError(sessionId, err instanceof Error ? err : new Error('发送失败'))
+        store.streamError(
+          sessionId,
+          err instanceof Error ? err : new Error(UI_MESSAGES.SEND_FAILED),
+        )
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

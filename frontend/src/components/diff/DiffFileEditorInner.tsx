@@ -7,6 +7,8 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import CodeMirror from '@uiw/react-codemirror'
 import { useCallback, useMemo, useState } from 'react'
 
+import { UI_ACTIONS, UI_STATUS } from '@/lib/ui-text'
+
 interface DiffFileEditorProps {
   oldContent: string
   newContent: string
@@ -74,14 +76,14 @@ export default function DiffFileEditorInner({
           onClick={onCancel}
           className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground"
         >
-          取消
+          {UI_ACTIONS.CANCEL}
         </button>
         <button
           onClick={handleSave}
           disabled={saving || modifiedContent === newContent}
           className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-[transform,opacity] hover:bg-primary/90 disabled:opacity-50"
         >
-          {saving ? '保存中...' : '保存修改'}
+          {saving ? UI_STATUS.SAVING : '保存修改'}
         </button>
       </div>
     </div>

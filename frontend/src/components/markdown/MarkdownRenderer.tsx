@@ -159,7 +159,7 @@ const components: Components = {
     return <strong className="font-bold text-[var(--prose-bold)]">{children}</strong>
   },
   em({ children }) {
-    return <em className="italic text-secondary">{children}</em>
+    return <em className="italic text-text-secondary">{children}</em>
   },
 
   // ─── 图片 ───
@@ -207,7 +207,7 @@ const components: Components = {
   },
   th({ children }) {
     return (
-      <th className="border-b border-white/8 bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-secondary">
+      <th className="border-b border-white/8 bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-text-secondary">
         {children}
       </th>
     )

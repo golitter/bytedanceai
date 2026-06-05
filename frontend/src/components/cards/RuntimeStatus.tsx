@@ -1,3 +1,4 @@
+import { UI_CARD_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 interface RuntimeStatusProps {
@@ -9,15 +10,30 @@ interface RuntimeStatusProps {
 }
 
 const statusConfig: Record<string, { bg: string; color: string; label: string; pulse: boolean }> = {
-  running: { bg: 'bg-agent-codex/10', color: 'text-agent-codex', label: '执行中', pulse: true },
+  running: {
+    bg: 'bg-agent-codex/10',
+    color: 'text-agent-codex',
+    label: UI_CARD_STATUS.RUNNING,
+    pulse: true,
+  },
   completed: {
     bg: 'bg-success/10',
     color: 'text-success',
-    label: '完成',
+    label: UI_CARD_STATUS.DONE,
     pulse: false,
   },
-  failed: { bg: 'bg-destructive/10', color: 'text-destructive', label: '失败', pulse: false },
-  pending: { bg: 'bg-muted', color: 'text-muted-foreground', label: '等待', pulse: false },
+  failed: {
+    bg: 'bg-destructive/10',
+    color: 'text-destructive',
+    label: UI_CARD_STATUS.FAILED,
+    pulse: false,
+  },
+  pending: {
+    bg: 'bg-muted',
+    color: 'text-muted-foreground',
+    label: UI_CARD_STATUS.WAITING,
+    pulse: false,
+  },
 }
 
 export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeStatusProps) {
@@ -33,7 +49,7 @@ export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeSt
         <span
           className={cn('h-1.5 w-1.5 rounded-full bg-current', config.pulse && 'animate-pulse')}
         />
-        <span className="shrink-0 font-medium text-foreground">{agent || '任务'}</span>
+        <span className="shrink-0 font-medium text-foreground">{agent || UI_CARD_STATUS.TASK}</span>
         <span
           className={cn(
             'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',

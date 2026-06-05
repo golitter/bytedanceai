@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { API_BASE } from '@/lib/constants'
+import { UI_CARD_STATUS } from '@/lib/ui-text'
 
 interface ImageCardProps {
   path: string
@@ -15,7 +16,7 @@ export function ImageCard({ path, sessionId }: ImageCardProps) {
   if (error || !fileUrl) {
     return (
       <div className="my-2 flex items-center justify-center rounded-lg border border-border bg-muted px-4 py-8 text-sm text-muted-foreground">
-        图片加载失败
+        {UI_CARD_STATUS.IMAGE_LOAD_FAILED}
       </div>
     )
   }

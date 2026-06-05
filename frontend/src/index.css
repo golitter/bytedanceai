@@ -179,7 +179,7 @@
 
     /* ─── Markdown prose 增强变量 ─── */
     --prose-heading: #F0F2F7;
-    --prose-heading-h1: #FFFFFF;
+    --prose-heading-h1: #F0F2F7;
     --prose-link: #818CF8;
     --prose-link-hover: #A5B4FC;
     --prose-bold: #F0F2F7;

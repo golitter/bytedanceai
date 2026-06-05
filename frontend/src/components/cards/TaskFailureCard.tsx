@@ -1,5 +1,7 @@
 import { AlertTriangle, Clock3 } from 'lucide-react'
 
+import { UI_CARD_STATUS } from '@/lib/ui-text'
+
 interface TaskFailureCardProps {
   taskId?: string
   agent?: string
@@ -9,7 +11,7 @@ interface TaskFailureCardProps {
 
 export function TaskFailureCard({ taskId, agent, reason, failureType }: TaskFailureCardProps) {
   const Icon = failureType === 'timeout' ? Clock3 : AlertTriangle
-  const title = failureType === 'timeout' ? '任务超时' : '任务失败'
+  const title = failureType === 'timeout' ? UI_CARD_STATUS.TASK_TIMEOUT : UI_CARD_STATUS.TASK_FAILED
 
   return (
     <div className="rounded-lg border border-destructive/25 bg-destructive/[0.08] px-3 py-2 text-xs text-destructive-foreground">

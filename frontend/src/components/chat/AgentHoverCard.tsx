@@ -7,6 +7,7 @@ import type { AgentType } from '@/generated/request'
 import type { AgentProfile } from '@/lib/api'
 import { fetchAgentProfile } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
+import { UI_ACTIONS, UI_MISC } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -98,7 +99,9 @@ function HoverCardContent({
                 <div className="truncate text-xs text-popover-foreground/70">{s.description}</div>
               </div>
             ))}
-            {remaining > 0 && <div className="pt-1 text-xs text-brand">+{remaining} 更多</div>}
+            {remaining > 0 && (
+              <div className="pt-1 text-xs text-brand">{`+${remaining} ${UI_MISC.MORE}`}</div>
+            )}
           </div>
         </>
       )}
@@ -110,7 +113,7 @@ function HoverCardContent({
           {truncateId(sessionId)}
         </span>
         <Link to={`/agent/${sessionId}`} className="text-xs text-brand hover:underline">
-          查看 Agent 详情
+          {UI_ACTIONS.VIEW_DETAIL}
         </Link>
       </div>
     </div>

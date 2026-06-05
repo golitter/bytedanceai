@@ -2,6 +2,7 @@ import { ArrowRight, ChevronDown, Link2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { CoordMessage } from '@/lib/block-types'
+import { UI_LABELS, UI_MISC } from '@/lib/ui-text'
 
 interface CoordChannelProps {
   messages: CoordMessage[]
@@ -42,7 +43,7 @@ export function CoordChannel({ messages, closed, summary }: CoordChannelProps) {
           {rounds.map((round) => (
             <div key={round} className="mb-2.5">
               <div className="mb-1.5 border-b border-dashed border-agent-orchestrator/15 pb-1 text-[11px] text-muted-foreground">
-                第 {round} 轮协调
+                {`${UI_MISC.ROUND}${round}${UI_MISC.ROUND_SUFFIX}`}
               </div>
               {messages
                 .filter((m) => m.round === round)
@@ -63,13 +64,15 @@ export function CoordChannel({ messages, closed, summary }: CoordChannelProps) {
 
           {closed && summary && (
             <div className="mt-2 rounded-lg border border-agent-orchestrator/15 bg-agent-orchestrator/5 p-2.5 text-[12px] text-muted-foreground">
-              <div className="mb-1 text-[11px] font-semibold text-agent-orchestrator">协调结论</div>
+              <div className="mb-1 text-[11px] font-semibold text-agent-orchestrator">
+                {UI_LABELS.COORD_CONCLUSION}
+              </div>
               {summary}
             </div>
           )}
 
           <div className="mt-1 text-[11px] text-muted-foreground">
-            {rounds.length} 轮协调，{messages.length} 条消息
+            {`${rounds.length}${UI_MISC.SUFFIX_ROUND}，${messages.length}${UI_MISC.SUFFIX_MESSAGES}`}
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ import { IconSidebar } from '@/components/layout/IconSidebar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useConversations } from '@/hooks/use-conversations'
 import { useResize } from '@/hooks/use-resize'
+import { UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 import { AgentOverviewPage } from '@/pages/admin/AgentOverviewPage'
 import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { ServiceHealthPage } from '@/pages/admin/ServiceHealthPage'
@@ -33,7 +34,7 @@ function PlaceholderPage({
     <div className="flex flex-1 flex-col items-center justify-center gap-3">
       <Icon className="h-12 w-12 text-tertiary" strokeWidth={1.25} />
       <h3 className="text-base font-medium text-text-secondary">{title}</h3>
-      <p className="text-sm text-tertiary">功能开发中，敬请期待</p>
+      <p className="text-sm text-tertiary">{UI_MESSAGES.DEV_COMING_SOON}</p>
     </div>
   )
 }
@@ -42,8 +43,8 @@ const PLACEHOLDER_PAGES: Record<
   string,
   { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; title: string }
 > = {
-  contacts: { icon: Users, title: '通讯录' },
-  settings: { icon: Settings, title: '设置' },
+  contacts: { icon: Users, title: UI_LABELS.CONTACTS },
+  settings: { icon: Settings, title: UI_LABELS.SETTINGS },
 }
 
 const ADMIN_PAGES: Record<string, React.ComponentType> = {
@@ -71,7 +72,7 @@ function AdminContent() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
         <LayoutDashboard className="h-12 w-12 text-tertiary" strokeWidth={1.25} />
-        <p className="text-sm text-tertiary">请先验证身份</p>
+        <p className="text-sm text-tertiary">{UI_MESSAGES.PLEASE_AUTH}</p>
       </div>
     )
   }
@@ -156,7 +157,7 @@ export function ImPage() {
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3">
                 <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1.25} />
-                <p className="text-sm text-tertiary">选择一个对话开始聊天</p>
+                <p className="text-sm text-tertiary">{UI_MESSAGES.SELECT_CHAT_TO_START}</p>
               </div>
             )}
           </div>

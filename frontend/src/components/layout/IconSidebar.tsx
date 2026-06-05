@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import { getAdminAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
+import { UI_ACTIONS, UI_LABELS, UI_MISC } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useAdminStore } from '@/stores/admin'
 import { type NavTab, useActiveTab } from '@/stores/chat'
@@ -78,16 +79,16 @@ function UserAvatarCard() {
           />
           <div>
             <div className="text-[13px] font-semibold text-foreground">{CURRENT_USER_NAME}</div>
-            <div className="text-[11px] text-tertiary">tln · 在线</div>
+            <div className="text-[11px] text-tertiary">{`${UI_MISC.ME} · ${UI_MISC.ONLINE}`}</div>
           </div>
         </div>
         <div className="my-2 h-px bg-border" />
         <div className="flex gap-1.5">
           <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-text-secondary transition-[transform,opacity] hover:bg-active">
-            编辑资料
+            {UI_ACTIONS.EDIT_PROFILE}
           </button>
           <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-text-secondary transition-[transform,opacity] hover:bg-active">
-            退出登录
+            {UI_ACTIONS.LOGOUT}
           </button>
         </div>
       </div>
@@ -103,22 +104,22 @@ export function IconSidebar() {
       <div className="flex flex-col items-center gap-1">
         <NavItem
           tab="chat"
-          label="聊天"
+          label={UI_LABELS.CHAT}
           icon={<MessageSquare className="h-5 w-5" strokeWidth={1.25} />}
         />
         <NavItem
           tab="contacts"
-          label="通讯录"
+          label={UI_LABELS.CONTACTS}
           icon={<Users className="h-5 w-5" strokeWidth={1.25} />}
         />
         <NavItem
           tab="skills"
-          label="技能"
+          label={UI_LABELS.SKILLS_HUB}
           icon={<Sparkles className="h-5 w-5" strokeWidth={1.25} />}
         />
         <NavItem
           tab="admin"
-          label="管理"
+          label={UI_LABELS.ADMIN}
           icon={<LayoutDashboard className="h-5 w-5" strokeWidth={1.25} />}
         />
       </div>
@@ -126,7 +127,7 @@ export function IconSidebar() {
       <div className="mt-auto flex flex-col items-center gap-1">
         <NavItem
           tab="settings"
-          label="设置"
+          label={UI_LABELS.SETTINGS}
           disabled
           icon={<Settings className="h-5 w-5" strokeWidth={1.25} />}
         />

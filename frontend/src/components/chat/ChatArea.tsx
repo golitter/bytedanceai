@@ -5,6 +5,7 @@ import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
+import { UI_ACTIONS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -79,7 +80,7 @@ export function ChatArea({
       prependMessages(sessionId, chatMessages, res.has_more)
     } catch {
       setLoadingMore(sessionId, false)
-      setLoadError('加载历史消息失败')
+      setLoadError(UI_MESSAGES.LOAD_HISTORY_FAILED)
     }
   }, [taskId, sessionId, isGroupChat, state.messages, prependMessages, setLoadingMore])
 
@@ -121,7 +122,7 @@ export function ChatArea({
       })
       .map((c) => c.agentName ?? AGENT_NAMES[c.agentType] ?? c.agentType)
     if (streamingNames.length === 0) return undefined
-    return `正在等待 ${streamingNames.join('、')} 回复中…`
+    return `${UI_MISC.WAITING_REPLY} ${streamingNames.join('、')} ${UI_MISC.REPLYING}`
   }, [isStreaming, conversations, taskId, getSession])
 
   const handleSend = async (message: string) => {
@@ -129,7 +130,7 @@ export function ChatArea({
   }
 
   const displayName = isGroupChat
-    ? (groupTitle ?? '群聊')
+    ? (groupTitle ?? UI_MISC.GROUP_CHAT)
     : (agentName ?? AGENT_NAMES[agentType] ?? agentType)
 
   return (
@@ -140,7 +141,7 @@ export function ChatArea({
           <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={24} />
         ) : null}
         <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
-        {isStreaming && <p className="text-[11px] text-tertiary">正在回复...</p>}
+        {isStreaming && <p className="text-[11px] text-tertiary">{UI_STATUS.STREAMING}</p>}
       </div>
 
       {/* Load error banner */}
@@ -148,7 +149,7 @@ export function ChatArea({
         <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
           {loadError}
           <button className="ml-2 underline" onClick={() => setLoadError(null)}>
-            关闭
+            {UI_ACTIONS.CLOSE}
           </button>
         </div>
       )}
@@ -169,7 +170,7 @@ export function ChatArea({
             />
           )}
           <p className="mt-2 text-sm font-medium text-foreground">{displayName}</p>
-          <p className="text-xs text-tertiary">发送消息开始对话</p>
+          <p className="text-xs text-tertiary">{UI_MESSAGES.SEND_MESSAGE_TO_START}</p>
         </div>
       ) : (
         <MessageList
@@ -196,7 +197,7 @@ export function ChatArea({
         onSend={handleSend}
         sendDisabled={isStreaming}
         sendDisabledHint={sendDisabledHint}
-        placeholder={`发消息给 ${displayName}...`}
+        placeholder={`${UI_PLACEHOLDERS.MESSAGE_TO} ${displayName}...`}
         mentionSessions={isGroupChat ? groupSessions : undefined}
       />
     </div>

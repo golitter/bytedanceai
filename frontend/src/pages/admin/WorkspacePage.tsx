@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
 
 import { deleteAdminWorkspace, getAdminWorkspaces } from '@/lib/api'
+import { UI_CONFIRMS, UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
@@ -17,7 +18,7 @@ export function WorkspacePage() {
     : { total: 0, active: 0, cleaned: 0, totalDisk: 0 }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确认清理该工作区？')) return
+    if (!confirm(UI_CONFIRMS.CLEAN_WORKSPACE)) return
     try {
       await deleteAdminWorkspace(id)
       refetch()
@@ -105,7 +106,9 @@ export function WorkspacePage() {
           </tbody>
         </table>
         {workspaces.length === 0 && (
-          <div className="py-8 text-center text-[13px] text-tertiary">暂无工作区</div>
+          <div className="py-8 text-center text-[13px] text-tertiary">
+            {UI_MESSAGES.NO_WORKSPACES}
+          </div>
         )}
       </div>
     </div>
