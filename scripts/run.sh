@@ -59,7 +59,22 @@ start_service() {
       (cd backend && exec ~/go/bin/air -c .air.toml) >> "$log_file" 2>&1 &
       ;;
     agentend)
-      (cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port") >> "$log_file" 2>&1 &
+      # Watch only handwritten source dirs. Excluding src/generated avoids
+      # tearing down active SSE streams when contract generation touches codegen files.
+      (
+        cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port" \
+          --reload-dir src/adapters \
+          --reload-dir src/api \
+          --reload-dir src/app \
+          --reload-dir src/clients \
+          --reload-dir src/orchestrator \
+          --reload-dir src/preview \
+          --reload-dir src/rules \
+          --reload-dir src/schemas \
+          --reload-dir src/session \
+          --reload-dir src/skills \
+          --reload-dir src/workspace
+      ) >> "$log_file" 2>&1 &
       ;;
   esac
 

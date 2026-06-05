@@ -59,7 +59,8 @@ class CodexAdapter(BaseAgentAdapter):
                 cmd.extend(["-C", cwd])
         if model:
             cmd.extend(["-m", model])
-        cmd.append(prompt)
+        if prompt or not (cli_session_id and is_resume):
+            cmd.append(prompt)
         return cmd
 
     def _parse_stream_line(self, line: str) -> StreamEvent | None:
@@ -170,12 +171,15 @@ class CodexAdapter(BaseAgentAdapter):
             limit=10 * 1024 * 1024,  # 10 MB — CLI may emit very long lines
         )
         self._processes[session_id] = process
+        saw_done = False
 
         try:
             assert process.stdout is not None
             async for line in process.stdout:
                 event = self._parse_stream_line(line.decode())
                 if event:
+                    if event.type == EventType.DONE.value:
+                        saw_done = True
                     yield event
 
             await process.wait()
@@ -186,6 +190,8 @@ class CodexAdapter(BaseAgentAdapter):
                 yield StreamEvent.create(
                     EventType.ERROR, error=stderr or "Codex process failed", agent_type=_AGENT_TYPE
                 )
+            elif not saw_done:
+                yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
             self._processes.pop(session_id, None)
 
