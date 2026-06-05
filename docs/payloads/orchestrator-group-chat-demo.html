@@ -75,7 +75,19 @@
   .tag.t-orange { background:var(--orange-bg); color:var(--orange); }
 
   .msg-text { font-size:14px; line-height:1.7; }
-  .msg-text code { background:var(--surface-3); padding:1px 5px; border-radius:3px; font-size:12px; }
+  .msg-text p { margin:0 0 8px; }
+  .msg-text p:last-child { margin-bottom:0; }
+  .msg-text h4 { font-size:14px; font-weight:600; margin:12px 0 6px; color:var(--text); }
+  .msg-text h4:first-child { margin-top:0; }
+  .msg-text ul { padding-left:18px; margin:4px 0 8px; }
+  .msg-text li { margin:3px 0; color:var(--text); }
+  .msg-text li::marker { color:var(--text-3); }
+  .msg-text code { background:var(--surface-3); padding:1px 5px; border-radius:3px; font-size:12px; font-family:"SF Mono","Fira Code",monospace; color:var(--green); }
+  .msg-text pre { background:#0d0f14; border:1px solid var(--border); border-radius:var(--r-sm); padding:10px 12px; margin:8px 0; overflow-x:auto; }
+  .msg-text pre code { background:none; padding:0; font-size:12px; color:var(--text-2); line-height:1.5; }
+  .msg-text strong { font-weight:600; color:var(--text); }
+  .msg-text em { color:var(--text-2); }
+  .msg-text hr { border:none; border-top:1px solid var(--border); margin:10px 0; }
 
   /* ── Runtime Status ── */
   .rt-list { display:flex; flex-direction:column; gap:5px; }
@@ -324,11 +336,21 @@
             <span class="q">「请介绍一下你自己…」</span>
           </div>
           <div class="msg-text">
-            你好！我是<strong>实现者</strong>，基于 Claude Code 运行。我的核心能力：<br><br>
-            <strong>代码实现</strong> — 擅长从零搭建完整功能模块，包括 React 组件、API 端点、数据库 Schema 等<br>
-            <strong>文件操作</strong> — 可以创建、编辑、重构多文件项目结构<br>
-            <strong>调试修复</strong> — 快速定位 Bug 并提供精确修复方案<br><br>
-            特点：注重代码质量和可维护性，习惯编写单元测试，遵循项目已有的代码风格。
+            <p>你好！我是 <strong>实现者</strong>，基于 <code>claude-code</code> 运行。以下是我的正式介绍：</p>
+
+            <h4>🔧 核心能力</h4>
+            <ul>
+              <li><strong>代码实现</strong> — 擅长从零搭建完整功能模块，包括 React 组件、API 端点、数据库 Schema 等</li>
+              <li><strong>文件操作</strong> — 可以创建、编辑、重构多文件项目结构</li>
+              <li><strong>调试修复</strong> — 快速定位 Bug 并提供精确修复方案</li>
+            </ul>
+
+            <h4>⚡ 技术栈</h4>
+            <pre><code>前端: React / TypeScript / Tailwind CSS
+后端: Go / Gin / GORM
+工具: Webpack / Vite / Jest</code></pre>
+
+            <p><em>特点：注重代码质量和可维护性，习惯编写单元测试，遵循项目已有的代码风格。</em></p>
           </div>
         </div>
       </div>
@@ -349,11 +371,35 @@
             <span class="q">「请介绍一下你自己…」</span>
           </div>
           <div class="msg-text">
-            我是<strong>执行者</strong>，运行在 OpenCode CLI 环境下。我的专长：<br><br>
-            <strong>命令执行</strong> — 直接运行终端命令，管理进程、安装依赖、部署服务<br>
-            <strong>系统操作</strong> — 熟悉 Linux/macOS 系统管理，包括文件系统、权限、网络配置<br>
-            <strong>DevOps</strong> — CI/CD 流水线搭建、容器编排、日志分析<br><br>
-            特点：执行速度快，擅长处理需要系统级操作的任务。
+            <p>你好！我是 <strong>执行者</strong>，基于 <code>opencode</code> 构建的交互式 CLI 编程 Agent。擅长语义级代码搜索、精确编辑、多 Agent 协作和 Git 全流程操作，工作风格简洁直接、先理解后动手。</p>
+
+            <!-- aka_yhy html-render 渲染卡片 -->
+            <div style="max-width:420px;margin:12px 0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;padding:32px 28px;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.15)">
+              <div style="font-size:48px;margin-bottom:12px">⚡</div>
+              <h2 style="margin:0 0 8px;font-size:24px;font-weight:700">执行者</h2>
+              <p style="margin:0 0 20px;font-size:14px;opacity:.85;font-weight:500">基于 opencode 构建的 CLI 编程 Agent</p>
+              <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:16px;margin-bottom:16px;text-align:left">
+                <p style="margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:1px">核心能力</p>
+                <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;opacity:.9">
+                  <li>语义级代码搜索与调用链追踪</li>
+                  <li>精确代码编辑、重构、批量重命名</li>
+                  <li>终端命令执行与 Git 全流程操作</li>
+                  <li>多 Agent 并行协作与任务编排</li>
+                  <li>Web 内容获取</li>
+                </ul>
+              </div>
+              <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:16px;text-align:left">
+                <p style="margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:1px">工作特点</p>
+                <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;opacity:.9">
+                  <li>简洁直接，不啰嗦</li>
+                  <li>先充分理解代码库再动手</li>
+                  <li>遵循项目现有风格和约定</li>
+                  <li>安全优先，可加载专项技能</li>
+                </ul>
+              </div>
+            </div>
+
+            <p><em>已合并到 task 分支，无冲突。</em></p>
           </div>
         </div>
       </div>
@@ -374,11 +420,26 @@
             <span class="q">「请介绍一下你自己…」</span>
           </div>
           <div class="msg-text">
-            <strong>操作者</strong>报到，我基于 Codex CLI 运行。能力概览：<br><br>
-            <strong>数据处理</strong> — 批量文件转换、数据清洗、格式化处理<br>
-            <strong>代码审查</strong> — 自动扫描代码质量问题、安全漏洞、性能瓶颈<br>
-            <strong>文档生成</strong> — 从代码自动生成 API 文档、架构说明、变更日志<br><br>
-            特点：严谨细致，擅长处理需要精确匹配和批量操作的场景。
+            <p><strong>操作者</strong> 报到，我基于 <code>codex</code> CLI 运行。能力概览：</p>
+
+            <h4>🔍 核心能力</h4>
+            <ul>
+              <li><strong>数据处理</strong> — 批量文件转换、数据清洗、格式化处理</li>
+              <li><strong>代码审查</strong> — 自动扫描代码质量问题、安全漏洞、性能瓶颈</li>
+              <li><strong>文档生成</strong> — 从代码自动生成 API 文档、架构说明、变更日志</li>
+            </ul>
+
+            <h4>📊 代码审查示例输出</h4>
+            <pre><code>⚠️  severity: medium
+   file: auth/handler.go:42
+   issue: 未校验 context 超时
+   fix:  添加 ctx.Deadline() 检查
+
+✅  severity: info
+   file: auth/handler.go:58
+   note:  建议使用 errors.Is 替代 == 比较</code></pre>
+
+            <p><em>特点：严谨细致，擅长处理需要精确匹配和批量操作的场景。</em></p>
           </div>
         </div>
       </div>
@@ -392,12 +453,14 @@
             <span class="tag t-orch">orchestrator</span>
           </div>
           <div class="msg-text">
-            <strong>📋 编排汇总</strong><br><br>
-            三个 Agent 均已完成自我介绍：<br><br>
-            1. <strong>实现者</strong>（claude-code）— 代码实现 + 文件操作 + 调试修复<br>
-            2. <strong>执行者</strong>（opencode）— 命令执行 + 系统操作 + DevOps<br>
-            3. <strong>操作者</strong>（codex）— 数据处理 + 代码审查 + 文档生成<br><br>
-            团队配置完整，覆盖实现、执行、运维三大领域。随时可以接受下一步任务。
+            <p><strong>📋 编排汇总</strong></p>
+            <p>三个 Agent 均已完成自我介绍：</p>
+            <ul>
+              <li><strong>实现者</strong>（claude-code）— 代码实现 + 文件操作 + 调试修复</li>
+              <li><strong>执行者</strong>（opencode）— 命令执行 + 系统操作 + DevOps</li>
+              <li><strong>操作者</strong>（codex）— 数据处理 + 代码审查 + 文档生成</li>
+            </ul>
+            <p>团队配置完整，覆盖实现、执行、运维三大领域。随时可以接受下一步任务。</p>
           </div>
         </div>
       </div>
@@ -570,7 +633,14 @@
             <span class="q">「请介绍一下你自己…」</span>
           </div>
           <div class="msg-text">
-            你好！我是<strong>实现者</strong>，基于 Claude Code 运行。我的核心能力是代码实现、文件操作和调试修复<span class="cursor"></span>
+            <p>你好！我是 <strong>实现者</strong>，基于 <code>claude-code</code> 运行。以下是我的正式介绍：</p>
+
+            <h4>🔧 核心能力</h4>
+            <ul>
+              <li><strong>代码实现</strong> — 擅长从零搭建完整功能模块</li>
+              <li><strong>文件操作</strong> — 可以创建、编辑、重构多文件项目结构</li>
+              <li><strong>调试修复</strong> — 快速定位 Bug 并提供精确修复方案<span class="cursor"></span></li>
+            </ul>
             <div class="dots"><span></span><span></span><span></span></div>
           </div>
         </div>
