@@ -9,11 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"agenthub/backend/internal/model"
-	"agenthub/backend/pkg/db"
-
 	"gopkg.in/yaml.v3"
-	"gorm.io/gorm"
 )
 
 const (
@@ -144,14 +140,6 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 		return &ValidationResult{Valid: false, Errors: errors}, tmpDir, nil
 	}
 
-	// 校验 name 不与 builtin 冲突
-	var count int64
-	db.GetDB().Model(&model.SkillHub{}).Where("name = ? AND builtin = ?", fmName, true).Count(&count)
-	if count > 0 {
-		os.RemoveAll(tmpDir)
-		return &ValidationResult{Valid: false, Errors: []string{"name conflicts with builtin skill"}}, "", nil
-	}
-
 	return &ValidationResult{
 		Valid:       true,
 		Name:        fmName,
@@ -187,8 +175,8 @@ func parseFrontmatter(data []byte) (name, description string, err error) {
 	return fm.Name, fm.Description, nil
 }
 
-// ConfirmSkill 将已校验的 tmpDir 打包为 zip blob 写入 DB
-func ConfirmSkill(name string, description string, fileCount int, totalSize int64, tmpDir string) error {
+// PackValidatedSkillDir repacks the validated skill directory into a zip blob.
+func PackValidatedSkillDir(name string, tmpDir string) ([]byte, error) {
 	// 确定源目录（zip 可能有或没有外层目录）
 	srcDir := filepath.Join(tmpDir, name)
 	if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
@@ -198,58 +186,10 @@ func ConfirmSkill(name string, description string, fileCount int, totalSize int6
 	// 将已校验的文件重新打包为 zip
 	zipData, err := zipDir(srcDir)
 	if err != nil {
-		return fmt.Errorf("pack skill files: %w", err)
+		return nil, fmt.Errorf("pack skill files: %w", err)
 	}
 
-	// 写入 DB（单行含元数据 + zip blob，原子操作无需事务）
-	skill := model.SkillHub{
-		Name:        name,
-		Builtin:     false,
-		Description: description,
-		FileCount:   fileCount,
-		TotalSize:   totalSize,
-		Content:     zipData,
-	}
-	if err := db.GetDB().Create(&skill).Error; err != nil {
-		return fmt.Errorf("db write failed: %w", err)
-	}
-
-	os.RemoveAll(tmpDir)
-	return nil
-}
-
-// DeleteSkillFromHub 删除 hub 中的 external skill 及其关联数据
-func DeleteSkillFromHub(name string) error {
-	var skill model.SkillHub
-	if err := db.GetDB().Where("name = ?", name).First(&skill).Error; err != nil {
-		return fmt.Errorf("skill not found")
-	}
-	if skill.Builtin {
-		return fmt.Errorf("cannot delete builtin skill")
-	}
-
-	// 事务：级联删除 agent_skill 关联 + 删除 SkillHub（含 Content blob）
-	return db.GetDB().Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("skill_name = ?", name).Delete(&model.AgentSkill{}).Error; err != nil {
-			return fmt.Errorf("delete agent skill associations: %w", err)
-		}
-		if err := tx.Delete(&skill).Error; err != nil {
-			return fmt.Errorf("delete skill hub: %w", err)
-		}
-		return nil
-	})
-}
-
-// PackSkillDir 从 DB 读取 skill 的 zip blob
-func PackSkillDir(skillName string) ([]byte, error) {
-	var skill model.SkillHub
-	if err := db.GetDB().Select("content").Where("name = ?", skillName).First(&skill).Error; err != nil {
-		return nil, fmt.Errorf("skill not found: %w", err)
-	}
-	if len(skill.Content) == 0 {
-		return nil, fmt.Errorf("no zip data for skill %s", skillName)
-	}
-	return skill.Content, nil
+	return zipData, nil
 }
 
 // zipDir 将目录打包为 zip 字节流

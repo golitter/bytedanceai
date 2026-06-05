@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
-	"agenthub/backend/pkg/db"
 	pkgredis "agenthub/backend/pkg/redis"
 
 	"github.com/google/uuid"
@@ -77,10 +77,14 @@ type StreamWriter struct {
 	textBuf      []string // buffered text snippets for TEXT events awaiting merge
 	textBufSize  int      // total byte size of textBuf
 	textBufStart time.Time
+
+	messageDao      dao.MessageDao
+	sessionDao      dao.SessionDao
+	diffSnapshotDao dao.DiffSnapshotDao
 }
 
 // NewStreamWriter creates a new StreamWriter and registers it.
-func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentType string) *StreamWriter {
+func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentType string, messageDao dao.MessageDao, sessionDao dao.SessionDao, diffSnapshotDao dao.DiffSnapshotDao) *StreamWriter {
 	childCtx, cancel := context.WithTimeout(ctx, goroutineTimeout)
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sw := &StreamWriter{
@@ -95,6 +99,9 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 		currentAgentName:  "",
 		sourcePersistSkip: make(map[string]bool),
 		askCardMessageIDs: make(map[string]string),
+		messageDao:        messageDao,
+		sessionDao:        sessionDao,
+		diffSnapshotDao:   diffSnapshotDao,
 	}
 	registry.Store(messageID, sw)
 	return sw
@@ -181,9 +188,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypePlanReview:
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
-					db.GetDB().Model(&model.Session{}).
-						Where("session_id = ? AND task_id = ?", sw.sessionID, sw.taskID).
-						Update("status", "awaiting_review")
+					_ = sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, "awaiting_review")
 				default:
 					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
 					sw.flushTextBuffer()
@@ -251,7 +256,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID 
 			AgentType: newAgentType,
 			AgentName: newAgentName,
 		}
-		if err := db.GetDB().Create(&newMsg).Error; err != nil {
+		if err := sw.messageDao.CreateMessage(newMsg); err != nil {
 			slog.Error("create sub-message failed", "error", err)
 			return
 		}
@@ -285,12 +290,8 @@ func (sw *StreamWriter) shouldForwardTextWithoutPersist(sourceMessageID string) 
 	}
 	sw.mu.Unlock()
 
-	var msg model.Message
-	err := db.GetDB().
-		Select("session_id").
-		Where("task_id = ? AND message_id = ?", sw.taskID, sourceMessageID).
-		First(&msg).Error
-	skip := err == nil && msg.SessionID != "" && msg.SessionID != sw.sessionID
+	sessionID, err := sw.messageDao.FindSessionIDByTaskMessage(sw.taskID, sourceMessageID)
+	skip := err == nil && sessionID != "" && sessionID != sw.sessionID
 
 	sw.mu.Lock()
 	sw.sourcePersistSkip[sourceMessageID] = skip
@@ -472,20 +473,7 @@ func (sw *StreamWriter) persistPlanReviewEvent(event generated.StreamEvent) {
 	diffText, _ := event.Content["diff"].(string)
 	sessionID, _ := event.Content["session_id"].(string)
 	if diffSnapshotID != "" && diffText != "" {
-		snap := model.DiffSnapshot{
-			SnapshotID:  diffSnapshotID,
-			SessionID:   sessionID,
-			DiffContent: diffText,
-			Status:      "pending",
-		}
-		if err := db.GetDB().
-			Where("snapshot_id = ?", diffSnapshotID).
-			Assign(model.DiffSnapshot{
-				SessionID:   sessionID,
-				DiffContent: diffText,
-				Status:      "pending",
-			}).
-			FirstOrCreate(&snap).Error; err != nil {
+		if err := sw.diffSnapshotDao.UpsertPending(diffSnapshotID, sessionID, diffText); err != nil {
 			slog.Warn("failed to persist merge diff snapshot", "snapshot_id", diffSnapshotID, "error", err)
 		}
 	}
@@ -514,18 +502,13 @@ func (sw *StreamWriter) appendTextToMessage(messageID, text string) {
 	seq := sw.lastSeq
 	sw.mu.Unlock()
 
-	var msg model.Message
-	if err := db.GetDB().Select("content").Where("message_id = ?", messageID).First(&msg).Error; err != nil {
+	content, err := sw.messageDao.FindMessageContent(messageID)
+	if err != nil {
 		slog.Error("load message for runtime block append failed", "message_id", messageID, "error", err)
 		return
 	}
 
-	err := db.GetDB().Model(&model.Message{}).
-		Where("message_id = ?", messageID).
-		Updates(map[string]interface{}{
-			"content":  msg.Content + text,
-			"last_seq": seq,
-		}).Error
+	err = sw.messageDao.UpdateMessageContentAndSeq(messageID, content+text, seq)
 	if err != nil {
 		slog.Error("append runtime block to MySQL failed", "message_id", messageID, "error", err)
 	}
@@ -563,23 +546,14 @@ func (sw *StreamWriter) doFlush() {
 	sw.lastFlush = time.Now()
 	sw.mu.Unlock()
 
-	err := db.GetDB().Model(&model.Message{}).
-		Where("message_id = ?", sw.messageID).
-		Updates(map[string]interface{}{
-			"content":  content,
-			"last_seq": seq,
-		}).Error
+	err := sw.messageDao.UpdateMessageContentAndSeq(sw.messageID, content, seq)
 	if err != nil {
 		slog.Error("flush to MySQL failed", "message_id", sw.messageID, "error", err)
 	}
 }
 
 func (sw *StreamWriter) updateMessageStatus(messageID, status string) error {
-	err := db.GetDB().Model(&model.Message{}).
-		Where("message_id = ?", messageID).
-		Updates(map[string]interface{}{
-			"status": status,
-		}).Error
+	err := sw.messageDao.UpdateMessageStatus(messageID, status)
 	if err != nil {
 		slog.Error("update message status failed", "message_id", messageID, "error", err)
 	}
@@ -628,7 +602,7 @@ func (sw *StreamWriter) Fail() {
 
 // PublishErrorAndFail writes an error event to Redis Stream and hub, then marks the message as failed.
 // Used when agentend fails before/during streaming so the frontend can see the error.
-func PublishErrorAndFail(messageID, sessionID, errMsg string) {
+func PublishErrorAndFail(messageDao dao.MessageDao, messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sseLine := formatErrorSSE(errMsg)
 
@@ -648,7 +622,9 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 		}).Result()
 		rdb.Expire(context.Background(), key, streamExpireTTL)
 	}
-	db.GetDB().Model(&model.Message{}).Where("message_id = ?", messageID).Update("status", "failed")
+	if err := messageDao.UpdateMessageStatus(messageID, "failed"); err != nil {
+		slog.Warn("failed to mark message failed", "message_id", messageID, "error", err)
+	}
 
 	// Ensure hub stream is cleaned up so subscribers receive Done event.
 	Hub.Close(key)
@@ -676,12 +652,14 @@ func formatErrorSSE(errMsg string) string {
 }
 
 // CleanupStaleMessages marks all streaming messages as failed (called at startup).
-func CleanupStaleMessages() {
-	result := db.GetDB().Model(&model.Message{}).
-		Where("status = ?", "streaming").
-		Update("status", "failed")
-	if result.RowsAffected > 0 {
-		slog.Info("cleaned up stale streaming messages", "count", result.RowsAffected)
+func CleanupStaleMessages(messageDao dao.MessageDao) {
+	rowsAffected, err := messageDao.FailStaleStreamingMessages()
+	if err != nil {
+		slog.Warn("failed to clean up stale streaming messages", "error", err)
+		return
+	}
+	if rowsAffected > 0 {
+		slog.Info("cleaned up stale streaming messages", "count", rowsAffected)
 	}
 }
 

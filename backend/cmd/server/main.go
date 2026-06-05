@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"agenthub/backend/internal/conf"
-	"agenthub/backend/internal/handler"
+	ctrlimpl "agenthub/backend/internal/controller/impl"
+	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/stream"
@@ -46,25 +47,25 @@ func main() {
 	}
 	defer redis.Close()
 
-	stream.CleanupStaleMessages()
+	stream.CleanupStaleMessages(gormdao.NewMessageDao())
 	stream.Hub.StartClosedKeysCleanup()
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 	qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
 
-	taskHandler := handler.NewTaskHandler(agentClient)
-	agentHandler := handler.NewAgentHandler()
-	sessionHandler := handler.NewSessionHandler()
-	messageHandler := handler.NewMessageHandler()
-	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
-	streamHandler := handler.NewStreamHandler()
-	agentProfileHandler := handler.NewAgentProfileHandler(agentClient)
-	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
-	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
-	announcementHandler := handler.NewAnnouncementHandler(agentClient)
-	contactGroupHandler := handler.NewContactGroupHandler()
-	skillHandler := handler.NewSkillHandler(agentClient)
-	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
+	taskController := ctrlimpl.NewTaskController(agentClient)
+	agentController := ctrlimpl.NewAgentController()
+	sessionController := ctrlimpl.NewSessionController()
+	messageController := ctrlimpl.NewMessageController()
+	avatarController := ctrlimpl.NewAvatarController(qiniuUploader)
+	streamController := ctrlimpl.NewStreamController()
+	agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
+	workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
+	diffSnapshotController := ctrlimpl.NewDiffSnapshotController()
+	announcementController := ctrlimpl.NewAnnouncementController(agentClient)
+	contactGroupController := ctrlimpl.NewContactGroupController()
+	skillController := ctrlimpl.NewSkillController(agentClient)
+	adminController := ctrlimpl.NewAdminController(cfg, qiniuUploader, agentClient)
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -81,82 +82,27 @@ func main() {
 
 	api := r.Group("/api")
 	{
-		api.POST("/tasks", taskHandler.CreateTask)
-		api.GET("/tasks", taskHandler.ListTasks)
-		api.GET("/tasks/:taskId", taskHandler.GetTask)
-		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
-		api.DELETE("/tasks/:taskId/leave", taskHandler.LeaveTask)
-		api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
+		taskController.RegisterRoutes(api)
+		streamController.RegisterRoutes(api)
+		messageController.RegisterRoutes(api)
 
-		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
-		api.POST("/tasks/:taskId/review", taskHandler.ReviewTask)
-		api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
-		api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
-		api.GET("/tasks/:taskId/messages/window", messageHandler.WindowMessages)
+		agentController.RegisterRoutes(api)
 
-		api.GET("/agent-types", agentHandler.ListAgentTypes)
+		announcementController.RegisterRoutes(api)
 
-		api.GET("/tasks/:taskId/announcements", announcementHandler.ListAnnouncements)
-		api.POST("/tasks/:taskId/announcements", announcementHandler.CreateAnnouncement)
-		api.DELETE("/tasks/:taskId/announcements/:id", announcementHandler.DeleteAnnouncement)
+		sessionController.RegisterRoutes(api)
+		avatarController.RegisterRoutes(api)
+		agentProfileController.RegisterRoutes(api)
 
-		api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
-		api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
-		api.GET("/sessions/:sessionId/profile", agentProfileHandler.GetProfile)
-		api.GET("/sessions/:sessionId/detail", agentProfileHandler.GetDetail)
-		api.GET("/sessions/:sessionId/soul", agentProfileHandler.GetSoul)
-		api.PUT("/sessions/:sessionId/soul", agentProfileHandler.UpdateSoul)
+		diffSnapshotController.RegisterRoutes(api)
 
-		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
-		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+		contactGroupController.RegisterRoutes(api)
 
-		// Diff snapshot routes
-		api.GET("/diff-snapshots/:snapshotId", diffSnapshotHandler.GetDiffSnapshot)
-		api.PUT("/diff-snapshots/:snapshotId", diffSnapshotHandler.SaveDiffSnapshot)
-
-		// Contact group routes
-		api.GET("/contact-groups", contactGroupHandler.ListGroups)
-		api.POST("/contact-groups", contactGroupHandler.CreateGroup)
-		api.PUT("/contact-groups/:groupId", contactGroupHandler.UpdateGroup)
-		api.DELETE("/contact-groups/:groupId", contactGroupHandler.DeleteGroup)
-		api.POST("/contact-groups/:groupId/items", contactGroupHandler.AddItem)
-		api.DELETE("/contact-groups/:groupId/items/:taskID", contactGroupHandler.RemoveItem)
-
-		// SkillsHub routes
-		api.POST("/skills/upload", skillHandler.Upload)
-		api.POST("/skills/confirm", skillHandler.Confirm)
-		api.GET("/skills", skillHandler.List)
-		api.DELETE("/skills/:name", skillHandler.Delete)
-		api.POST("/skills/:name/import", skillHandler.Import)
-		api.DELETE("/skills/:name/sessions/:sessionId", skillHandler.Remove)
-
-		// Builtin skills report (internal)
-		api.POST("/internal/builtin-skills", skillHandler.ReportBuiltinSkills)
-
-		ws := api.Group("/workspace")
-		{
-			ws.GET("/task/:taskId/git-info", workspaceHandler.TaskGitInfo)
-			ws.POST("/task/:taskId/merge-to-main", workspaceHandler.MergeTaskToMain)
-			ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
-			ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
-			ws.GET("/:id/diff", workspaceHandler.GetDiff)
-			ws.POST("/:id/commit", workspaceHandler.Commit)
-			ws.POST("/:id/revert", workspaceHandler.Revert)
-			ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
-			ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
-		}
-
-		ss := api.Group("/session")
-		{
-			ss.GET("/:sessionId/files/*filepath", workspaceHandler.SessionFileRead)
-			ss.PUT("/:sessionId/files/*filepath", workspaceHandler.SessionFileWrite)
-			ss.GET("/:sessionId/diff", workspaceHandler.SessionGetDiff)
-			ss.POST("/:sessionId/commit", workspaceHandler.SessionCommit)
-			ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
-		}
+		skillController.RegisterRoutes(api)
+		workspaceController.RegisterRoutes(api)
 	}
 
-	adminHandler.RegisterRoutes(api)
+	adminController.RegisterRoutes(api)
 
 	slog.Info("server starting", "port", 8080)
 
