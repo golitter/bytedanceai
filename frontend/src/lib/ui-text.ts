@@ -201,6 +201,7 @@ export const UI_CARD_STATUS = {
   TASK: '任务',
   RUNNING: '执行中',
   DONE: '完成',
+  FAILED: '失败',
   WAITING: '等待',
   IMAGE_LOAD_FAILED: '图片加载失败',
   OPEN_IN_NEW_TAB: '在新标签页打开',

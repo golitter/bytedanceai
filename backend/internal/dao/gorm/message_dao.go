@@ -168,16 +168,32 @@ func applyGroupMessageVisibility(query *gorm.DB, taskID, primarySessionID string
 	if primarySessionID == "" {
 		return query.Where("role = ? OR role = ?", "user", "agent")
 	}
-	directReplySessions := db.GetDB().
-		Model(&model.Message{}).
-		Select("DISTINCT session_id").
-		Where("task_id = ? AND role = ? AND session_id <> ?", taskID, "user", primarySessionID)
 
 	return query.Where(
-		"role = ? OR session_id = ? OR (role = ? AND session_id IN (?))",
+		`role = ? OR session_id = ? OR (role = ? AND group_id <> ?) OR (
+			role = ? AND session_id <> ? AND EXISTS (
+				SELECT 1 FROM messages user_msg
+				WHERE user_msg.task_id = messages.task_id
+					AND user_msg.session_id = messages.session_id
+					AND user_msg.role = ?
+					AND user_msg.id < messages.id
+					AND NOT EXISTS (
+						SELECT 1 FROM messages agent_msg
+						WHERE agent_msg.task_id = messages.task_id
+							AND agent_msg.session_id = messages.session_id
+							AND agent_msg.role = ?
+							AND agent_msg.id > user_msg.id
+							AND agent_msg.id < messages.id
+					)
+			)
+		)`,
 		"user",
 		primarySessionID,
 		"agent",
-		directReplySessions,
+		"",
+		"agent",
+		primarySessionID,
+		"user",
+		"agent",
 	)
 }

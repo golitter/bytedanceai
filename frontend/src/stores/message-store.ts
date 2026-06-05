@@ -611,8 +611,14 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
       const messages = [...session.messages]
+      const errorText = error.message || 'Unknown error'
       if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
         messages.push({ ...buildAgentMessage(session, sessionId), status: 'failed' })
+      } else {
+        messages.push({
+          ...buildAgentMessage({ ...session, streamingContent: errorText }, sessionId),
+          status: 'failed',
+        })
       }
       return {
         sessions: {

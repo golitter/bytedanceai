@@ -21,6 +21,8 @@ export interface GitBranchConfig {
   exists?: boolean
 }
 
+export type GitBranchInfo = GitBranchConfig
+
 export interface GitGraphData {
   repoPath?: string
   commits: GitCommit[]

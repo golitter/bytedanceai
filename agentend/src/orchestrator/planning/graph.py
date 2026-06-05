@@ -700,11 +700,12 @@ async def reason_node(state: GraphState) -> dict:
             "plan": None,
             "memory_messages": [HumanMessage(content=state["message"])],
         }
-    except Exception:
+    except Exception as e:
         logger.exception("Reason node failed unexpectedly")
+        error_text = str(e).strip() or e.__class__.__name__
         return {
             "output_type": "error",
-            "text": "Reasoning failed",
+            "text": f"Orchestrator 推理失败：{e.__class__.__name__}: {error_text}",
             "plan": None,
         }
 

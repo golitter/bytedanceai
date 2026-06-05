@@ -5,7 +5,14 @@ import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
-import { UI_ACTIONS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -130,7 +137,7 @@ export function ChatArea({
   }
 
   const displayName = isGroupChat
-    ? (groupTitle ?? UI_MISC.GROUP_CHAT)
+    ? (groupTitle ?? UI_LABELS.GROUP_CHAT)
     : (agentName ?? AGENT_NAMES[agentType] ?? agentType)
 
   return (

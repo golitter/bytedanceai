@@ -2,11 +2,14 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.adapters.orchestrator import _child_result_text
+from src.adapters.orchestrator import OrchestratorAdapter, _child_result_text
 from src.orchestrator.models import TaskResult
 from src.orchestrator.reporting.aggregator import build_final_summary_block
+from src.schemas.events import EventType
 
 
 def _extract_json_block(text: str) -> dict:
@@ -63,3 +66,19 @@ def test_final_summary_block_is_summary_first() -> None:
     assert payload["failed"] == 1
     assert payload["details"][1]["status"] == "failed"
     assert "[Timeout]" not in block
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_reason_error_becomes_stream_error_event() -> None:
+    adapter = OrchestratorAdapter()
+
+    events = await adapter._handle_reason(
+        {
+            "output_type": "error",
+            "text": "Orchestrator 推理失败：APIConnectionError: Connection error.",
+        }
+    )
+
+    assert len(events) == 1
+    assert events[0].type == EventType.ERROR.value
+    assert events[0].content["error"] == "Orchestrator 推理失败：APIConnectionError: Connection error."

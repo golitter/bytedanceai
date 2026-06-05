@@ -69,7 +69,7 @@ export function SidebarActions({
         }}
       >
         <LogOut className="h-3.5 w-3.5 text-destructive" strokeWidth={1.25} />
-        {isGroupChat ? UI_ACTIONS.EXIT_GROUP : UI_ACTIONS.DELETE_CHAT}
+        {isGroupChat ? UI_LABELS.EXIT_GROUP : UI_LABELS.DELETE_CHAT}
       </button>
     </div>
   )

@@ -237,6 +237,26 @@ describe('chat store ask-agent cards', () => {
     expect(state.messages[0].status).toBe('failed')
   })
 
+  it('shows a failed message when the stream errors before any text arrives', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamAgentUpdate(sessionId, 'orchestrator', '管理者', 'orchestrator-error-message')
+    store.streamError(
+      sessionId,
+      new Error('Orchestrator 推理失败：APIConnectionError: Connection error.'),
+    )
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.status).toBe('error')
+    expect(state.messages).toHaveLength(1)
+    expect(state.messages[0].content).toBe(
+      'Orchestrator 推理失败：APIConnectionError: Connection error.',
+    )
+    expect(state.messages[0].status).toBe('failed')
+    expect(state.messages[0].agentName).toBe('管理者')
+  })
+
   it('deduplicates replayed text chunks by message id', () => {
     const store = useChatStore.getState()
 

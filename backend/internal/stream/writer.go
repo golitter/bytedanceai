@@ -174,8 +174,13 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 						}
 
 						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
-							sw.flushTextBuffer()
-							sw.publishForwardedText(text, newAgentType, newAgentName, sourceMessageID)
+							if sw.needsAgentSwitch(newAgentType, newAgentName, sourceMessageID, "") {
+								sw.flushTextBuffer()
+								sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
+							}
+							sw.appendText(text)
+							sw.bufferTextLine(text)
+							sw.markSplitAfterForward()
 							return
 						}
 
@@ -222,6 +227,13 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
 					_ = sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, "awaiting_review")
+				case generated.EventTypePlanning,
+					generated.EventTypeRuntimeExecuting,
+					generated.EventTypeRuntimeCompleted,
+					generated.EventTypeCoordinationMessage,
+					generated.EventTypeCoordinationDone:
+					sw.flushTextBuffer()
+					sw.persistRuntimeBlockEvent(event)
 				default:
 					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
 					sw.flushTextBuffer()
@@ -265,6 +277,8 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 	sw.mu.Lock()
 	hasContent := sw.bufLen > 0
 	currentMessageID := sw.messageID
+	currentAgentType := sw.currentAgentType
+	currentAgentName := sw.currentAgentName
 	sw.mu.Unlock()
 
 	if hasContent {
@@ -281,7 +295,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 
 	if targetMessageID != "" {
 		sw.seedBufferFromMessage(targetMessageID, groupID)
-	} else if hasContent {
+	} else if hasContent || shouldCreateEmptySubMessage(currentMessageID, sw.originalMessageID, sourceMessageID, newAgentType, newAgentName, currentAgentType, currentAgentName) {
 		newMsgID := sw.createSubMessage(newAgentType, newAgentName, groupID)
 		if newMsgID == "" {
 			return
@@ -302,6 +316,16 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 	sw.currentSourceID = sourceMessageID
 	sw.groupID = groupID
 	sw.mu.Unlock()
+}
+
+func (sw *StreamWriter) needsAgentSwitch(newAgentType, newAgentName, sourceMessageID, groupID string) bool {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.messageID == "" ||
+		sw.currentAgentType != newAgentType ||
+		(newAgentName != "" && sw.currentAgentName != newAgentName) ||
+		(sourceMessageID != "" && sw.currentSourceID != sourceMessageID) ||
+		sw.groupID != groupID
 }
 
 func (sw *StreamWriter) createSubMessage(agentType, agentName, groupID string) string {
@@ -388,8 +412,17 @@ func (sw *StreamWriter) shouldForwardTextWithoutPersist(sourceMessageID string) 
 	return skip
 }
 
-func (sw *StreamWriter) publishForwardedText(text, agentType, agentName, messageID string) {
-	sw.publishToRedis(FormatSSEWithMeta(text, agentType, agentName, messageID, ""))
+func shouldCreateEmptySubMessage(currentMessageID, originalMessageID, sourceMessageID, newAgentType, newAgentName, currentAgentType, currentAgentName string) bool {
+	if currentMessageID != originalMessageID {
+		return false
+	}
+	if sourceMessageID == "" || sourceMessageID == currentMessageID || sourceMessageID == originalMessageID {
+		return false
+	}
+	return newAgentType != currentAgentType || (newAgentName != "" && newAgentName != currentAgentName)
+}
+
+func (sw *StreamWriter) markSplitAfterForward() {
 	sw.mu.Lock()
 	sw.splitAfterForward = true
 	sw.mu.Unlock()
@@ -594,6 +627,15 @@ func (sw *StreamWriter) persistPlanReviewEvent(event generated.StreamEvent) {
 		"status":           "pending",
 	}
 	sw.appendText(legacyRuntimeBlockLine("plan_review", payload))
+	sw.doFlush()
+}
+
+func (sw *StreamWriter) persistRuntimeBlockEvent(event generated.StreamEvent) {
+	marker := legacyRuntimeBlockLineForEvent(event)
+	if marker == "" {
+		return
+	}
+	sw.appendText(marker)
 	sw.doFlush()
 }
 
@@ -806,6 +848,100 @@ func FormatSSEWithMeta(text, agentType, agentName, messageID, groupID string) st
 func legacyRuntimeBlockLine(blockType string, payload map[string]interface{}) string {
 	data, _ := json.Marshal(payload)
 	return fmt.Sprintf("\ntype: %s\njson: %s\n", blockType, string(data))
+}
+
+func legacyRuntimeBlockLineForEvent(event generated.StreamEvent) string {
+	switch event.Type {
+	case generated.EventTypePlanning:
+		dispatch, ok := event.Content["dispatch"].(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		payload := map[string]interface{}{
+			"overview": "",
+			"tasks": []map[string]interface{}{
+				{
+					"task_id": dispatch["task_id"],
+					"agent":   dispatch["agent"],
+					"title":   firstNonEmptyString(dispatch["title"], dispatch["content"]),
+					"content": dispatch["content"],
+					"status":  "pending",
+				},
+			},
+		}
+		return legacyRuntimeBlockLine("plan", payload)
+	case generated.EventTypeRuntimeExecuting:
+		payload := map[string]interface{}{
+			"task_id": event.Content["task_id"],
+			"agent":   event.Content["agent"],
+			"title":   event.Content["title"],
+			"status":  firstNonEmptyString(event.Content["status"], "running"),
+		}
+		return legacyRuntimeBlockLine("runtime_status", payload)
+	case generated.EventTypeRuntimeCompleted:
+		status := firstNonEmptyString(event.Content["status"], "")
+		if status == "" {
+			if success, ok := event.Content["success"].(bool); ok && success {
+				status = "completed"
+			} else {
+				status = "failed"
+			}
+		}
+		payload := map[string]interface{}{
+			"task_id": event.Content["task_id"],
+			"agent":   event.Content["agent"],
+			"status":  status,
+		}
+		return legacyRuntimeBlockLine("runtime_status", payload)
+	case generated.EventTypeCoordinationMessage:
+		payload := map[string]interface{}{
+			"messages": []map[string]interface{}{
+				{
+					"from":  event.Content["from"],
+					"to":    event.Content["to"],
+					"text":  event.Content["text"],
+					"round": event.Content["round"],
+				},
+			},
+			"closed": false,
+		}
+		return legacyRuntimeBlockLine("coordination", payload)
+	case generated.EventTypeCoordinationDone:
+		payload := map[string]interface{}{
+			"messages": []map[string]interface{}{},
+			"closed":   true,
+			"summary":  coordinationSummary(event.Content),
+		}
+		return legacyRuntimeBlockLine("coordination", payload)
+	default:
+		return ""
+	}
+}
+
+func firstNonEmptyString(values ...interface{}) string {
+	for _, value := range values {
+		if str, ok := value.(string); ok && str != "" {
+			return str
+		}
+	}
+	return ""
+}
+
+func coordinationSummary(content map[string]interface{}) string {
+	if summary := firstNonEmptyString(content["summary"]); summary != "" {
+		return summary
+	}
+	rawDecisions, ok := content["decisions"].([]interface{})
+	if !ok || len(rawDecisions) == 0 {
+		return ""
+	}
+	decisions := make([]string, 0, len(rawDecisions))
+	for _, raw := range rawDecisions {
+		if decision, ok := raw.(string); ok && decision != "" {
+			decisions = append(decisions, decision)
+		}
+	}
+	return strings.Join(decisions, "\n")
 }
 
 func askCardStatus(raw interface{}) string {

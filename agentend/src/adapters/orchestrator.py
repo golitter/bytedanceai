@@ -294,6 +294,14 @@ class OrchestratorAdapter(BaseAgentAdapter):
             plan = node_output.get("plan")
             if plan:
                 events.append(StreamEvent.create(EventType.PLANNING, node="reason", status="plan_generated"))
+        elif output_type == "error":
+            error_text = (
+                node_output.get("error")
+                or node_output.get("message")
+                or node_output.get("text")
+                or "Orchestrator internal error"
+            )
+            events.append(StreamEvent.create(EventType.ERROR, error=str(error_text)))
         return events
 
     async def _handle_execute(

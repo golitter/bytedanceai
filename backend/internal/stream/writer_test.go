@@ -1,8 +1,14 @@
 package stream
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	"agenthub/backend/internal/generated"
+	"agenthub/backend/internal/model"
 )
 
 // Note: PublishErrorAndFail requires db.GetDB() and redis to be initialized.
@@ -161,3 +167,314 @@ func TestHub_StartClosedKeysCleanup(t *testing.T) {
 		t.Logf("closedKeys count = %d (cleanup may have run)", count)
 	}
 }
+
+func TestLegacyRuntimeBlockLineForEventPersistsRuntimeStatus(t *testing.T) {
+	got := legacyRuntimeBlockLineForEvent(generated.StreamEvent{
+		Type: generated.EventTypeRuntimeExecuting,
+		Content: map[string]interface{}{
+			"task_id": "task-001",
+			"agent":   "worker",
+			"title":   "Inspect refresh hydration",
+			"status":  "running",
+		},
+	})
+
+	for _, want := range []string{
+		"type: runtime_status",
+		`"task_id":"task-001"`,
+		`"agent":"worker"`,
+		`"title":"Inspect refresh hydration"`,
+		`"status":"running"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("legacyRuntimeBlockLineForEvent() = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestLegacyRuntimeBlockLineForEventSkipsRuntimeText(t *testing.T) {
+	got := legacyRuntimeBlockLineForEvent(generated.StreamEvent{
+		Type: generated.EventTypeRuntimeText,
+		Content: map[string]interface{}{
+			"task_id": "task-001",
+			"agent":   "worker",
+			"text":    "transient child output",
+		},
+	})
+	if got != "" {
+		t.Fatalf("runtime_text should stay transient, got %q", got)
+	}
+}
+
+func TestStreamWriterPersistsForwardedCrossSessionTextAsSingleLocalSubMessage(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID            = "task-forward"
+		orchestratorID    = "orch-session"
+		originalMessageID = "orch-message"
+		childMessageID    = "child-message"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[originalMessageID] = &model.Message{
+		MessageID: originalMessageID,
+		TaskID:    taskID,
+		SessionID: orchestratorID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+		AgentName: "manager",
+	}
+	messageDao.sourceSessions[childMessageID] = "child-session"
+
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		orchestratorID,
+		originalMessageID,
+		"orchestrator",
+		messageDao,
+		&writerSessionDao{},
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		for _, event := range []generated.StreamEvent{
+			{
+				Type: generated.EventTypeAskCardStart,
+				Content: map[string]interface{}{
+					"question_id":       "q-forward",
+					"source_agent":      "manager",
+					"source_agent_type": "orchestrator",
+					"source_session_id": orchestratorID,
+					"target_agent":      "worker",
+					"target_agent_type": "claude-code",
+					"target_session_id": "child-session",
+					"question":          "introduce yourself",
+				},
+			},
+			{
+				Type: generated.EventTypeText,
+				Content: map[string]interface{}{
+					"text":       "hello ",
+					"agent":      "worker",
+					"agent_type": "claude-code",
+					"message_id": childMessageID,
+				},
+			},
+			{
+				Type: generated.EventTypeText,
+				Content: map[string]interface{}{
+					"text":       "world",
+					"agent":      "worker",
+					"agent_type": "claude-code",
+					"message_id": childMessageID,
+				},
+			},
+			{
+				Type: generated.EventTypeAskCardDone,
+				Content: map[string]interface{}{
+					"question_id":       "q-forward",
+					"target_agent":      "worker",
+					"target_agent_type": "claude-code",
+					"target_session_id": "child-session",
+					"summary":           "hello world",
+					"status":            "completed",
+				},
+			},
+			{Type: generated.EventTypeDone},
+		} {
+			fn(formatTestSSE(event))
+		}
+		return nil
+	})
+	if outcome != RunOutcomeCompleted {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeCompleted)
+	}
+
+	var workerMessages []model.Message
+	for _, message := range messageDao.messages {
+		if message.SessionID == orchestratorID && message.AgentType == "claude-code" {
+			workerMessages = append(workerMessages, *message)
+		}
+	}
+	if len(workerMessages) != 1 {
+		t.Fatalf("created worker messages = %d, want 1: %#v", len(workerMessages), workerMessages)
+	}
+	if workerMessages[0].Content != "hello world" {
+		t.Fatalf("worker content = %q, want %q", workerMessages[0].Content, "hello world")
+	}
+	original := messageDao.messages[originalMessageID]
+	if original == nil || !strings.Contains(original.Content, `"status":"answered"`) {
+		t.Fatalf("original message should contain answered ask card marker, got %#v", original)
+	}
+}
+
+func TestStreamWriterPersistsErrorEventAsFailedMessage(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID    = "task-error"
+		sessionID = "orch-session"
+		messageID = "orch-message-error"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: sessionID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+		AgentName: "manager",
+	}
+
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		sessionID,
+		messageID,
+		"orchestrator",
+		messageDao,
+		&writerSessionDao{},
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypeError,
+			Content: map[string]interface{}{
+				"error": "Orchestrator 推理失败：APIConnectionError: Connection error.",
+			},
+		}))
+		fn(formatTestSSE(generated.StreamEvent{Type: generated.EventTypeDone}))
+		return nil
+	})
+
+	if outcome != RunOutcomeFailed {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeFailed)
+	}
+	message := messageDao.messages[messageID]
+	if message == nil {
+		t.Fatalf("message not found")
+	}
+	if message.Status != string(RunOutcomeFailed) {
+		t.Fatalf("message status = %q, want %q", message.Status, RunOutcomeFailed)
+	}
+	if !strings.Contains(message.Content, "Orchestrator 推理失败") {
+		t.Fatalf("message content = %q, want visible error", message.Content)
+	}
+}
+
+func formatTestSSE(event generated.StreamEvent) string {
+	data, _ := json.Marshal(event)
+	return "data: " + string(data)
+}
+
+type writerMessageDao struct {
+	messages       map[string]*model.Message
+	sourceSessions map[string]string
+}
+
+func newWriterMessageDao() *writerMessageDao {
+	return &writerMessageDao{
+		messages:       make(map[string]*model.Message),
+		sourceSessions: make(map[string]string),
+	}
+}
+
+func (dao *writerMessageDao) ListByTask(string, string, string, string, int, *uint64) ([]model.Message, error) {
+	return nil, nil
+}
+
+func (dao *writerMessageDao) CountBySessionID(string) (int64, error) { return 0, nil }
+
+func (dao *writerMessageDao) FindByMessageID(messageID string) (*model.Message, error) {
+	return dao.messages[messageID], nil
+}
+
+func (dao *writerMessageDao) CreateMessage(message model.Message) error {
+	copyMessage := message
+	dao.messages[message.MessageID] = &copyMessage
+	return nil
+}
+
+func (dao *writerMessageDao) FindSessionIDByTaskMessage(_, messageID string) (string, error) {
+	return dao.sourceSessions[messageID], nil
+}
+
+func (dao *writerMessageDao) FindMessageContent(messageID string) (string, error) {
+	if message := dao.messages[messageID]; message != nil {
+		return message.Content, nil
+	}
+	return "", nil
+}
+
+func (dao *writerMessageDao) UpdateMessageContentAndSeq(messageID, content, seq string) error {
+	if message := dao.messages[messageID]; message != nil {
+		message.Content = content
+		message.LastSeq = seq
+	}
+	return nil
+}
+
+func (dao *writerMessageDao) UpdateMessageStatus(messageID, status string) error {
+	if message := dao.messages[messageID]; message != nil {
+		message.Status = status
+	}
+	return nil
+}
+
+func (dao *writerMessageDao) FailStaleStreamingMessages() (int64, error) { return 0, nil }
+
+func (dao *writerMessageDao) FindLatestCompletedAgentMessage(string, string) (*model.Message, error) {
+	return nil, nil
+}
+
+func (dao *writerMessageDao) ListGroupChatWindowMessages(string, string, *model.Message) ([]model.Message, error) {
+	return nil, nil
+}
+
+func (dao *writerMessageDao) FindLatestPlanReviewMessage(string, string) (*model.Message, error) {
+	return nil, nil
+}
+
+func (dao *writerMessageDao) UpdateContent(messageID, content string) error {
+	if message := dao.messages[messageID]; message != nil {
+		message.Content = content
+	}
+	return nil
+}
+
+type writerSessionDao struct{}
+
+func (dao *writerSessionDao) DeactivateSession(string) (bool, error)        { return false, nil }
+func (dao *writerSessionDao) GetBySessionID(string) (*model.Session, error) { return nil, nil }
+func (dao *writerSessionDao) GetByTaskAndSessionID(string, string) (*model.Session, error) {
+	return nil, nil
+}
+func (dao *writerSessionDao) ListByTaskID(string) ([]model.Session, error)     { return nil, nil }
+func (dao *writerSessionDao) ListAll() ([]model.Session, error)                { return nil, nil }
+func (dao *writerSessionDao) FindPrimaryGroupSessionID(string) (string, error) { return "", nil }
+func (dao *writerSessionDao) UpdateFields(string, map[string]interface{}) (bool, error) {
+	return false, nil
+}
+func (dao *writerSessionDao) UpdateSoul(string, string) (bool, error)         { return false, nil }
+func (dao *writerSessionDao) UpdateStatusByTask(string, string, string) error { return nil }
+
+type writerDiffSnapshotDao struct{}
+
+func (dao *writerDiffSnapshotDao) GetBySnapshotID(string) (*model.DiffSnapshot, error) {
+	return nil, nil
+}
+func (dao *writerDiffSnapshotDao) CancelPendingBySession(string, string) error { return nil }
+func (dao *writerDiffSnapshotDao) Upsert(snapshot model.DiffSnapshot) (*model.DiffSnapshot, error) {
+	return &snapshot, nil
+}
+func (dao *writerDiffSnapshotDao) UpsertPending(string, string, string) error { return nil }

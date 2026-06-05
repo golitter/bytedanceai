@@ -17,14 +17,7 @@ import {
   uploadAvatar,
 } from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
-import {
-  UI_ACTIONS,
-  UI_MESSAGES,
-  UI_MISC,
-  UI_PLACEHOLDERS,
-  UI_PROFILE,
-  UI_STATUS,
-} from '@/lib/ui-text'
+import { UI_ACTIONS, UI_MESSAGES, UI_PLACEHOLDERS, UI_PROFILE, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
@@ -531,7 +524,7 @@ function ImportSkillDialog({
                 </div>
                 <span className="text-[13px] font-medium">{skill.name}</span>
                 <span className="ml-auto shrink-0 text-[10px] text-tertiary">
-                  {imported ? UI_MISC.IMPORTED : ''}
+                  {imported ? UI_MESSAGES.IMPORTED : ''}
                 </span>
               </button>
             )
