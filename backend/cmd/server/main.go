@@ -18,8 +18,8 @@ import (
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
-	"agenthub/backend/pkg/qiniu"
 	"agenthub/backend/pkg/redis"
+	"agenthub/backend/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,13 +51,17 @@ func main() {
 	stream.Hub.StartClosedKeysCleanup()
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
-	qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
+	storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+	if err != nil {
+		slog.Error("init storage", "error", err)
+		os.Exit(1)
+	}
 
 	taskController := ctrlimpl.NewTaskController(agentClient)
 	agentController := ctrlimpl.NewAgentController()
 	sessionController := ctrlimpl.NewSessionController()
 	messageController := ctrlimpl.NewMessageController()
-	avatarController := ctrlimpl.NewAvatarController(qiniuUploader)
+	avatarController := ctrlimpl.NewAvatarController(storageProvider)
 	streamController := ctrlimpl.NewStreamController()
 	agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
 	workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
@@ -65,12 +69,18 @@ func main() {
 	announcementController := ctrlimpl.NewAnnouncementController(agentClient)
 	contactGroupController := ctrlimpl.NewContactGroupController()
 	skillController := ctrlimpl.NewSkillController(agentClient)
-	adminController := ctrlimpl.NewAdminController(cfg, qiniuUploader, agentClient)
+	adminController := ctrlimpl.NewAdminController(cfg, storageProvider, agentClient)
 
 	r := gin.New()
 	r.Use(middleware.Logger())
 	r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 	r.Use(gin.Recovery())
+
+	// Serve local uploads when using local storage
+	if local, ok := storageProvider.(*storage.LocalStorage); ok {
+		r.Static("/uploads", local.Dir())
+		slog.Info("serving local uploads", "dir", local.Dir())
+	}
 
 	r.GET("/ping", func(c *gin.Context) {
 		vo.OK(c, gin.H{"message": "pong"})

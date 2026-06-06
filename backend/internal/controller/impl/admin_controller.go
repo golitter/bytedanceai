@@ -10,7 +10,7 @@ import (
 	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
-	"agenthub/backend/pkg/qiniu"
+	"agenthub/backend/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +20,7 @@ type AdminController struct {
 	cfg     *conf.Config
 }
 
-func NewAdminController(cfg *conf.Config, _ *qiniu.Uploader, agentClient *agentend_client.Client) *AdminController {
+func NewAdminController(cfg *conf.Config, _ storage.Provider, agentClient *agentend_client.Client) *AdminController {
 	adminDao := gormdao.NewAdminDao()
 	sessionDao := gormdao.NewSessionDao()
 	adminService := svcimpl.NewAdminService(cfg, adminDao, sessionDao, agentClient)

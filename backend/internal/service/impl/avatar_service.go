@@ -7,17 +7,17 @@ import (
 
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/service"
-	"agenthub/backend/pkg/qiniu"
+	"agenthub/backend/pkg/storage"
 
 	"github.com/google/uuid"
 )
 
 type AvatarService struct {
 	sessionDao dao.SessionDao
-	uploader   *qiniu.Uploader
+	uploader   storage.Provider
 }
 
-func NewAvatarService(sessionDao dao.SessionDao, uploader *qiniu.Uploader) *AvatarService {
+func NewAvatarService(sessionDao dao.SessionDao, uploader storage.Provider) *AvatarService {
 	return &AvatarService{sessionDao: sessionDao, uploader: uploader}
 }
 

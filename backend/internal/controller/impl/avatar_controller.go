@@ -9,7 +9,7 @@ import (
 	"agenthub/backend/internal/service"
 	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/qiniu"
+	"agenthub/backend/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +30,7 @@ type AvatarController struct {
 	service service.AvatarService
 }
 
-func NewAvatarController(uploader *qiniu.Uploader) *AvatarController {
+func NewAvatarController(uploader storage.Provider) *AvatarController {
 	sessionDao := gormdao.NewSessionDao()
 	avatarService := svcimpl.NewAvatarService(sessionDao, uploader)
 	return &AvatarController{service: avatarService}

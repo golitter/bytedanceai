@@ -44,6 +44,16 @@ type QiniuConfig struct {
 	Region    string `yaml:"region"`
 }
 
+type LocalStorageConfig struct {
+	Dir       string `yaml:"dir"`
+	URLPrefix string `yaml:"url_prefix"`
+}
+
+type StorageConfig struct {
+	Type  string             `yaml:"type"` // "qiniu" | "local" | "" (auto-detect)
+	Local LocalStorageConfig `yaml:"local"`
+}
+
 type RedisConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
@@ -68,6 +78,7 @@ type Config struct {
 	JWT      JWTConfig      `yaml:"jwt"`
 	AgentEnd AgentEndConfig `yaml:"agentend"`
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
+	Storage  StorageConfig  `yaml:"storage"`
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
 	CORS     CORSConfig     `yaml:"cors"`
