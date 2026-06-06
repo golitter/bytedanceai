@@ -148,7 +148,15 @@ export function ChatArea({
           <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={24} />
         ) : null}
         <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
-        {isStreaming && <p className="text-[11px] text-tertiary">{UI_STATUS.STREAMING}</p>}
+        {isStreaming && (
+          <p
+            className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success"
+            aria-live="polite"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+            {UI_STATUS.STREAMING}
+          </p>
+        )}
       </div>
 
       {/* Load error banner */}
