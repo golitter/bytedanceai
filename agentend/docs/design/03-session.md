@@ -30,7 +30,7 @@ class Session:
     created_at: datetime
     last_active: datetime
     history: list[dict] = []             # 消息历史
-    metadata: dict = {}                  # 扩展元数据
+    metadata: dict = field(default_factory=dict)  # 扩展元数据
 ```
 
 ### 状态机

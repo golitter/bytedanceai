@@ -61,6 +61,6 @@ Run: Orchestrator session_id=yyy
 - `reason_node` 内通过 `langgraph.config.get_config()` 获取 runnable config 并传播到 `llm_with_tools.ainvoke()`，确保 LLM 子调用挂到 graph trace 树下
 - 不设 `LANGSMITH_TRACING` 时 `get_config()` 兜底返回 None，零开销
 
-## 后续规划（Phase 5.2）
+## CLI Adapter Trace（Phase 5.2 — 已实现）
 
-CLI Adapter（Claude Code / OpenCode / Codex）的 trace 接入，通过 `langsmith.RunTree` 手动上报 StreamEvent 生命周期。
+CLI Adapter（Claude Code / OpenCode / Codex）的 trace 已通过 `src/adapters/trace.py` 的 `trace_stream_events()` async generator wrapper 接入。在 `src/api/v1/agent.py` 的 `_execute_stream` 中自动包裹非 Orchestrator Agent 的流式输出。Orchestrator 走 Phase 5.1 的 `get_config()` 自动 trace，不经过此 wrapper。

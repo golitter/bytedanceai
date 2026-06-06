@@ -55,6 +55,7 @@ src/
 │   │   └── wave.py          # Wave 执行子图（占位）
 │   ├── memory/
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
+│   │   ├── conversation_memory.py  # ConversationMemoryStore (conversation_memory.json)
 │   │   └── evolution.py     # EvolutionStore (evolution.yaml)
 │   ├── prompts/
 │   │   └── group_chat.py    # 跨 Agent 对话上下文构建（build_group_chat_context）
@@ -179,9 +180,10 @@ Reason 阶段 LLM 可调用 `ask_agent(agent, question)` 向特定 Agent 提问�
 ### Pin API (`src/api/v1/pin.py`)
 
 ```
-POST /v1/pin/add      {shared_dir, content, title}
-POST /v1/pin/remove   {shared_dir, filename}
-GET  /v1/pin/list     ?shared_dir=...
+POST /v1/pin/add                {shared_dir, content, title}
+POST /v1/pin/remove             {shared_dir, filename}
+POST /v1/pin/announcement-unpin {shared_dir, content, sender_name}
+GET  /v1/pin/list               ?shared_dir=...
 ```
 
 ### Evolution (`src/orchestrator/memory/evolution.py`)

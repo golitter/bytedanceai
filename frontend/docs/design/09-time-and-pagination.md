@@ -82,7 +82,7 @@ interface TaskMessagesResponse {
   has_more: boolean
 }
 
-getTaskMessages(taskId, params?: { limit?: number; before?: number; sessionId?: string })
+getTaskMessages(taskId, params?: { limit?: number; before?: number; sessionId?: string; mode?: 'group'; primarySessionId?: string })
 ```
 
 `before` 参数为消息的自增 ID（cursor），后端返回 `id < before` 的消息。

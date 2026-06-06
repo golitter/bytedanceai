@@ -21,6 +21,7 @@ bytedanceai/
 │   ├── prompts/   #   Claude Code Skills prompt
 │   ├── payloads/  #   测试数据与 Demo
 │   └── common/    #   开发路线图（dev-plan）
+├── docker/        # Docker 部署（docker-compose.yml + Backend/Frontend Dockerfile + Nginx + precheck）
 ├── scripts/       # 工程脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）

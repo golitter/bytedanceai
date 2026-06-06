@@ -2,7 +2,7 @@
 
 ## 文档状态
 
-**本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（14 组 Service 实现）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已清空（仅保留空目录），所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
+**本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（11 组 Service 实现 + 3 辅助模块：stream_helper、task_route、group_chat_window）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已清空（仅保留空目录），所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
 
 ## Context
 
@@ -352,6 +352,10 @@ Admin handler 已有 `RegisterRoutes` 模式，拆分较自然。cascade helper 
 **原则：** 每个 Controller 提供一个 `New*Controller(外部依赖) *Controller` 构造函数，在函数内部组装 DAO → Service → Controller 完整链路。main.go 只调 13 个构造函数 + 注册路由，不暴露 DAO/Service 实例，也不把 `*gorm.DB` 继续传入 controller/service 层。启动迁移仍可在 `cmd/server/main.go` 使用 `db.GetDB().AutoMigrate(...)`。
 
 ```go
+// 外部依赖
+agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
+storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+
 // Controller 层（内部组装 DAO → Service → Controller）
 agentCtrl := ctrlimpl.NewAgentController()
 sessionCtrl := ctrlimpl.NewSessionController()
@@ -360,12 +364,12 @@ announcementCtrl := ctrlimpl.NewAnnouncementController(agentClient)
 contactGroupCtrl := ctrlimpl.NewContactGroupController()
 skillCtrl := ctrlimpl.NewSkillController(agentClient)
 messageCtrl := ctrlimpl.NewMessageController()
-avatarCtrl := ctrlimpl.NewAvatarController(qiniuUploader)
+avatarCtrl := ctrlimpl.NewAvatarController(storageProvider)
 agentProfileCtrl := ctrlimpl.NewAgentProfileController(agentClient)
 workspaceCtrl := ctrlimpl.NewWorkspaceController(agentClient)
 streamCtrl := ctrlimpl.NewStreamController()
 taskCtrl := ctrlimpl.NewTaskController(agentClient)
-adminCtrl := ctrlimpl.NewAdminController(cfg, qiniuUploader, agentClient)
+adminCtrl := ctrlimpl.NewAdminController(cfg, storageProvider, agentClient)
 
 // 注册路由
 agentCtrl.RegisterRoutes(api)

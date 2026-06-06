@@ -5,8 +5,9 @@ agentend/src/schemas/
 agentend/src/api/
 agentend/src/adapters/
 backend/internal/model/
-backend/internal/handler/
-backend/internal/types/
-frontend/src/types/
-frontend/src/api/
+backend/internal/controller/impl/
+backend/internal/service/impl/
+frontend/src/lib/
+frontend/src/stores/
+frontend/src/hooks/
 contracts/

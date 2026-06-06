@@ -26,7 +26,7 @@
 | tw-animate-css | ^1.4.0 | Tailwind 动画扩展 |
 | @fontsource-variable/geist | ^5.2.9 | Geist Variable 字体 |
 
-配色方案通过 CSS 变量实现 light/dark 双主题，Light 模式使用 Indigo 品牌色 `#6366F1`。
+配色方案通过 CSS 变量实现 light/dark 双主题，使用 hex / rgba 色值定义，品牌色 Indigo `#6366F1`。
 
 ## UI 组件库
 
@@ -112,7 +112,7 @@ frontend/
 ## 关键设计决策
 
 - **路由模式**：BrowserRouter（客户端路由），两条路由：`/agent/:sessionId` → AgentProfilePage、`/*` → ImPage
-- **CSS 变量主题**：通过 oklch 色彩空间定义 light/dark 双主题变量，Tailwind 直接引用
+- **CSS 变量主题**：通过 hex / rgba 色值定义 light/dark 双主题变量，Tailwind 直接引用
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
 - **SSE 流式通信**：通过 EventSource 直连 Backend，开发环境绕过 Vite 代理避免缓冲问题

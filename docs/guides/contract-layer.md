@@ -59,7 +59,6 @@ contracts/
 - `agentend/src/api/`
 - `agentend/src/adapters/`
 - `backend/internal/model/`
-- `backend/internal/handler/`（已迁移至 `controller/impl/`）
 - `backend/internal/controller/impl/`
 - `backend/internal/service/impl/`
 - `frontend/src/lib/`

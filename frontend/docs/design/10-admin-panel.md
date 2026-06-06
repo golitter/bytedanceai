@@ -36,11 +36,19 @@ interface AdminStore {
   isAuthenticated: boolean
   showPasswordDialog: boolean
   passwordDialogPurpose: 'login' | 'reauth'
-  // actions...
+  adminAvatarUrl: string
+  setActiveMenuKey: (key: AdminMenuKey) => void
+  setAdminToken: (token: string | null) => void
+  setIsAuthenticated: (val: boolean) => void
+  showLoginDialog: () => void
+  showReauthDialog: () => void
+  hidePasswordDialog: () => void
+  logout: () => void
+  setAdminAvatarUrl: (url: string) => void
 }
 ```
 
-暴露两个选择器 hook：`useAdminAuth()`（认证状态）和 `useAdminMenu()`（菜单选择）。`setAdminToken` 同步写入 API 层的 token。
+暴露两个选择器 hook：`useAdminAuth()`（认证状态）和 `useAdminMenu()`（菜单选择）。`setAdminToken` 同步写入 API 层的 token。`adminAvatarUrl` 默认使用 DiceBear 生成的头像。
 
 ### IconSidebar (`src/components/layout/IconSidebar.tsx`)
 

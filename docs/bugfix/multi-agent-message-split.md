@@ -73,7 +73,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
 
 **根因**: `ListMessages` 按 `task_id` 查询，返回所有 session 的消息。ExecutionEngine 为子 Agent 调用 `run_task()` 创建的 Message 属于子 Agent 的 session，与 orchestrator session 的消息内容重复。
 
-**修复** (`backend/internal/handler/message.go` + 前端):
+**修复** (`backend/internal/handler/message.go`，已迁移至 `controller/impl/message_controller.go` + `service/impl/message_service.go` + 前端):
 
 `ListMessages` 新增可选 `session_id` query param：
 
@@ -91,7 +91,7 @@ if sessionID != "" {
 
 **根因**: `FormatSSE(text)` 仅生成 `{type:"text", content:{text}}`，不包含 `agent_type`/`agent` 字段。`serveCompleted` 和 `serveStreaming` Phase 1 使用此函数重放 MySQL 历史内容，前端收到的事件缺少 agent 信息。
 
-**修复** (`backend/internal/stream/writer.go` + `backend/internal/handler/stream.go`):
+**修复** (`backend/internal/stream/writer.go` + `backend/internal/handler/stream.go`，已迁移至 `controller/impl/stream_controller.go` + `service/impl/stream_service.go`):
 
 1. 新增 `FormatSSEWithMeta(text, agentType, agentName)`:
 

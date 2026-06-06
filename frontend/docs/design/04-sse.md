@@ -143,7 +143,7 @@ export async function submitMessage(
 }
 ```
 
-**历史消息获取** — GET `/api/tasks/:id/messages`（支持 cursor 分页）：
+**历史消息获取** — GET `/api/tasks/:id/messages`（支持 cursor 分页 + 群聊模式）：
 
 ```typescript
 export interface TaskMessagesResponse {
@@ -153,16 +153,24 @@ export interface TaskMessagesResponse {
 
 export async function getTaskMessages(
   taskId: string,
-  params?: { limit?: number; before?: number; sessionId?: string },
+  params?: {
+    limit?: number
+    before?: number
+    sessionId?: string
+    mode?: 'group'
+    primarySessionId?: string
+  },
 ): Promise<TaskMessagesResponse> {
   const searchParams = new URLSearchParams()
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.before) searchParams.set('before', String(params.before))
+  if (params?.sessionId) searchParams.set('session_id', params.sessionId)
+  if (params?.mode) searchParams.set('mode', params.mode)
+  if (params?.primarySessionId) searchParams.set('primary_session_id', params.primarySessionId)
   const qs = searchParams.toString()
   const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
   const res = await fetch(url)
-  const json = await res.json()
-  return json.data
+  return handleResponse<TaskMessagesResponse>(res)
 }
 ```
 
@@ -238,11 +246,14 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 message_id |
 | `submitPlanReview` | POST | `/api/tasks/:id/plan-review` | 提交计划审查结果（approve/reject） |
-| `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 `limit` + `before` cursor 分页） |
+| `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 cursor 分页 + 群聊 mode/primarySessionId） |
+| `leaveTask` | POST | `/api/tasks/:id/leave` | 离开任务 |
+| `mergeTaskToMain` | POST | `/api/tasks/:id/merge` | 合并任务分支到 main |
 | `updateSession` | PUT | `/api/sessions/:id` | 更新 session（agent_name / avatar_url） |
 | `fetchAgentTypes` | GET | `/api/agent-types` | 获取可用 Agent 类型列表 |
 | `uploadAvatar` | POST | `/api/agents/avatar` | 上传头像 |
 | `validateRepoPath` | POST | `/api/validate-repo-path` | 校验仓库路径 |
+| `initGitRepo` | POST | `/api/init-git-repo` | 初始化 Git 仓库（非 Git 目录自动初始化） |
 | `fetchAgentProfile` | GET | `/api/sessions/:id/profile` | 获取 Agent 悬停卡片数据（名称 + 头像 + 技能） |
 | `fetchAgentDetail` | GET | `/api/sessions/:id/detail` | 获取 Agent 详情页数据（元数据 + 技能 + 统计） |
 | `fetchAgentSoul` | GET | `/api/sessions/:id/soul` | 获取 Agent Soul（人格描述 Markdown） |
@@ -253,6 +264,18 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `updateTaskPin` | PUT | `/api/tasks/:id/pin` | 置顶/取消置顶公告 |
 | `fetchConversations` | GET | 多接口聚合 | Task+Session 扁平化对话列表 |
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |
+| `fetchContactGroups` | GET | `/api/contact-groups` | 获取联系人分组列表 |
+| `createContactGroup` | POST | `/api/contact-groups` | 创建联系人分组 |
+| `updateContactGroup` | PUT | `/api/contact-groups/:id` | 更新联系人分组名称 |
+| `deleteContactGroup` | DELETE | `/api/contact-groups/:id` | 删除联系人分组 |
+| `addToContactGroup` | POST | `/api/contact-groups/:id/add` | 添加任务到联系人分组 |
+| `removeFromContactGroup` | POST | `/api/contact-groups/:id/remove` | 从联系人分组移除任务 |
+| `fetchSkills` | GET | `/api/skills` | 获取技能库列表 |
+| `uploadSkill` | POST | `/api/skills/upload` | 上传技能文件 |
+| `confirmSkill` | POST | `/api/skills/confirm` | 确认技能创建 |
+| `deleteSkill` | DELETE | `/api/skills/:name` | 删除技能 |
+| `importSkill` | POST | `/api/skills/import` | 导入技能到 Agent |
+| `removeSkill` | POST | `/api/skills/remove` | 从 Agent 移除技能 |
 | `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |
 | `getAdminResources` | GET | `/api/admin/resources` | 获取系统资源（磁盘/内存/Redis 用量） |
 | `deleteAdminSessions` | DELETE | `/api/admin/sessions` | 批量删除会话 |
@@ -263,4 +286,3 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 获取统计数据 |
 | `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
 | `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |
-| `initGitRepo` | POST | `/api/init-git-repo` | 初始化 Git 仓库（非 Git 目录自动初始化） |

@@ -39,6 +39,7 @@ docs/
 - [contract-layer.md](guides/contract-layer.md) — 契约层使用指南
 - [setup.md](guides/setup.md) — 环境搭建
 - [monorepo-setup.md](guides/monorepo-setup.md) — Monorepo 配置
+- [docker-deployment.md](guides/docker-deployment.md) — Docker 容器化部署
 ### testing/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告

@@ -38,7 +38,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
 | joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
-配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云、Admin、CORS 配置段。支持环境变量覆盖（如七牛云 access_key）。
+配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云、Storage、Admin、CORS 配置段。支持环境变量覆盖（如七牛云 access_key）。
 
 ## 认证
 
@@ -64,6 +64,10 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 
 上传器位于 `pkg/qiniu`，支持字节/Reader 上传，生成公开/私有 URL。
 
+## 存储层
+
+存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(cfg)` 工厂方法根据配置自动选择实现。
+
 ## 工具库
 
 | 库 | 版本 | 用途 |
@@ -82,13 +86,13 @@ backend/
 ├── internal/
 │   ├── conf/                # 配置加载
 │   ├── controller/          # Controller 层
-│   │   ├── controller.go    # 接口定义
+│   │   ├── controller.go    # 接口定义（11 个接口）
 │   │   └── impl/            # 13 组 Controller 实现
 │   ├── service/             # Service 层
 │   │   ├── service.go       # 接口定义 + DTO
 │   │   ├── bizerr.go        # 统一业务错误
 │   │   ├── skill_validator.go
-│   │   └── impl/            # 14 组 Service 实现
+│   │   └── impl/            # 11 组 Service 实现 + 3 辅助模块
 │   ├── dao/                 # DAO 层
 │   │   ├── dao.go           # 接口定义
 │   │   ├── gorm/            # GORM 实现
@@ -102,7 +106,8 @@ backend/
 │   ├── db/                  # MySQL 单例连接（sync.Once）
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
 │   ├── agentend_client/     # AgentEnd HTTP 客户端
-│   └── qiniu/               # 七牛云上传
+│   ├── qiniu/               # 七牛云上传
+│   └── storage/             # 存储层抽象（七牛云优先，本地磁盘兜底）
 ├── go.mod
 └── go.sum
 ```
@@ -131,6 +136,7 @@ backend/
 - **自注册路由**：每个 Controller 实现 `RegisterRoutes(rg *gin.RouterGroup)` 接口，路由注册内聚到 Controller
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
+- **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，Controller 通过构造函数注入 `storage.Provider`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待
 - **IP 限流**：Admin auth 路由使用 `IPRateLimiter`（5 次/分钟）防止暴力破解

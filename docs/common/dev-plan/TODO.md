@@ -62,8 +62,6 @@
 ### P2 — 增强能力
 
 > 无 P2 待实现项。
-| 4 | **Skills API** | ✅ 已实现 | `agentend/src/api/v1/skills.py` 已实现技能查询；`backend/pkg/agentend_client/client.go` 已有 `FetchSkills`；`backend/internal/service/impl/skill_service.go` + `backend/internal/controller/impl/skill_controller.go` 已实现 | Phase 6 |
-| 5 | **Service 层抽取** | ✅ 已完成 | 后端已重构为 Controller + Service 分层（`controller/impl/` + `service/impl/`，共 17 个 service 文件 + 14 个 controller 文件） | 架构优化 |
 
 ---
 
@@ -99,8 +97,8 @@
 
 | # | 功能 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 13 | **Docker Compose** | 📋 未实现 | 项目无 Dockerfile / docker-compose。三端均为本地开发模式启动 | Phase 6 |
-| 14 | **Nginx 反向代理** | 📋 未实现 | 无生产环境代理配置 | Phase 6 |
+| 13 | **Docker Compose** | ✅ 已实现 | `docker/` 目录含 docker-compose.yml + Backend/Frontend Dockerfile + Nginx 配置 + precheck 脚本 | Phase 6 |
+| 14 | **Nginx 反向代理** | ✅ 已实现 | `docker/frontend/nginx.conf` 已配置 SPA 路由 + /api 代理 + SSE 支持 | Phase 6 |
 | 15 | **部署状态卡片** | 📋 未实现 | 前端无部署进度展示 | Phase 6 |
 
 ---

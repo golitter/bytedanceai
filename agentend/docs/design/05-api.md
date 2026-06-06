@@ -96,11 +96,20 @@ class ReviewRequest(BaseModel):
 | `/v1/workspace/{id}` | DELETE | 清理 workspace（worktree + branch） |
 | `/v1/workspace` | GET | 列出所有 workspace |
 | `/v1/workspace/by-session/{session_id}` | GET | 按 session_id 查找活跃 workspace |
+| `/v1/workspace/task/{task_id}` | DELETE | 清理 task 下所有 workspace |
+| `/v1/workspace/task/{task_id}/cleanup-branches` | POST | 强制清理 task 分支（无活跃 workspace 时） |
 | `/v1/workspace/task/{task_id}/git-info` | GET | 获取 task 分支的 Git 信息（分支、提交、日志） |
 
 ### Pin 管理 (`src/api/v1/pin.py`)
 
 Pin Memory 上下文管理端点，允许用户将关键约束"钉住"供 Orchestrator 使用。
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/pin/add` | POST | 添加 Pin |
+| `/v1/pin/remove` | POST | 移除 Pin（同时写入 unpin SystemMessage 到对话记忆） |
+| `/v1/pin/announcement-unpin` | POST | Backend 通知 pinned announcement 已删除（写入 unpin SystemMessage） |
+| `/v1/pin/list` | GET | 列出所有 Pin |
 
 ### Resources (`src/api/v1/resources.py`)
 
@@ -120,6 +129,14 @@ macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/memin
 |------|------|------|
 | `/v1/validate-repo-path` | POST | 校验仓库路径是否存在且为 Git 仓库 |
 | `/v1/init-git-repo` | POST | 在指定路径初始化 Git 仓库（`git init`） |
+
+### Agent Configs (`src/api/v1/agents.py`)
+
+读取各 Agent CLI 的系统级配置文件内容，由后端 admin 接口调用：
+
+```
+GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "configPath": "...", "configContent": "..."}, ...]
+```
 
 ### Skills 管理 (`src/api/v1/skills.py`)
 

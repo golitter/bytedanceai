@@ -1,6 +1,7 @@
 # AgentHub Visual Style Guide
 
 > Dark Utilitarian — 深 色 · 平 坦 · 克 制 · 密 集
+> 本文档以暗色主题为主描述设计规范。亮色主题使用相同的架构，色值见 color-palette.md。
 
 ## 定位
 

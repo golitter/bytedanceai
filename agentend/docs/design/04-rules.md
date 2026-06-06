@@ -85,9 +85,9 @@ evaluate(context) → (bool, dict)
 #### PinRule（priority=9）
 
 - `check`：始终通过
-- `enforce`：当请求中携带 `task_id` 时，通过 `BackendClient.get_pinned_announcements(task_id)` 从 Go Backend 获取置顶公告，将内容注入到 `system_prompt_append`
+- `enforce`：当请求上下文中携带 `pinned_announcements`（由 `agent.py` 通过 `BackendClient.get_pinned_announcements(task_id)` 预获取）时，将置顶公告内容注入到 `system_prompt_append`
   - 用于 Orchestrator 多 Agent 协作场景，将团队公告作为全局约束注入
-  - 注入格式：`## 必须遵守的公告约束\n\n{announcements_text}`
+  - 注入格式：`## 必须遵守的约束（Pinned Announcements）\n\n{announcements_text}`
   - 对 Orchestrator Agent：通过 `system_prompt_append` 传入 `state["pin_context"]`
   - 对非 Orchestrator Agent：通过 CLI `--append-system-prompt` 传递
 
@@ -108,7 +108,7 @@ RuleEngine.evaluate(context)
 SafetyRule.enforce → system_prompt_append: "You are operating in a managed environment..."
                     allowed_tools: [...]
   ↓
-PinRule.enforce → system_prompt_append: "## 必须遵守的公告约束\n\n{announcements}"
+PinRule.enforce → system_prompt_append: "## 必须遵守的约束（Pinned Announcements）\n\n{announcements}"
   ↓
 SoulRule.enforce → system_prompt_append: "## 你的身份文档 (SOUL.md)\n\n{content}"
   ↓

@@ -24,6 +24,10 @@ export interface PlanReviewPayload {
   review_key?: string
   session_id?: string
   task_id?: string
+  review_type?: 'plan' | 'merge_to_main'
+  source_branch?: string
+  target_branch?: string
+  diff_snapshot_id?: string
   overview: string
   tasks: PlanTask[]
   waves: PlanTask[][]
@@ -66,31 +70,32 @@ export type MessageBlock =
 
 `reduceEventToBlocks(fullText)` 解析完整事件文本：
 
-1. 用正则 ` /``aka_yhy\n([\s\S]*?)```/g` 匹配所有标记块
-2. 标记块之前和之后的文本生成 `text` 块
-3. 标记块内部按 `type:` 行判断块类型，提取对应字段
-4. 未识别类型降级为 `text` 块
-5. 无标记块时返回单个 `text` 块
+1. 用 `BLOCK_MARKER = 'aka_yhy'` 常量定位标记块（```aka_yhy ... ```）
+2. 通过 `text.indexOf(openFence)` 循环查找所有标记块
+3. 标记块之前和之后的文本生成 `text` 块
+4. 标记块内部按 `type:` 行判断块类型，提取对应字段
+5. 未识别类型降级为 `text` 块
+6. 无标记块时返回单个 `text` 块
 
 ```typescript
+const BLOCK_MARKER = 'aka_yhy'
+
 export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   const blocks: MessageBlock[] = []
-  let lastIndex = 0
+  const openFence = '```' + BLOCK_MARKER
+  let searchFrom = 0
 
-  for (const match of fullText.matchAll(BLOCK_RE)) {
-    if (matchStart > lastIndex) {
-      const text = fullText.slice(lastIndex, matchStart)
-      if (text) blocks.push({ type: 'text', id: nextBlockId(), content: text })
-    }
-    const inner = match[1].trim()
+  while (searchFrom < text.length) {
+    const start = text.indexOf(openFence, searchFrom)
+    if (start < 0) break
+    // 提取标记块前后文本和标记块内容
+    const inner = extractBlockContent(text, start)
     const parsed = parseBlockContent(inner)
     if (parsed) blocks.push(parsed)
-    else blocks.push({ type: 'text', id: nextBlockId(), content: match[0] })
-    lastIndex = matchStart + match[0].length
+    else blocks.push({ type: 'text', id: nextBlockId(), content: ... })
+    searchFrom = endOfBlock
   }
-  if (lastIndex < fullText.length) {
-    blocks.push({ type: 'text', id: nextBlockId(), content: fullText.slice(lastIndex) })
-  }
+  // 处理尾部文本
   if (blocks.length === 0) return [{ type: 'text', id: nextBlockId(), content: fullText }]
   return blocks
 }

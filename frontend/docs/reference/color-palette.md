@@ -1,6 +1,6 @@
 # Color Palette — 前端配色速查
 
-> 暗色模式（Dark Utilitarian）为唯一生产主题，色值均取自 `.dark` 块。
+> 色值均取自 `.dark` 块（暗色模式）。亮色模式色值见文档底部 Light 主题章节。
 > 所有颜色通过 CSS 变量 + Tailwind `@theme inline` 映射为工具类，组件中不硬编码色值。
 
 ---

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Redis、Admin、CORS 七个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
+通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Storage、Redis、Admin、CORS 八个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
 
 ## 怎么实现的
 
@@ -14,6 +14,7 @@ type Config struct {
 	JWT      JWTConfig      `yaml:"jwt"`
 	AgentEnd AgentEndConfig `yaml:"agentend"`
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
+	Storage  StorageConfig  `yaml:"storage"`
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
 	CORS     CORSConfig     `yaml:"cors"`
@@ -74,6 +75,16 @@ type QiniuConfig struct {
 	Bucket    string `yaml:"bucket"`
 	Domain    string `yaml:"domain"`
 	Region    string `yaml:"region"`
+}
+
+type LocalStorageConfig struct {
+	Dir       string `yaml:"dir"`
+	URLPrefix string `yaml:"url_prefix"`
+}
+
+type StorageConfig struct {
+	Type  string             `yaml:"type"` // "qiniu" | "local" | "" (auto-detect)
+	Local LocalStorageConfig `yaml:"local"`
 }
 
 type AdminConfig struct {
@@ -142,9 +153,17 @@ qiniu:
   domain: "http://tfj4mvkda.hd-bkt.clouddn.com"
   region: z0    # z0=华东 z1=华北 z2=华南 na0=北美
 
+storage:
+  type: ""          # "qiniu" | "local" | "" 自动检测（有 QINIU_ACCESS_KEY 则七牛云，否则本地）
+  local:
+    dir: "./uploads"
+    url_prefix: "http://localhost:8080/uploads"
+
 cors:
   allow_origins:
     - "http://localhost:5173"
 ```
 
 七牛云 `access_key` / `secret_key` 不在 YAML 中配置，通过 `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` 环境变量注入。
+
+存储层通过 `StorageConfig.Type` 控制策略：空字符串自动检测（有七牛云密钥则用七牛云，否则本地磁盘），`"qiniu"` 强制七牛云，`"local"` 强制本地磁盘。`pkg/storage/` 包提供统一的 `Provider` 接口，Controller 通过构造函数注入 `storage.Provider`。

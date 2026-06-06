@@ -51,13 +51,13 @@ func main() {
 
 ```go
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
-qiniuUploader := qiniu.NewUploader(&cfg.Qiniu)
+storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
 
 taskController := ctrlimpl.NewTaskController(agentClient)
 agentController := ctrlimpl.NewAgentController()
 sessionController := ctrlimpl.NewSessionController()
 messageController := ctrlimpl.NewMessageController()
-avatarController := ctrlimpl.NewAvatarController(qiniuUploader)
+avatarController := ctrlimpl.NewAvatarController(storageProvider)
 streamController := ctrlimpl.NewStreamController()
 agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
 workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
@@ -65,7 +65,7 @@ diffSnapshotController := ctrlimpl.NewDiffSnapshotController()
 announcementController := ctrlimpl.NewAnnouncementController(agentClient)
 contactGroupController := ctrlimpl.NewContactGroupController()
 skillController := ctrlimpl.NewSkillController(agentClient)
-adminController := ctrlimpl.NewAdminController(cfg, qiniuUploader, agentClient)
+adminController := ctrlimpl.NewAdminController(cfg, storageProvider, agentClient)
 ```
 
 以 `TaskController` 为例，内部组装链为：
@@ -86,12 +86,12 @@ func NewTaskController(agentClient *agentend_client.Client) *TaskController {
 | Controller | 外部依赖 | 说明 |
 |------------|---------|------|
 | TaskController | `agentend_client.Client` | 转发 run、review 和 validate-repo-path |
-| AvatarController | `qiniu.Uploader` | 头像上传 |
+| AvatarController | `storage.Provider` | 头像上传（七牛云优先，本地磁盘兜底） |
 | AgentProfileController | `agentend_client.Client` | 技能查询 |
 | WorkspaceController | `agentend_client.Client` | 代理工作区操作到 AgentEnd |
 | AnnouncementController | `agentend_client.Client` | Agent 通知 |
 | SkillController | `agentend_client.Client` | 技能同步到 AgentEnd |
-| AdminController | `Config` + `qiniu.Uploader` + `agentend_client.Client` | 认证/头像/代理 |
+| AdminController | `Config` + `storage.Provider` + `agentend_client.Client` | 认证/头像/代理 |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
 ### 中间件
@@ -101,6 +101,11 @@ r := gin.New()
 r.Use(middleware.Logger())
 r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 r.Use(gin.Recovery())
+
+// Serve local uploads when using local storage
+if local, ok := storageProvider.(*storage.LocalStorage); ok {
+    r.Static("/uploads", local.Dir())
+}
 ```
 
 CORS 配置从 `config.yaml` 的 `cors.allow_origins` 字段加载，默认允许 `http://localhost:5173`：

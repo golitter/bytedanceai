@@ -887,7 +887,7 @@ backend/
 │   ├── generated/                   # 契约生成的类型文件
 │   ├── controller/                  # Controller 层（参数绑定 + vo 响应）
 │   │   ├── controller.go            # 接口定义（统一 RegisterRoutes）
-│   │   └── impl/                    # 14 组实现
+│   │   └── impl/                    # 13 组实现
 │   │       ├── task_controller.go
 │   │       ├── session_controller.go
 │   │       ├── message_controller.go

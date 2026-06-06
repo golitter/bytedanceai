@@ -10,8 +10,6 @@
 
 `reason_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
 
-`reason_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
-
 ### 根因
 
 ```

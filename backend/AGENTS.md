@@ -30,7 +30,8 @@ pkg/
 ├── db/                       # MySQL 单例（sync.Once）
 ├── redis/                    # Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
-└── qiniu/                    # 七牛云上传
+├── qiniu/                    # 七牛云上传
+└── storage/                  # 存储层抽象（七牛云优先，本地磁盘兜底）
 ```
 
 ## 架构分层

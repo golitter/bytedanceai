@@ -50,6 +50,7 @@ export function ImPage() {
           <div className="flex-1">
             {active ? <ChatArea ... /> : <EmptyState />}
           </div>
+          {active && <RightSidebar ... />}
         </>
       ) : activeTab === 'admin' ? (
         <>
@@ -58,13 +59,17 @@ export function ImPage() {
             <AdminContent />
           </div>
         </>
+      ) : activeTab === 'contacts' ? (
+        <ContactsPage />
+      ) : activeTab === 'skills' ? (
+        <SkillsHubPage />
       ) : <PlaceholderPage />}
     </div>
   )
 }
 ```
 
-NavTab 类型：`'chat' | 'contacts' | 'admin' | 'settings'`，其中 `contacts` 和 `settings` 为占位状态。`admin` Tab 进入时需先通过密码验证（`AdminPasswordDialog`），验证后根据 `activeMenuKey` 渲染对应管理页面。
+NavTab 类型：`'chat' | 'contacts' | 'skills' | 'admin' | 'settings'`，其中 `settings` 为占位状态。`contacts` 渲染 `ContactsPage`，`skills` 渲染 `SkillsHubPage`。`admin` Tab 进入时需先通过密码验证（`AdminPasswordDialog`），验证后根据 `activeMenuKey` 渲染对应管理页面。
 
 ### 构建配置 (`vite.config.ts`)
 
@@ -94,7 +99,7 @@ export default defineConfig({
 ```
 src/
 ├── main.tsx                          # 应用入口：StrictMode + QueryClient + BrowserRouter
-├── index.css                         # 全局样式：Tailwind + CSS 变量暗色主题
+├── index.css                         # 全局样式：Tailwind + CSS 变量 Light/Dark 双主题
 ├── assets/                           # 静态资源
 │
 ├── pages/
@@ -124,7 +129,7 @@ src/
 │   │   ├── MessageList.tsx           # 消息列表（支持虚拟滚动 + 向上翻页加载）
 │   │   ├── MessageBubble.tsx         # 消息气泡（user / agent / system 三种变体）
 │   │   ├── MessageRenderer.tsx       # 消息渲染器（消息气泡 + Markdown + 卡片编排）
-│   │   ├── MessageInput.tsx          # 输入框（自动高度 + Enter 发送）
+│   │   ├── MessageInput.tsx          # 输入框（自动高度 + Markdown 双栏预览 + @提及）
 │   │   ├── AgentAvatar.tsx           # Agent 头像（颜色 + 状态指示灯 + DiceBear initials）
 │   │   ├── GroupAvatar.tsx           # 群聊头像（多 Agent 头像叠加）
 │   │   ├── git-graph-types.ts        # Git Graph 数据类型（GitCommit / GitBranchConfig / GitGraphData + Terminal 类型）
@@ -240,7 +245,7 @@ src/
 | 状态 | Zustand | 全局轻量状态 |
 | 数据 | TanStack React Query | 服务端状态管理 |
 | Markdown | react-markdown + remark-gfm | Markdown 渲染 |
-| 代码高亮 | Shiki | VS Code 级别语法高亮 |
+| 代码高亮 | Shiki | VS Code 级别语法高亮（codeToHtml 单次调用 API） |
 | 虚拟滚动 | @tanstack/react-virtual | 大量消息时的性能优化 |
 | Diff 渲染 | react-diff-view | Unified Diff 视图渲染 |
 | 代码编辑 | @uiw/react-codemirror + @codemirror/* | Diff 文件编辑器（语法高亮 + 懒加载） |

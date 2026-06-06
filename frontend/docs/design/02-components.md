@@ -32,27 +32,24 @@ export function ConversationList() {
 
 ### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
-单条对话项，接收 `Conversation` 数据并渲染 Agent 头像、名称、任务标题和相对时间。通过 `useHoverStyle` hook 实现悬停效果：
+单条对话项，接收 `Conversation` 数据并渲染 Agent 头像、名称、任务标题和相对时间。通过 Tailwind 类实现选中态和悬停效果：
 
 ```tsx
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const name =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
-  const hoverStyle = useHoverStyle()
 
   return (
     <button
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out"
-      style={{
-        backgroundColor: isActive ? 'var(--accent)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--primary)' : '2px solid transparent',
-      }}
+      className={clsx(
+        'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out',
+        isActive ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-accent',
+      )}
       onClick={onClick}
-      {...(!isActive && hoverStyle)}
     >
 ```
 
-Active 态通过 `borderLeft: 2px solid var(--primary)` 品牌色竖线标识，非 Active 态使用 `useHoverStyle` 提供的 `onMouseEnter/Leave` 切换背景色。
+Active 态通过 `border-l-primary` 品牌色竖线 + `bg-accent` 背景标识，非 Active 态使用 `hover:bg-accent` Tailwind 悬停效果。
 
 ### NewChatDialog (`src/components/im/NewChatDialog.tsx`)
 
@@ -207,7 +204,11 @@ export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarPr
 
 ### MessageInput (`src/components/chat/MessageInput.tsx`)
 
-输入框组件，textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行。支持 IME 输入法组合状态检测（`compositionstart`/`compositionend`），组合输入中 `Enter` 不触发发送：
+输入框组件，支持两种模式：单栏模式（默认）和 Markdown 双栏预览模式。通过工具栏 "Markdown" 按钮切换。
+
+单栏模式：textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行。支持 IME 输入法组合状态检测（`compositionstart`/`compositionend`），组合输入中 `Enter` 不触发发送。
+
+双栏模式：左栏 textarea 编辑（`Enter` 插入换行，不触发发送），右栏 `MarkdownRenderer` 实时预览（150ms 防抖）。支持滚动同步和自动高度调整（最小 120px，最大 60vh）。
 
 ```tsx
 const adjustHeight = useCallback(() => {
@@ -218,7 +219,7 @@ const adjustHeight = useCallback(() => {
 }, [])
 ```
 
-发送后清空输入框并重置高度为 48px。流式输出时 `disabled`，按钮和输入框同时变为不可用。
+两种模式均支持 @提及（`mentionSessions`）自动补全。发送后清空输入框并重置高度。流式输出时 `disabled`，按钮和输入框同时变为不可用。
 
 ### AgentAvatar (`src/components/chat/AgentAvatar.tsx`)
 
@@ -426,10 +427,24 @@ export function TerminalPanel({
 
 ### MarkdownRenderer (`src/components/markdown/MarkdownRenderer.tsx`)
 
-基于 `react-markdown` + `remark-gfm` 的渲染器，通过自定义 `components` 对象覆盖默认渲染：
+基于 `react-markdown` + `remark-gfm` 的渲染器，通过自定义 `components` 对象覆盖默认渲染。还内置 `fenceTreeBlocks` 预处理，自动检测树形结构文本（`│├└` 等）并包裹为 ` ```text ` 代码块：
 
 ```tsx
+// 预处理：检测树形文本自动包裹为代码块
+const processed = fenceTreeBlocks(content)
+
+// components 覆盖约 20 种元素：
 const components: Components = {
+  // 标题：h1/h2/h3/h4，使用 --prose-heading / --prose-heading-h1 CSS 变量
+  // 段落：p，mb-3 leading-7
+  // 链接：a，--prose-link + 下划线 + target="_blank"
+  // 引用块：blockquote，3px --prose-bq-border 左边框 + --prose-bq-bg 背景
+  // 列表：ul/ol/li，list-disc/list-decimal + --prose-li-marker 颜色
+  // 分隔线：hr，--prose-hr
+  // 粗体/斜体：strong/em，--prose-bold / text-secondary
+  // 图片：img，圆角 + 边框
+  // 行内代码/代码块：code/pre，带 \n 检测委托 CodeBlock，否则 inline 样式
+  // 表格：table/th/td，圆角外框 + 半透明表头
   pre({ children }) {
     return <>{children}</>
   },
@@ -439,47 +454,46 @@ const components: Components = {
     if (match) {
       return <CodeBlock code={code} language={match[1]} />
     }
+    if (code.includes('\n')) {
+      return <CodeBlock code={code} />
+    }
     return (
-      <code className="rounded bg-code px-1.5 py-0.5 text-[13px]"
+      <code className="inline rounded-md bg-[var(--prose-code-bg)] px-1.5 py-0.5 text-[13px] text-[var(--prose-code-text)]"
         style={{ fontFamily: "'Geist Mono', monospace", letterSpacing: 0 }}
         {...props}>
         {children}
       </code>
     )
   },
-  table({ children }) {
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm border-border">{children}</table>
-      </div>
-    )
-  },
+  // ... 其他覆盖元素
 }
 ```
 
-代码块（带 `language-` 前缀）委托给 `CodeBlock`，行内代码使用深色背景 + Geist Mono 字体，表格带边框和表头背景色。
+外层使用 `prose prose-invert` 类 + `@tailwindcss/typography` 插件提供基础排版，CSS 变量覆盖暗色主题配色。代码块（带 `language-` 前缀）委托给 `CodeBlock`，无语言标记但含换行的代码也委托给 `CodeBlock`，行内代码使用 `--prose-code-bg` + `--prose-code-text` 变量。
 
 ### CodeBlock (`src/components/markdown/CodeBlock.tsx`)
 
 代码高亮组件，使用 Shiki（`tokyo-night` 主题）异步高亮。高亮完成前 fallback 到纯文本 + 行号显示：
 
 ```tsx
+import { codeToHtml } from 'shiki'
+
 useEffect(() => {
+  let cancelled = false
   async function highlight() {
-    const shiki = await import('shiki')
-    const highlighter = await shiki.createHighlighter({
-      themes: ['tokyo-night'],
-      langs: language ? [language] : [],
-    })
-    const result = highlighter.codeToHtml(code, {
-      lang: language ?? 'text',
-      theme: 'tokyo-night',
-    })
-    setHtml(result)
-    highlighter.dispose()
+    try {
+      const result = await codeToHtml(code, {
+        lang: language ?? 'text',
+        theme: 'tokyo-night',
+      })
+      if (!cancelled) setHtml(result)
+    } catch {
+      // language not supported — fallback to plain text
+    }
   }
   if (language) highlight()
+  return () => { cancelled = true }
 }, [code, language])
 ```
 
-Shiki 通过动态 `import()` 按需加载，`highlighter` 使用后立即 `dispose()` 释放资源。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。
+使用 Shiki 的 `codeToHtml` 单次调用 API（无需手动创建/销毁 highlighter），通过 `cancelled` 标志避免组件卸载后的 state 更新。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。

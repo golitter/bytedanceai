@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
     await db_reader.connect()
     await ws_mgr.start_inactive_cleanup(db_reader, interval=settings.workspace.cleanup_interval)
 
+    # Startup: report builtin skills to Backend
+    asyncio.create_task(_report_builtin_skills())
+
     yield
 
     # Shutdown
@@ -74,7 +77,7 @@ agentend/
 │   ├── orchestrator/   # Orchestrator 规划模块
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
 │   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
-│   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
 │   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）

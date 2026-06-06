@@ -25,15 +25,19 @@
 | GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支 Git 信息 |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找工作区 |
 | DELETE | `/v1/workspace/{id}` | 清理工作区 |
+| DELETE | `/v1/workspace/task/{task_id}` | 清理 task 下所有 workspace |
+| POST | `/v1/workspace/task/{task_id}/cleanup-branches` | 强制清理 task 分支（无活跃 workspace 时） |
 | POST | `/v1/validate-repo-path` | 验证 repo 路径 |
 | POST | `/v1/init-git-repo` | 初始化 Git 仓库 |
 | POST | `/v1/pin/add` | 添加 Pin 到共享内存 |
 | POST | `/v1/pin/remove` | 移除 Pin |
+| POST | `/v1/pin/announcement-unpin` | Backend 通知 pinned announcement 已删除 |
 | GET | `/v1/pin/list` | 列出所有 Pin |
 | GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
 | GET | `/v1/skills/{agent_type}` | 扫描已安装的技能列表 |
 | POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能 |
 | DELETE | `/v1/skills/{agent_type}/{skill_name}` | 移除指定技能 |
+| GET | `/v1/agents/configs` | 读取各 Agent CLI 的系统级配置文件 |
 | GET | `/health` | 健康检查 |
 
 ## 项目结构
@@ -50,7 +54,7 @@ agentend/
 │   ├── orchestrator/   # Orchestrator 规划模块
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
 │   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + state + wave）
-│   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
 │   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）

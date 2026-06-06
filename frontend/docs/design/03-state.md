@@ -24,7 +24,7 @@ Chat 状态拆分为三个独立 Zustand Store，通过 `src/stores/chat.ts` bar
 管理 UI 导航状态，暴露 `useActiveTab()` 和 `useChatNav()` 两个 selector hook：
 
 ```typescript
-export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
+export type NavTab = 'chat' | 'contacts' | 'skills' | 'admin' | 'settings'
 
 interface NavigationState {
   activeTab: NavTab

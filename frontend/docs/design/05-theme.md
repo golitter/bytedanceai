@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 CSS 变量的暗色主题系统，通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。
+基于 CSS 变量的 Light/Dark 双主题系统，通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。`@tailwindcss/typography` 插件通过 `@plugin` 指令加载，提供 `prose` 排版基础。
 
 ## 怎么实现的
 
@@ -12,6 +12,7 @@
 
 ```css
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";

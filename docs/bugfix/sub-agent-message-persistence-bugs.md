@@ -81,7 +81,7 @@ yield StreamEvent.create(EventType.TEXT, text=aggregated or overview)
 
 **修复**:
 
-1. **后端** (`backend/internal/handler/task.go`): `RunTaskReq` 新增 `SkipUserMessage bool` 字段，当为 `true` 时跳过创建 user message
+1. **后端** (`backend/internal/handler/task.go`，已迁移至 `controller/impl/task_controller.go` + `service/impl/task_service.go`): `RunTaskReq` 新增 `SkipUserMessage bool` 字段，当为 `true` 时跳过创建 user message
 
 ```go
 type RunTaskReq struct {
@@ -179,7 +179,7 @@ data: {...}\n\n       ← 默认消息，前端 onmessage 捕获
 - 子 Agent SSE 流经 `BackendClient.stream_result()` 消费时，`event:` 和 `data:` 行在 Redis 中解耦，极端情况下 `data:` 行可能丢失，导致收集到的内容为空
 - 前端看到"一条消息被拆成多条"或"输出为空"
 
-**修复** (`backend/internal/handler/task.go`):
+**修复** (`backend/internal/handler/task.go`，已迁移至 `controller/impl/task_controller.go` + `service/impl/task_service.go`):
 
 后端 goroutine 跳过 `event:` 行和空行，仅将 `data:` 行发布到 Redis：
 

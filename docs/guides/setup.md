@@ -229,7 +229,7 @@ import (
 	"os"
 
 	"agenthub/backend/internal/conf"
-	"agenthub/backend/internal/handler"
+	"agenthub/backend/internal/controller"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/stream"

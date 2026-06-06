@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 14 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
+基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 13 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
 
 ## 怎么实现的
 
@@ -255,7 +255,7 @@ POST   /contact-groups                   CreateGroup
 PUT    /contact-groups/:groupId          UpdateGroup
 DELETE /contact-groups/:groupId          DeleteGroup
 POST   /contact-groups/:groupId/items    AddItem
-DELETE /contact-groups/:groupId/items/:taskId RemoveItem
+DELETE /contact-groups/:groupId/items/:taskID RemoveItem
 ```
 
 ### SkillController (`skill_controller.go`)

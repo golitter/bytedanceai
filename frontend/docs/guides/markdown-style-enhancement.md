@@ -1,7 +1,7 @@
 # Markdown 风格增强修改报告
 
 > 日期：2026-06-05
-> 状态：方案设计
+> 状态：已实施
 
 ## 1. 现状分析
 
@@ -16,7 +16,7 @@
 
 ### 1.2 核心问题
 
-#### 问题 A：`@tailwindcss/typography` 已安装但配置可能缺失
+#### 问题 A：`@tailwindcss/typography` 已安装并正确配置
 
 `MarkdownRenderer` 外层 div 使用了 `prose prose-invert` 类：
 
@@ -24,31 +24,32 @@
 <div className="prose prose-invert ...">
 ```
 
-`package.json` 中已安装 `@tailwindcss/typography@^0.5.19`（devDependency）。需确认 `src/index.css` 中已通过 `@import "@tailwindcss/typography"` 正确加载插件，否则 `prose` 类会被静默忽略。
+`package.json` 中已安装 `@tailwindcss/typography@^0.5.19`（devDependency），`src/index.css` 中已通过 `@plugin "@tailwindcss/typography"` 正确加载插件。
 
-#### 问题 B：`components` 覆盖不完整
+#### 问题 B：`components` 覆盖已补全
 
-`MarkdownRenderer.tsx` 的 `components` 对象仅覆盖了 5 种元素：
+`MarkdownRenderer.tsx` 的 `components` 对象现已覆盖约 20 种元素：
 
-| 已覆盖 | 缺失 |
+| 已覆盖 | 状态 |
 |--------|------|
-| `code` / `pre` | `h1` `h2` `h3` `h4` `h5` `h6` |
-| `table` / `th` / `td` | `blockquote` `a`（链接） |
-| | `ul` `ol` `li`（列表） |
-| | `hr`（分隔线） |
-| | `strong` `em`（粗体/斜体） |
-| | `img`（图片） |
-| | `p`（段落） |
+| `code` / `pre` | 已覆盖 |
+| `table` / `th` / `td` | 已覆盖 |
+| `h1` `h2` `h3` `h4` | 已覆盖，使用 --prose-heading / --prose-heading-h1 CSS 变量 |
+| `blockquote` | 已覆盖，3px --prose-bq-border 左边框 + --prose-bq-bg 背景 |
+| `a`（链接） | 已覆盖，--prose-link + 下划线 |
+| `ul` `ol` `li`（列表） | 已覆盖，list-disc/list-decimal + --prose-li-marker |
+| `hr`（分隔线） | 已覆盖 |
+| `strong` `em`（粗体/斜体） | 已覆盖 |
+| `img`（图片） | 已覆盖 |
+| `p`（段落） | 已覆盖 |
 
-标题层级之间没有视觉区分，引用块无左边框，链接没有下划线或颜色区分，列表缺乏缩进和标记样式。
+#### 问题 C：暗色模式下对比度（已修复）
 
-#### 问题 C：暗色模式下对比度不足
-
-暗色主题 `--foreground: #E8EBF0` 作为正文色尚可，但：
-- 标题缺少层级色彩变化（应比正文更亮或带 brand 色调）
-- 行内 `code` 的 `bg-code`（`#0D0F14`）与代码块背景几乎相同，辨识度低
-- `blockquote` 无背景/边框区分
-- 链接颜色与正文相同，无法识别
+暗色主题已通过 CSS 变量和 components 覆盖增强：
+- 标题使用 `--prose-heading: #F0F2F7` / `--prose-heading-h1: #F0F2F7`，比正文更亮
+- 行内 `code` 使用 `--prose-code-bg` + `--prose-code-text: #C7D2FE`，辨识度大幅提升
+- `blockquote` 使用 3px `--prose-bq-border: #6366F1` 左边框 + `--prose-bq-bg` 背景
+- 链接使用 `--prose-link: #818CF8` + 下划线，明显区分于正文
 
 ### 1.3 截图对比（现状 vs 预期）
 
@@ -74,26 +75,26 @@
 
 ### 方案概述
 
-采用 **"安装 typography 插件 + 自定义 prose 变量 + 补全 components"** 三层策略：
+采用 **"typography 插件 + 自定义 prose 变量 + 补全 components"** 三层策略，现已全部实施：
 
 ```
-Layer 1: @tailwindcss/typography  → 提供 prose 基础排版
-Layer 2: CSS 变量覆盖            → 暗色主题下的精细配色
-Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效果
+Layer 1: @tailwindcss/typography  → 提供 prose 基础排版 ✓
+Layer 2: CSS 变量覆盖            → 暗色/亮色主题下的精细配色 ✓
+Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效果 ✓
 ```
 
-### 2.1 Layer 1：确认 typography 插件配置
+### 2.1 Layer 1：typography 插件配置（已确认）
 
-`@tailwindcss/typography` 已安装于 devDependency（`^0.5.19`）。需确认 `src/index.css` 中已正确导入：
+`@tailwindcss/typography` 已安装于 devDependency（`^0.5.19`）。`src/index.css` 中通过 `@plugin` 指令加载：
 
 ```css
 @import "tailwindcss";
-@import "@tailwindcss/typography";  /* 确认此行存在 */
+@plugin "@tailwindcss/typography";  /* 已确认存在 */
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 ```
 
-> Tailwind CSS 4.x 通过 `@import` 方式加载插件，不需要在 `vite.config.ts` 中额外配置。
+> Tailwind CSS 4.x 通过 `@plugin` 指令加载插件，不需要在 `vite.config.ts` 中额外配置。
 
 ### 2.2 Layer 2：CSS 变量覆盖（暗色主题 prose 配色）
 
@@ -289,16 +290,16 @@ const components: Components = {
 }
 ```
 
-### 2.4 修改文件清单
+### 2.4 已修改文件清单
 
 | 文件 | 修改内容 |
 |------|----------|
-| `frontend/src/index.css` | 确认 typography 插件导入 + 新增 prose CSS 变量 + prose 覆盖样式 |
-| `frontend/src/components/markdown/MarkdownRenderer.tsx` | 补全 `components` 对象中 14 个元素的渲染组件 |
+| `frontend/src/index.css` | `@plugin` 加载 typography + 新增 prose CSS 变量（暗色 + 亮色）+ `@layer components` prose 覆盖样式 |
+| `frontend/src/components/markdown/MarkdownRenderer.tsx` | 补全 `components` 对象中约 20 种元素的渲染组件 + `fenceTreeBlocks` 预处理 |
 
 ### 2.5 兼容性说明
 
-- **Tailwind CSS 4.x**：使用 `@import "@tailwindcss/typography"` 方式加载，无需修改 `vite.config.ts`
+- **Tailwind CSS 4.x**：使用 `@plugin "@tailwindcss/typography"` 方式加载，无需修改 `vite.config.ts`
 - **现有代码块高亮**：`CodeBlock.tsx` 使用 shiki，不受影响
 - **`prose-invert`**：安装插件后生效，配合 CSS 变量覆盖实现暗色优化
 - **`fenceTreeBlocks` 预处理**：不受影响，仍在 `ReactMarkdown` 之前运行
@@ -335,14 +336,15 @@ const components: Components = {
 
 ---
 
-## 4. 实施步骤
+## 4. 实施记录
+
+所有步骤已完成：
 
 ```
-1. 确认 src/index.css 已导入 @tailwindcss/typography
-2. src/index.css → 添加 CSS 变量 + prose 覆盖
-3. MarkdownRenderer.tsx → 替换 components 对象
-4. 验证：启动前端，发送包含各类 Markdown 元素的消息
-5. 可选：参考 demo 页面进行视觉回归测试
+1. ✓ src/index.css 已通过 @plugin 加载 @tailwindcss/typography
+2. ✓ src/index.css 已添加 CSS 变量（暗色 + 亮色 prose 增强）+ prose 覆盖样式
+3. ✓ MarkdownRenderer.tsx 已替换 components 对象（约 20 种元素覆盖）
+4. ✓ fenceTreeBlocks 预处理已添加（自动检测树形文本包裹为代码块）
 ```
 
-预计影响范围：仅 `markdown/` 目录 + `index.css`，不涉及其他组件。
+影响范围：`markdown/` 目录（MarkdownRenderer.tsx + CodeBlock.tsx）+ `index.css`，不涉及其他组件。

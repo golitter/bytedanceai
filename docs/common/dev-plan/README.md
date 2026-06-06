@@ -44,7 +44,7 @@ Frontend (React)   ~92%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown 
 | 4 | 产物与打磨 | 代码块/工具卡片 + 产物预览 | 2-3 天 | ✅ 完成 | [phase4-artifacts.md](phase4-artifacts.md) |
 | 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | ✅ 完成 | [phase5-orchestrator.md](phase5-orchestrator.md) |
 | 5a | 群聊增强 | 规划审查 + 右侧栏增强 + Git Graph | 3 天 | ✅ 完成 | [phase5a/](phase5a/) |
-| 6 | 预览 + 部署 | Runtime 升级 + Profile System + MergeManager | TBD | ⚠️ 大部分完成 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
+| 6 | 预览 + 部署 | Runtime 升级 + Profile System + MergeManager + Docker | TBD | ⚠️ 大部分完成 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
 | 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | 📋 待收尾 | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
 
 **Phase 1-5a 已全部完成。Phase 6 Runtime 核心能力大部分已实现（记忆持久化、冲突处理、重试、重规划、会话恢复、Merge API），剩余部署容器化和 Profile 权限。Phase 7 交付物大部分已具备。**

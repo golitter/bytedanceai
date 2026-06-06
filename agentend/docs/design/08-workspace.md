@@ -114,6 +114,21 @@ class Workspace:
 - `branch_name` → `"agent/{session_id}/{task_id}"`
 - `worktree_path` → `"{repo_parent}/worktrees/{task_id}/{session_id}"`
 
+#### MergeResult dataclass
+
+```python
+@dataclass
+class MergeResult:
+    success: bool
+    source_branch: str
+    target_branch: str
+    conflict_files: list[str] = field(default_factory=list)
+    error: str = ""
+    aborted: bool = False
+```
+
+由 `WorkspaceManager.merge()` 和 `merge_task_to_main()` 返回，通过 `asdict()` 序列化为 API 响应。
+
 #### task_branch_name 辅助函数
 
 ```python
@@ -503,6 +518,8 @@ Shutdown:
 | POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并 task branch 到 main |
 | DELETE | `/v1/workspace/{id}` | 清理 workspace |
 | GET | `/v1/workspace` | 列出所有 workspace |
+| DELETE | `/v1/workspace/task/{task_id}` | 清理 task 下所有 workspace |
+| POST | `/v1/workspace/task/{task_id}/cleanup-branches` | 强制清理 task 分支（无活跃 workspace 时） |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找 workspace |
 
 ---
