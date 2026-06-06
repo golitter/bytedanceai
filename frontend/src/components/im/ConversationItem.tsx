@@ -2,7 +2,6 @@ import { Pin } from 'lucide-react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { GroupAvatar } from '@/components/chat/GroupAvatar'
-import { useHoverStyle } from '@/hooks/use-hover-style'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
 import { UI_TIME } from '@/lib/ui-text'
@@ -31,16 +30,15 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
   const singleName =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
   const displayName = isGroup ? conversation.title : singleName
-  const hoverStyle = useHoverStyle()
 
   return (
     <button
+      type="button"
       className={cn(
-        'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left',
-        isActive ? 'bg-accent border-l-2 border-l-primary' : 'border-l-2 border-l-transparent',
+        'flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left transition-colors',
+        isActive ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-accent',
       )}
       onClick={onClick}
-      {...(!isActive && hoverStyle)}
     >
       {isGroup && conversation.groupAgentTypes && conversation.groupAgentNames ? (
         <GroupAvatar
