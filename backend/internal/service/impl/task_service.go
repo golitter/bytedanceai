@@ -119,8 +119,15 @@ func (svc *TaskService) GetTask(taskID string) (*service.TaskDetailResponse, err
 	enrichedSessions := make([]model.Session, 0, len(sessions))
 	for _, sessionModel := range sessions {
 		if agent, ok := agentMap[sessionModel.SessionID]; ok {
-			sessionModel.AgentType = agent.AgentType
-			sessionModel.AgentName = agent.AgentName
+			if agent.AgentType != "" {
+				sessionModel.AgentType = agent.AgentType
+			}
+			if sessionModel.AgentName == "" {
+				sessionModel.AgentName = agent.AgentName
+			}
+			if sessionModel.AvatarURL == "" {
+				sessionModel.AvatarURL = agent.AvatarURL
+			}
 		}
 		enrichedSessions = append(enrichedSessions, sessionModel)
 	}

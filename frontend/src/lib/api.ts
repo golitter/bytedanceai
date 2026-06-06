@@ -1,6 +1,6 @@
 import type { RunTaskRequest, RunTaskResponse } from '@/generated/agent-routing'
 import type { AgentType } from '@/generated/request'
-import { AGENT_TYPES, API_BASE } from '@/lib/constants'
+import { AGENT_NAMES, AGENT_TYPES, API_BASE } from '@/lib/constants'
 
 export class ApiError extends Error {
   status: number
@@ -128,6 +128,21 @@ export interface Conversation {
   groupSessions?: AgentSessionInfo[]
 }
 
+const SINGLE_CHAT_TITLE_PREFIX = 'Chat with '
+
+function agentDisplayName(agentName: string | null | undefined, agentType: AgentType): string {
+  return agentName || AGENT_NAMES[agentType] || agentType
+}
+
+function singleConversationTaskTitle(
+  taskTitle: string,
+  agentName: string | null | undefined,
+  agentType: AgentType,
+) {
+  if (!taskTitle.startsWith(SINGLE_CHAT_TITLE_PREFIX)) return taskTitle
+  return `${SINGLE_CHAT_TITLE_PREFIX}${agentDisplayName(agentName, agentType)}`
+}
+
 export async function fetchConversations(): Promise<Conversation[]> {
   const tasks = await fetchTasks()
   const details = await Promise.all(tasks.map((t) => fetchTask(t.task_id)))
@@ -169,14 +184,15 @@ export async function fetchConversations(): Promise<Conversation[]> {
     } else {
       // Single agent: show as individual conversation
       const s = sessions[0]
+      const displayName = agentDisplayName(s.agent_name, s.agent_type)
       convos.push({
         taskId: s.task_id,
         sessionId: s.session_id,
         agentType: s.agent_type,
         agentName: s.agent_name ?? '',
-        title: s.agent_name || s.agent_type,
+        title: displayName,
         lastActiveAt: s.updated_at,
-        taskTitle: detail.task.title,
+        taskTitle: singleConversationTaskTitle(detail.task.title, s.agent_name, s.agent_type),
         status: s.status,
         avatarUrl: s.avatar_url || undefined,
         repoPath: detail.task.repo_path || undefined,

@@ -79,14 +79,38 @@ func (dao *SessionDao) FindPrimaryGroupSessionID(taskID string) (string, error) 
 }
 
 func (dao *SessionDao) UpdateFields(sessionID string, updates map[string]interface{}) (bool, error) {
-	result := db.GetDB().
-		Model(&model.Session{}).
-		Where("session_id = ?", sessionID).
-		Updates(updates)
-	if result.Error != nil {
-		return false, result.Error
+	updated := false
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		result := tx.
+			Model(&model.Session{}).
+			Where("session_id = ?", sessionID).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		updated = true
+
+		agentUpdates := map[string]interface{}{}
+		for _, key := range []string{"agent_name", "agent_type", "avatar_url"} {
+			if value, ok := updates[key]; ok {
+				agentUpdates[key] = value
+			}
+		}
+		if len(agentUpdates) == 0 {
+			return nil
+		}
+		return tx.
+			Model(&model.SessionAgent{}).
+			Where("session_id = ?", sessionID).
+			Updates(agentUpdates).Error
+	})
+	if err != nil {
+		return false, err
 	}
-	return result.RowsAffected > 0, nil
+	return updated, nil
 }
 
 func (dao *SessionDao) UpdateSoul(sessionID, soulMD string) (bool, error) {
