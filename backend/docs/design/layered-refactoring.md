@@ -1,12 +1,16 @@
 # 后端分层架构重构计划：handler → controller + service + dao
 
-## 文档状态
+## 实现了什么
 
 **本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（11 组 Service 实现 + 3 辅助模块：stream_helper、task_route、group_chat_window）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已清空（仅保留空目录），所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
 
 ## Context
 
 当前后端 `internal/handler/` 一层包揽了 HTTP 参数绑定、业务逻辑、数据库操作三重职责，此外 `internal/stream/writer.go` 也包含 10 处直调。业务层生产代码共 101 处 `db.GetDB()` 直调（handler 层 86 处 + service 层 5 处 + stream 层 10 处；不统计 `cmd/server/main.go` 启动迁移用的 1 处和测试注释），不符合目标的 controller → service → dao 分层架构。本次重构将按三层模式拆分，每层 interface 先行、impl 实现，使代码可测试、可维护。
+
+## 怎么实现的
+
+重构按「目标架构 → 14 阶段分步执行 → main.go 接线模式」层层推进，下文逐段展开历史决策与实施过程（本方案已全部实施完成，本文档作为历史参考保留）。
 
 ## 目标架构
 

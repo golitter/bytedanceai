@@ -139,3 +139,10 @@ agentend/
 - [02-workspace-git-ops.md](../testing/02-workspace-git-ops.md) — Workspace Git 操作测试
 - [03-taskctl-merge.md](../testing/03-taskctl-merge.md) — taskctl merge 命令测试
 - [04-orchestrator-planning.md](../testing/04-orchestrator-planning.md) — Orchestrator 规划测试
+
+### backlog/
+
+- [orchestrator-drawbacks.md](../backlog/orchestrator-drawbacks.md) — Orchestrator 已知缺陷与改进方向
+- [session-persistence.md](../backlog/session-persistence.md) — 会话持久化设计笔记
+- [system-architecture-and-frontend-cards.md](../backlog/system-architecture-and-frontend-cards.md) — 系统架构与前端卡片联动设计
+- [trace-system.md](../backlog/trace-system.md) — Trace 可观测性系统设计笔记

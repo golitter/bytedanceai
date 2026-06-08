@@ -59,7 +59,7 @@ docs/
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
 ### payloads/
 - [codediff-test.md](payloads/codediff-test.md) / [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — 测试数据与场景
-- Demo: [plan-review](payloads/plan-review-demo.html) / [contacts-pin](payloads/contacts-pin-leave-demo.html) / [skills-hub](payloads/skills-hub-demo.html)
+- Demo: [plan-review](payloads/plan-review-demo.html) / [contacts-pin](payloads/contacts-pin-leave-demo.html) / [skills-hub](payloads/skills-hub-demo.html) / [orchestrator-group-chat](payloads/orchestrator-group-chat-demo.html)
 ### dev-plan/
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）+ [TODO.md](common/dev-plan/TODO.md)
 

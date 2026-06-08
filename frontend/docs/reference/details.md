@@ -25,3 +25,9 @@
 
 - [development-strategy.md](../guides/development-strategy.md) — 前端开发策略与规范
 - [markdown-style-enhancement.md](../guides/markdown-style-enhancement.md) — Markdown 风格增强修改报告
+- [markdown-demo.html](../guides/markdown-demo.html) / [markdown-demo.tsx](../guides/markdown-demo.tsx) — Markdown 渲染 Demo（静态页 + React 组件）
+
+## payloads/
+
+- [git-auto-init-demo.html](../payloads/git-auto-init-demo.html) — Git 自动初始化 Demo
+- [markdown-chat-preview-demo.html](../payloads/markdown-chat-preview-demo.html) — 输入栏双栏实时预览 Demo

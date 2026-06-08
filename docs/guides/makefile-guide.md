@@ -46,6 +46,18 @@
 | `make tidy` | 执行 `go mod tidy` |
 | `make generate` | 从 `contracts/schemas/*.yaml` 生成三端类型文件（Python / TypeScript / Go） |
 
+### Docker 部署
+
+| 命令 | 说明 |
+|------|------|
+| `make docker-up` | 启动前校验 + 构建并启动容器（前后端 + MySQL + Redis）+ 等待就绪后启动 agentend |
+| `make docker-down` | 停止并移除容器 |
+| `make docker-build` | 仅构建镜像（不启动） |
+| `make docker-logs` | 查看容器实时日志 |
+| `make docker-status` | 查看容器运行状态 |
+
+> Docker 配置文件位于 `docker/configs/`，启动前请参考 [docker-deployment.md](docker-deployment.md)。
+
 ## 直接使用脚本
 
 ```bash

@@ -16,6 +16,7 @@ internal/
 ├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
 │   ├── service.go            # 接口定义 + DTO
 │   ├── bizerr.go             # 统一业务错误（Code + Message）
+│   ├── skill_validator.go    # 技能 zip 包校验（SKILL.md + 解压白名单 + 大小限制）
 │   └── impl/                 # 11 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window
 ├── dao/                      # DAO 层（接口可 Mock 替换）
 │   ├── dao.go                # 8 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, AdminDao）
