@@ -166,4 +166,6 @@ cors:
 
 七牛云 `access_key` / `secret_key` 不在 YAML 中配置，通过 `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` 环境变量注入。
 
+> `.env` 模板见 [`backend/.env.example`](../../../backend/.env.example)，首次运行前 `cp .env.example .env` 并填入实际密钥；留空则自动回退到本地磁盘存储。
+
 存储层通过 `StorageConfig.Type` 控制策略：空字符串自动检测（有七牛云密钥则用七牛云，否则本地磁盘），`"qiniu"` 强制七牛云，`"local"` 强制本地磁盘。`pkg/storage/` 包提供统一的 `Provider` 接口，Controller 通过构造函数注入 `storage.Provider`。

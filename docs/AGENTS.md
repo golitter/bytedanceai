@@ -15,7 +15,6 @@ docs/
 ├── payloads/      # 测试数据 — Demo 与测试场景
 └── common/        # 接下来  — 开发路线图（dev-plan）
 ```
-## 本目录文档索引
 
 ### design/
 - [01-three-tier-design.md](design/01-three-tier-design.md) — 三层架构设计
@@ -64,8 +63,6 @@ docs/
 ### dev-plan/
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）+ [TODO.md](common/dev-plan/TODO.md)
 
-## 子项目 docs/
-- [frontend/docs/](../frontend/docs/) — 前端设计、组件、数据流
-- [backend/docs/](../backend/docs/) — 后端实现方案、技术栈
-- [agentend/docs/](../agentend/docs/) — Agent 端架构、API 端点
-> 按语义入对应分类（kebab-case 命名）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充
+## 子项目 docs/ & 规则
+- [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)
+> 按语义入对应分类（kebab-case）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充

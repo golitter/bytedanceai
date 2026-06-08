@@ -1,6 +1,6 @@
 # AGENTS.md — backend
 
-基于 Go Gin + GORM + MySQL 的后端服务，采用 **Controller → Service → DAO 三层架构**。Go >=1.26，Air 热重载。
+基于 Go Gin + GORM + MySQL 的后端服务，采用 **Controller → Service → DAO 三层架构**：Controller 仅做参数绑定/校验和 HTTP 响应，Service 承载业务逻辑并返回 `BizError`，DAO 接口可 Mock 替换。Go >=1.26，Air 热重载。
 
 ## 目录结构
 
@@ -34,16 +34,6 @@ pkg/
 └── storage/                  # 存储层抽象（七牛云优先，本地磁盘兜底）
 ```
 
-## 架构分层
-
-```
-Controller（参数绑定 + vo 响应） → Service（纯业务逻辑 + BizError） → DAO（纯数据访问） → MySQL/Redis
-```
-
-- **Controller**：仅做参数绑定/校验和 HTTP 响应，通过构造函数内部组装 DAO→Service
-- **Service**：接收 DTO，返回业务结果或 `BizError`，可独立单测（注入 mock DAO）
-- **DAO**：接口在 `dao.go`，GORM 实现在 `gorm/`，mock 在 `mock/`
-
 ## 常用命令
 
 > 根目录 Makefile 执行，排查看 `../logs/backend.log`
@@ -55,6 +45,23 @@ make restart-backend   # 重启
 make status            # 查看状态
 make tidy              # go mod tidy
 ```
+
+## 配置文件
+
+| 文件 | 用途 | 入库 |
+|------|------|------|
+| `configs/config.yaml` | 主配置（MySQL/Redis/JWT/Admin/CORS 等） | ✅ |
+| `.env` | 七牛云密钥（`QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY`），通过 godotenv 注入 | ❌ |
+| `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
+
+首次运行前：
+
+```bash
+cp .env.example .env
+# 编辑 .env 填入七牛云密钥；留空会自动回退到本地磁盘存储（uploads/）
+```
+
+> Docker 环境下使用 `docker/configs/backend/.env`（结构相同），详见 [../docs/guides/docker-deployment.md](../docs/guides/docker-deployment.md)。
 
 ## 详细文档
 

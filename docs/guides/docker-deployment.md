@@ -37,7 +37,9 @@ docker/
 ├── docker-compose.yml              # 编排文件
 ├── configs/
 │   ├── backend/
-│   │   └── config.yaml             # Backend 配置（构建时 COPY 进容器）
+│   │   ├── config.yaml             # Backend 配置（构建时 COPY 进容器）
+│   │   ├── .env.example            # Backend 密钥模板（七牛云）— 入库
+│   │   └── .env                    # 实际密钥（构建时 COPY 进容器）— 不入库
 │   └── agentend/
 │       └── config.yaml             # Agentend 配置（本地启动前 cp 到 agentend/）
 ├── backend/
@@ -56,14 +58,18 @@ docker/
 vim docker/configs/backend/config.yaml    # MySQL 密码、JWT 密钥、Admin 密码
 vim docker/configs/agentend/config.yaml   # MySQL 密码（与 backend 一致）
 
-# 2. 启动 Docker 容器（自动校验配置 → 构建 → 启动）
+# 2. 准备 .env（Docker 构建会 COPY docker/configs/backend/.env 进容器）
+cp docker/configs/backend/.env.example docker/configs/backend/.env
+cp agentend/.env.example agentend/.env    # 宿主机 agentend 用
+
+# 3. 启动 Docker 容器（自动校验配置 → 构建 → 启动）
 make docker-up
 
-# 3. 等待所有服务就绪后，启动本地 agentend
+# 4. 等待所有服务就绪后，启动本地 agentend
 cp docker/configs/agentend/config.yaml agentend/config.yaml
 make run-agentend
 
-# 4. 访问 http://localhost
+# 5. 访问 http://localhost
 ```
 
 ## 配置文件说明
@@ -85,6 +91,17 @@ make run-agentend
 - `mysql.password` — 不能用 `123456`
 - `jwt.secret` — 不能用 `agenthub-demo-secret`，用 `openssl rand -hex 32` 生成
 - `admin.password` — 不能用 `123456`
+
+### docker/configs/backend/.env
+
+构建时 COPY 到容器的 `/app/.env`，由 backend `godotenv` 加载。与 `backend/.env` **字段一致**，仅放七牛云密钥：
+
+```bash
+cp docker/configs/backend/.env.example docker/configs/backend/.env
+# 然后编辑填入实际密钥；留空则容器内 backend 自动回退到本地磁盘存储
+```
+
+> 此文件是 Docker 构建的硬依赖（`docker/backend/Dockerfile` 第 26 行 `COPY docker/configs/backend/.env .env`），不存在则构建失败。
 
 ### docker/configs/agentend/config.yaml
 

@@ -42,7 +42,8 @@ done
 
 # agentend 不在 Docker 内，仅检查宿主机 .env 是否存在
 if [ ! -f "$AGENTEND_ENV" ]; then
-    echo -e "  ${YELLOW}⚠ agentend/.env 不存在，make run-agentend 前需配置${RESET}"
+    echo -e "  ${YELLOW}⚠ agentend/.env 不存在${RESET}"
+    echo -e "      提示：cp agentend/.env.example agentend/.env，然后填入 DS_API_KEY"
     warnings=$((warnings + 1))
 else
     echo -e "  ${GREEN}✓ agentend/.env${RESET}"

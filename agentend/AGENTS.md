@@ -41,6 +41,22 @@ make status                # 查看状态
 - Makefile 完整说明：[docs/guides/makefile-guide.md](../docs/guides/makefile-guide.md)
 - 排查问题查看 `../logs/agentend.log`
 
+## 配置文件
+
+| 文件 | 用途 | 入库 |
+|------|------|------|
+| `config.yaml` | 主配置（server/workspace/database/agents 等） | ✅ |
+| `agents.json` | Agent CLI 路径与配置目录（`cli_path`/`config_dir`/`event_type`） | ✅ |
+| `.env` | LLM 与 LangSmith 密钥（`DS_API_KEY` / `LANGSMITH_API_KEY` 等），由 `pydantic-settings` 读取 | ❌ |
+| `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
+
+首次运行前：
+
+```bash
+cp .env.example .env
+# 编辑 .env 填入 DeepSeek API Key（Orchestrator 必填）；LangSmith 可选
+```
+
 ## 详细文档
 
 详见 [docs/reference/details.md](docs/reference/details.md)。

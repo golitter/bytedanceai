@@ -411,14 +411,25 @@ brew services start redis
 
 ---
 
-## 5. 统一环境变量
+## 5. 环境变量（密钥注入）
 
-创建项目根目录 `.env`（示例）：
+项目不使用项目根 `.env`，密钥由各子项目自己的 `.env` 注入。模板已入库，复制即可：
 
-```env
-# Backend — 通过 backend/configs/config.yaml 配置，秘密字段支持环境变量覆盖
-# AgentEnd — 通过 agentend/.env 配置
+```bash
+# Backend — 七牛云密钥（可选，留空回退本地磁盘）
+cp backend/.env.example backend/.env
+
+# AgentEnd — DeepSeek API Key（Orchestrator 必填）+ LangSmith（可选）
+cp agentend/.env.example agentend/.env
 ```
+
+| 文件 | 字段 | 用途 |
+|------|------|------|
+| `backend/.env` | `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` | 七牛云对象存储 |
+| `agentend/.env` | `DS_MODEL` / `DS_BASE_URL` / `DS_API_KEY` | Orchestrator LLM |
+| `agentend/.env` | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | LangSmith 追踪（可选） |
+
+> 主配置（MySQL/Redis/JWT/Admin/CORS 等）走各端 `config.yaml`，不在 `.env` 中。
 
 ---
 
