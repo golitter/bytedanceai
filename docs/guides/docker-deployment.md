@@ -1,6 +1,6 @@
 # Docker 容器化部署指南
 
-> **目标**：Frontend + Backend + MySQL + Redis 跑在 Docker 容器中，Agentend 留在宿主机（需要本地文件系统/git worktree）。
+> **目标**：Frontend + Backend + MySQL + Redis 跑在 Docker 容器中，Agentend 留在宿主机（需要本地文件系统 / git worktree）。
 
 ## 架构概览
 
@@ -11,24 +11,26 @@
 │  │ Frontend │─────────►│ Backend  │            │
 │  │ Nginx:80 │          │ Go:8080  │            │
 │  └──────────┘          └────┬─────┘            │
-│                             │                   │
+│     :8787                    │                   │
 │                    ┌────────┼────────┐          │
 │                    ▼        ▼        ▼          │
-│              ┌───────┐ ┌───────┐ ┌──────────┐  │
-│              │ MySQL │ │ Redis │ │ Agentend │  │
-│              │ :3306 │ │ :6379 │ │ (宿主机)  │  │
-│              └───┬───┘ └───┬───┘ └──────────┘  │
+│              ┌───────┐ ┌───────┐    ┌────────┐  │
+│              │ MySQL │ │ Redis │    │AgentEnd│  │
+│              │ :3306 │ │ :6379 │    │(宿主机) │  │
+│              └───┬───┘ └───┬───┘    └────────┘  │
 │                  │         │           ▲        │
 └──────────────────┼─────────┼───────────┼────────┘
                    │         │           │
-            端口映射到宿主机 localhost       │
+            端口映射到宿主机 localhost     │
                    │         │           │
-                   ▼         ▼           │
-              agentend 连 localhost:3306  │
-              agentend 连 localhost:8080 ─┘
+            agentend 连 localhost:3306    │
+            agentend 连 localhost:8080 ───┘
 ```
 
-**核心决策**：MySQL/Redis 端口映射到宿主机 → agentend 的 `config.yaml` **无需任何改动**（与本地开发一致）。
+- **Frontend**：宿主机 `:8787` → 容器 `:80`（Nginx 反代 `/api/*` → Backend）
+- **Backend**：宿主机 `:8080` → 容器 `:8080`
+- **MySQL / Redis**：端口映射到宿主机，agentend 无需改动配置即可连接
+- **Agentend**：宿主机本地运行，`make docker-up` 自动启动
 
 ## 文件结构
 
@@ -36,12 +38,10 @@
 docker/
 ├── docker-compose.yml              # 编排文件
 ├── configs/
-│   ├── backend/
-│   │   ├── config.yaml             # Backend 配置（构建时 COPY 进容器）
-│   │   ├── .env.example            # Backend 密钥模板（七牛云）— 入库
-│   │   └── .env                    # 实际密钥（构建时 COPY 进容器）— 不入库
-│   └── agentend/
-│       └── config.yaml             # Agentend 配置（本地启动前 cp 到 agentend/）
+│   └── backend/
+│       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）
+│       ├── .env.example            # Backend 密钥模板（七牛云）— 入库
+│       └── .env                    # 实际密钥（构建时 COPY 进容器）— 不入库
 ├── backend/
 │   └── Dockerfile                  # 多阶段构建（Go build → Alpine runtime）
 ├── frontend/
@@ -56,25 +56,25 @@ docker/
 ```bash
 # 1. 修改配置文件（⚠️ 必须修改密码/密钥）
 vim docker/configs/backend/config.yaml    # MySQL 密码、JWT 密钥、Admin 密码
-vim docker/configs/agentend/config.yaml   # MySQL 密码（与 backend 一致）
 
-# 2. 准备 .env（Docker 构建会 COPY docker/configs/backend/.env 进容器）
-cp docker/configs/backend/.env.example docker/configs/backend/.env
-cp agentend/.env.example agentend/.env    # 宿主机 agentend 用
+# 2. 准备 .env
+cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend 七牛云密钥
+cp agentend/.env.example agentend/.env                                # Agentend LLM 密钥
 
-# 3. 启动 Docker 容器（自动校验配置 → 构建 → 启动）
+# 3. 一键启动（校验 → 构建容器 → 启动容器 → 本地启动 agentend）
 make docker-up
 
-# 4. 等待所有服务就绪后，启动本地 agentend
-cp docker/configs/agentend/config.yaml agentend/config.yaml
-make run-agentend
-
-# 5. 访问 http://localhost
+# 4. 访问 http://localhost:8787
 ```
 
-## 配置文件说明
+`make docker-up` 会自动完成以下步骤：
+1. 运行 `precheck.sh` 校验配置
+2. `docker compose up --build -d` 构建并启动容器
+3. `docker compose up --wait` 等待所有服务就绪（MySQL healthy）
+4. `cd agentend && uv sync` 安装 agentend 依赖
+5. `make run-agentend` 启动 agentend
 
-用户只需要关心 `docker/configs/` 下的两个文件：
+## 配置文件说明
 
 ### docker/configs/backend/config.yaml
 
@@ -85,7 +85,7 @@ make run-agentend
 | `mysql.host` | `127.0.0.1` | `mysql` | Docker Compose 服务名 |
 | `redis.host` | `127.0.0.1` | `redis` | Docker Compose 服务名 |
 | `agentend.host` | `http://localhost` | `http://host.docker.internal` | 容器访问宿主机 |
-| `cors.allow_origins` | `http://localhost:5173` | `http://localhost` | Nginx 监听 80 端口 |
+| `cors.allow_origins` | `http://localhost:5173` | `http://localhost` + `http://localhost:8787` | Nginx 监听 80 端口，映射到 8787 |
 
 **⚠️ 部署前必须修改**：
 - `mysql.password` — 不能用 `123456`
@@ -94,7 +94,7 @@ make run-agentend
 
 ### docker/configs/backend/.env
 
-构建时 COPY 到容器的 `/app/.env`，由 backend `godotenv` 加载。与 `backend/.env` **字段一致**，仅放七牛云密钥：
+构建时 COPY 到容器的 `/app/.env`，由 backend `godotenv` 加载。仅放七牛云密钥：
 
 ```bash
 cp docker/configs/backend/.env.example docker/configs/backend/.env
@@ -103,22 +103,18 @@ cp docker/configs/backend/.env.example docker/configs/backend/.env
 
 > 此文件是 Docker 构建的硬依赖（`docker/backend/Dockerfile` 第 26 行 `COPY docker/configs/backend/.env .env`），不存在则构建失败。
 
-### docker/configs/agentend/config.yaml
-
-本地 agentend 运行时的配置。与本地开发版本**几乎一样**，因为 MySQL/Redis 端口映射到宿主机。
-
-**⚠️ 部署前必须修改**：
-- `database.password` — 与 backend 的 MySQL 密码保持一致
-- `agents.*.config_path` — 填写实际的 CLI 配置路径
-
-启动前需要复制到 agentend 目录：
-```bash
-cp docker/configs/agentend/config.yaml agentend/config.yaml
-```
-
 ### docker-compose.yml 中的密码
 
-`docker-compose.yml` 中 MySQL 的 `MYSQL_ROOT_PASSWORD` 也需要与 `configs/backend/config.yaml` 中的 `mysql.password` 保持一致。
+`docker-compose.yml` 中 MySQL 的 `MYSQL_ROOT_PASSWORD` 需要与 `configs/backend/config.yaml` 中的 `mysql.password` 保持一致。
+
+### agentend/.env
+
+宿主机 agentend 运行时加载，需配置 LLM 密钥（`DS_API_KEY` 等）：
+
+```bash
+cp agentend/.env.example agentend/.env
+# 编辑填入实际密钥
+```
 
 ## 启动前校验（precheck.sh）
 
@@ -128,47 +124,49 @@ cp docker/configs/agentend/config.yaml agentend/config.yaml
 $ make docker-up
 === AgentHub Docker 部署校验 ===
 
-[1/4] 检查配置文件
+[1/3] 检查配置文件
   ✓ backend: config.yaml
-  ✓ agentend: config.yaml
+  ✓ backend: .env
+  ✓ agentend/.env
 
-[2/4] 检查配置安全性
-  ✓ backend MySQL 密码
+[2/3] 检查配置安全性
+  ⚠ backend MySQL 密码 仍为默认值 (123456)
   ✓ backend JWT 密钥
   ✓ backend Admin 密码
-  ✓ agentend MySQL 密码
+  ✓ agentend DS_API_KEY
 
-[3/4] 检查 Docker 环境
+[3/3] 检查 Docker 环境
   ✓ Docker 已运行
   ✓ docker compose 可用
 
-[4/4] 检查 AgentEnd 连通性
-  ⚠ agentend 不可达 (localhost:8001)
-    这是正常的，请确保 Docker 启动后再运行 make run-agentend
-
 ================================
-校验通过 (1 个警告)
+校验通过，1 个提醒
+
+Docker 启动后，运行 agentend:
+  cd agentend && uv sync && cd ..
+  make run-agentend
+
+是否继续启动 Docker？[y/N]
 ```
 
 校验内容：
-1. 配置文件是否存在
-2. 密码/密钥是否仍为默认危险值（`123456`、`agenthub-demo-secret`）
-3. Docker 是否安装并运行
-4. agentend 是否可达（可选，warning 级别）
+1. **配置文件是否存在**（缺失则阻断）
+2. **密码/密钥是否仍为默认危险值**（仅提醒，不阻断）
+3. **Docker 是否安装并运行**（缺失则阻断）
 
 ## Makefile 命令
 
 | 命令 | 说明 |
 |------|------|
-| `make docker-up` | 校验配置 + 构建并启动容器 |
+| `make docker-up` | 校验配置 + 构建并启动容器 + 本地启动 agentend |
 | `make docker-down` | 停止并移除容器 |
-| `make docker-build` | 仅构建镜像 |
-| `make docker-logs` | 查看实时日志 |
-| `make docker-status` | 查看容器状态 |
+| `make docker-build` | 仅构建镜像（不启动） |
+| `make docker-logs` | 查看容器实时日志 |
+| `make docker-status` | 查看容器运行状态 |
 
 ## 注意事项
 
-- **启动顺序**：先 `make docker-up`（等待 MySQL healthy），再 `make run-agentend`
+- **启动顺序**：`make docker-up` 已自动编排——先等 MySQL healthy，再启动 agentend
 - **数据持久化**：MySQL 和 Redis 数据存储在 Docker named volume 中，`docker compose down` 不会丢失
 - **完全清空数据**：`cd docker && docker compose down -v`（`-v` 删除 volume）
-- **源码无需改动**：Backend、Frontend、Agentend 的源码完全不改
+- **源码无需改动**：Backend、Frontend、Agentend 的源码完全不改，仅通过 `docker/configs/` 覆盖配置
