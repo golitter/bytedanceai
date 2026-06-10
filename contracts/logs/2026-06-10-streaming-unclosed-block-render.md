@@ -11,6 +11,7 @@
 - `frontend/src/lib/ui-text.ts`：新增 `UI_CARD_STATUS.HTML_RENDERING` 文案常量
 - `frontend/src/components/cards/HtmlCard.tsx`：streaming 占位 UI
 - `frontend/src/components/chat/BlockRenderer.tsx`：透传 streaming
+- `frontend/src/stores/message-store.ts`：`buildAgentMessage` 终态化时清除 streaming 标记
 - `frontend/src/lib/__tests__/block-reducer.test.ts`：新增 4 个流式未闭合测试用例
 
 ## 对比结果
@@ -21,6 +22,7 @@
 | 流式中 html-render 卡片 | 不渲染（显示原始围栏标记） | 显示「正在生成 HTML 卡片…」占位，闭合后渲染 iframe |
 | 闭合后 html-render 卡片 | 正常渲染（不受影响） | 正常渲染，`streaming` 字段为 `undefined` |
 | `block-types.ts` | `html-render` 无 `streaming` 字段 | 新增可选 `streaming?: boolean`（前端派生状态） |
+| 终态化消息中的 html-render | `streaming` 可能残留为 `true`（SSE done 早于闭合 ``` 到达） | `buildAgentMessage` 清除 `streaming` 标记 |
 
 ## 跨端影响
 
