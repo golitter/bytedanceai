@@ -4,9 +4,6 @@
 /.husky
 /.ruff_cache
 
-# 忽略 根目录下的 openspec
-/openspec
-
 
 # Python 缓存
 __pycache__/
